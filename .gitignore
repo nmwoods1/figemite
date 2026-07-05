@@ -1,0 +1,9 @@
+node_modules/
+dist/
+coverage/
+boards/
+public/
+.history/
+*.tsbuildinfo
+.DS_Store
+.env*

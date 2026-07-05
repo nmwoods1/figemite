@@ -1,0 +1,8 @@
+# This file is a documented placeholder only.
+#
+# It exists solely to reserve the GitLab Pages static-publish recipe for
+# this project. The real pipeline (build the client package as a static
+# site and publish it via GitLab Pages) will be wired up in a later phase.
+#
+# No jobs are defined here yet — intentionally left inert so that GitLab
+# does not attempt to run a pipeline against this stub.
