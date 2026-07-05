@@ -10,6 +10,19 @@ export default tseslint.config(
   js.configs.recommended,
   ...tseslint.configs.recommended,
   {
+    // Node tooling scripts (build/audit helpers) run in Node, not the browser.
+    files: ['scripts/**/*.{js,mjs,cjs}', '*.config.{js,mjs,cjs,ts}'],
+    languageOptions: {
+      globals: {
+        console: 'readonly',
+        process: 'readonly',
+        Buffer: 'readonly',
+        __dirname: 'readonly',
+        __filename: 'readonly',
+      },
+    },
+  },
+  {
     files: ['packages/client/**/*.{ts,tsx,js,jsx}'],
     plugins: {
       'react-hooks': reactHooks,

@@ -4,6 +4,10 @@ on:
   push:
   pull_request:
 
+concurrency:
+  group: '${{ github.workflow }}-${{ github.ref }}'
+  cancel-in-progress: true
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -28,4 +32,4 @@ jobs:
         run: npm test
 
       - name: License audit
-        run: npx --yes license-checker-rseidelsohn --production --excludePrivatePackages --onlyAllow 'MIT;ISC;Apache-2.0;BSD-2-Clause;BSD-3-Clause;0BSD;CC0-1.0;Unlicense'
+        run: npm run license:audit

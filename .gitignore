@@ -1,7 +1,9 @@
 node_modules/
 dist/
 coverage/
+# local board data — never versioned
 boards/
+# static build output
 public/
 .history/
 *.tsbuildinfo

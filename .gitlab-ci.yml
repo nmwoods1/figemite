@@ -6,3 +6,9 @@
 #
 # No jobs are defined here yet — intentionally left inert so that GitLab
 # does not attempt to run a pipeline against this stub.
+#
+# The `workflow` rule below prevents pipelines from ever being created for
+# this file, so a job-less configuration can never raise a pipeline error.
+workflow:
+  rules:
+    - when: never

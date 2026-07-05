@@ -2,8 +2,9 @@
   "name": "easel-monorepo",
   "private": true,
   "type": "module",
+  "packageManager": "npm@10.8.2",
   "engines": {
-    "node": ">=18"
+    "node": ">=20"
   },
   "workspaces": [
     "packages/*"
@@ -14,7 +15,8 @@
     "format:check": "prettier --check .",
     "typecheck": "tsc -b",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "license:audit": "node scripts/license-audit.mjs"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.4",
