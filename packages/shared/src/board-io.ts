@@ -319,22 +319,29 @@ function normalizeNode(node: BoardNode): Record<string, unknown> {
     ...(node.description !== undefined ? { description: node.description } : {}),
   };
 
+  // WH sizes are reconstructed key-by-key ({ width, height }) rather than
+  // spread, so key order is enforced by this function itself instead of
+  // relying on every upstream producer to build the object in that order —
+  // critical for the byte-identical browser/MCP guarantee. (emoji/icon carry
+  // a numeric `size`, a primitive, so there's nothing to normalize there.)
+  const wh = (s: WH) => ({ width: s.width, height: s.height });
+
   switch (node.type) {
     case 'sticky':
-      return { ...base, size: node.size, text: node.text, color: node.color };
+      return { ...base, size: wh(node.size), text: node.text, color: node.color };
     case 'text':
       return { ...base, text: node.text };
     case 'shape':
       return {
         ...base,
-        size: node.size,
+        size: wh(node.size),
         shape: node.shape,
         ...(node.text !== undefined ? { text: node.text } : {}),
         color: node.color,
         ...(node.rotation !== undefined ? { rotation: node.rotation } : {}),
       };
     case 'frame':
-      return { ...base, size: node.size, title: node.title, color: node.color };
+      return { ...base, size: wh(node.size), title: node.title, color: node.color };
     case 'emoji':
       return {
         ...base,
@@ -353,7 +360,7 @@ function normalizeNode(node: BoardNode): Record<string, unknown> {
     case 'drawing':
       return {
         ...base,
-        size: node.size,
+        size: wh(node.size),
         points: node.points.map((p) => ({ x: p.x, y: p.y })),
         color: node.color,
         strokeWidth: node.strokeWidth,

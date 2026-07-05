@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { BoardEdge, BoardFile, BoardNode, ShapeNode } from './model/board.js';
+import type { BoardEdge, BoardFile, BoardNode, ShapeNode, WH } from './model/board.js';
 import {
   DEFAULT_EMOJI_SIZE,
   DEFAULT_FRAME_SIZE,
@@ -464,6 +464,18 @@ describe('serialise', () => {
     };
 
     expect(serialise(board)).toBe(serialise(shuffled));
+  });
+
+  it('is independent of a WH size object’s key insertion order', () => {
+    const forward = baseBoard();
+    forward.nodes = [{ ...forward.nodes[0], size: { width: 60, height: 40 } } as BoardNode];
+
+    const reversed = baseBoard();
+    // Same logical size, but keys inserted height-first. The canonical
+    // function must re-emit { width, height } regardless of producer order.
+    reversed.nodes = [{ ...reversed.nodes[0], size: { height: 40, width: 60 } as WH } as BoardNode];
+
+    expect(serialise(reversed)).toBe(serialise(forward));
   });
 
   it('changes when a node field changes', () => {
