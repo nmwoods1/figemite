@@ -5,6 +5,7 @@ import App from './App.js';
 const boardsApiMock = vi.hoisted(() => ({
   listBoards: vi.fn(),
   getBoard: vi.fn(),
+  saveBoard: vi.fn(),
   createBoard: vi.fn(),
   deleteSubBoard: vi.fn(),
   saveTags: vi.fn(),
@@ -29,6 +30,7 @@ describe('App view switch', () => {
       edges: [],
       viewport: { x: 0, y: 0, zoom: 1 },
     });
+    boardsApiMock.saveBoard.mockReset().mockResolvedValue(undefined);
     boardsApiMock.createBoard.mockReset().mockResolvedValue(undefined);
     boardsApiMock.deleteSubBoard.mockReset().mockResolvedValue(undefined);
     setHash('');

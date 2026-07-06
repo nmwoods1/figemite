@@ -36,6 +36,9 @@ import type { BoardStore } from '../store/board-store.js';
 import { useBoardStore } from '../store/use-board-store.js';
 import { useEditableCanvas } from '../hooks/useEditableCanvas.js';
 import { useMultiSelectResize } from '../hooks/useMultiSelectResize.js';
+import { useUndoRedo } from '../hooks/useUndoRedo.js';
+import { useAutosave } from '../hooks/useAutosave.js';
+import { useBoardInteractions } from '../hooks/useBoardInteractions.js';
 import { boardToRf } from './rf-adapters.js';
 import { MultiSelectResizer } from './MultiSelectResizer.js';
 import { nodeTypes } from '../nodes/index.js';
@@ -43,19 +46,17 @@ import { edgeTypes } from '../edges/index.js';
 import { Toolbar } from '../components/Toolbar.js';
 import { DescriptionModal } from '../components/DescriptionModal.js';
 import { nodeLabel } from './node-label.js';
-import type { SaveStatus } from '../hooks/useAutosave.js';
 
 export interface BoardCanvasProps {
   board: BoardFile;
   readonly: boolean;
   onNavigate?: (nodeId: string) => void;
-  /** Reflected by the Toolbar's save-status indicator. The autosave hook
-   * itself is owned by the caller (e.g. the board route) — BoardCanvas only
-   * renders whatever status it's given. Defaults to 'idle' for callers that
-   * don't wire autosave (e.g. every current test). */
-  saveStatus?: SaveStatus;
-  /** Retry a failed save — passed straight through to the Toolbar. */
-  onRetrySave?: () => void;
+  /** The board's slug + sub-board path — required for the editable pane to
+   * target `useAutosave` at the right board file (dev-server `/api/board`
+   * POST). Ignored (and autosave stays disabled) in read-only mode, so
+   * read-only callers/tests may omit them. */
+  slug?: string;
+  path?: string[];
 }
 
 /** True when a viewport is just the BoardFile zero-value default — i.e. not
@@ -118,14 +119,53 @@ function ReadOnlyCanvas({ store, fitView, viewport }: PaneProps) {
  * BoardCanvas.tsx's own `descNodeId` state) and passes the opener into
  * `useEditableCanvas`'s `onOpenDescription` option, which wires it through to
  * every describable node's `data.onOpenDescription` seam (P4-T24). Saving
- * commits via `store.updateNode(id, { description })`. */
-function EditableCanvas({ store, fitView, viewport, saveStatus, onRetrySave }: EditablePaneProps) {
+ * commits via `store.updateNode(id, { description })`.
+ *
+ * P4-T27 wires the undo + autosave hooks (previously built but never
+ * instantiated anywhere — the integration gap this task closes) plus
+ * `useBoardInteractions` (keyboard shortcuts, internal clipboard, layer
+ * reorder, alt-drag duplicate). `useUndoRedo`/`useAutosave` are only ever
+ * constructed here, in the EDITABLE pane — the read-only pane never mounts
+ * this component, so a read-only board never gets an undo manager or an
+ * autosave timer. `formatVersion`/`boardLabel` come straight off the already-
+ * loaded `board` prop (BoardCanvas's caller already fetched the whole
+ * BoardFile — no second source of truth needed); `slug`/`path` identify WHICH
+ * board file autosave POSTs to, threaded down from the board route
+ * (App.tsx). */
+function EditableCanvas({
+  store,
+  fitView,
+  viewport,
+  slug,
+  path,
+  formatVersion,
+  boardLabel,
+}: EditablePaneProps) {
   const [descNodeId, setDescNodeId] = useState<string | null>(null);
   const openDescription = useCallback((id: string) => setDescNodeId(id), []);
   const editable = useEditableCanvas(store, { onOpenDescription: openDescription });
   const multiSelect = useMultiSelectResize(store, editable.selectedNodeIds);
   const containerRef = useRef<HTMLDivElement>(null);
   const { nodes } = useBoardStore(store);
+
+  const undoRedo = useUndoRedo(store);
+  const autosave = useAutosave(store, {
+    slug: slug ?? '',
+    path: path ?? [],
+    enabled: Boolean(slug),
+    formatVersion,
+    boardLabel,
+  });
+  const interactions = useBoardInteractions({
+    store,
+    selectedNodeIds: editable.selectedNodeIds,
+    selectedEdgeIds: editable.selectedEdgeIds,
+    readonly: false,
+    undo: undoRedo.undo,
+    redo: undoRedo.redo,
+    flushNow: autosave.flushNow,
+    onEscape: () => setDescNodeId(null),
+  });
 
   const descNode = descNodeId ? nodes.find((n) => n.id === descNodeId) : undefined;
 
@@ -145,6 +185,7 @@ function EditableCanvas({ store, fitView, viewport, saveStatus, onRetrySave }: E
         edges={editable.edges}
         onNodesChange={editable.onNodesChange}
         onEdgesChange={editable.onEdgesChange}
+        onNodeDragStart={interactions.onNodeDragStart}
         onNodeDragStop={editable.onNodeDragStop}
         onNodesDelete={editable.onNodesDelete}
         onConnect={editable.onConnect}
@@ -169,9 +210,9 @@ function EditableCanvas({ store, fitView, viewport, saveStatus, onRetrySave }: E
         store={store}
         selectedNodeIds={editable.selectedNodeIds}
         selectedEdgeIds={editable.selectedEdgeIds}
-        saveStatus={saveStatus ?? 'idle'}
+        saveStatus={autosave.saveStatus}
         readonly={false}
-        onRetrySave={onRetrySave}
+        onRetrySave={autosave.flushNow}
       />
       {descNode && (
         <DescriptionModal
@@ -192,11 +233,13 @@ interface PaneProps {
 }
 
 interface EditablePaneProps extends PaneProps {
-  saveStatus?: SaveStatus;
-  onRetrySave?: () => void;
+  slug?: string;
+  path?: string[];
+  formatVersion: number;
+  boardLabel: string;
 }
 
-export function BoardCanvas({ board, readonly, saveStatus, onRetrySave }: BoardCanvasProps) {
+export function BoardCanvas({ board, readonly, slug, path }: BoardCanvasProps) {
   const store = useMemo(() => createBoardStore(board, { readonly }), [board, readonly]);
 
   useEffect(() => {
@@ -215,8 +258,10 @@ export function BoardCanvas({ board, readonly, saveStatus, onRetrySave }: BoardC
             store={store}
             fitView={fitView}
             viewport={board.viewport}
-            saveStatus={saveStatus}
-            onRetrySave={onRetrySave}
+            slug={slug}
+            path={path}
+            formatVersion={board.formatVersion}
+            boardLabel={board.boardLabel}
           />
         )}
       </ReactFlowProvider>

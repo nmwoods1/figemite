@@ -5,10 +5,14 @@
 //     `slug` for the board view, not `board` as upstream — see that module's
 //     doc comment).
 //   - The `board` view resolves the route, fetches the full `BoardFile` via
-//     `lib/boards-api.ts`'s `getBoard()`, and renders a Breadcrumb + the
-//     read-only `canvas/BoardCanvas.tsx` (P3-T20). `Breadcrumb`'s `isDirty`
-//     is hardcoded `false` — real dirty-tracking is Phase 4 (interaction
-//     handlers land there too; this canvas only renders).
+//     `lib/boards-api.ts`'s `getBoard()`, and renders a Breadcrumb +
+//     `canvas/BoardCanvas.tsx`. `slug`/`path` are threaded straight through to
+//     BoardCanvas (P4-T27) — it's what its EDITABLE pane needs to target
+//     `useAutosave` at the right board file; the READ-ONLY pane ignores them.
+//     `Breadcrumb`'s `isDirty` is still hardcoded `false`: the autosave hook
+//     (and its `isDirty`) is owned inside BoardCanvas's editable pane, not
+//     lifted up here — surfacing it on the Breadcrumb would need a callback
+//     seam this task didn't add; left as a follow-up.
 //   - Delete-sub-board is wired to `deleteSubBoard` from `lib/boards-api.ts`
 //     and only offered (via `Breadcrumb`'s optional `onDelete`) when not in
 //     READONLY mode and `path.length > 0`, matching the "every write
@@ -151,7 +155,9 @@ function BoardRoute({ slug, path, onGoHome, onNavigate }: BoardRouteProps) {
           <p style={{ color: '#dc2626', fontSize: 14 }}>Failed to load board: {state.message}</p>
         </div>
       )}
-      {state.status === 'ready' && <BoardCanvas board={state.board} readonly={READONLY} />}
+      {state.status === 'ready' && (
+        <BoardCanvas board={state.board} readonly={READONLY} slug={slug} path={path} />
+      )}
     </div>
   );
 }
