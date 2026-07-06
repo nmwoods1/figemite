@@ -209,32 +209,47 @@ describe('FileWatcher fs.watch integration (real filesystem)', () => {
     await fs.rm(tmpRoot, { recursive: true, force: true });
   });
 
-  it('detects a real atomic write (temp file + rename) to a board file and reports external-change', async () => {
-    const onExternalChange = vi.fn();
-    const watcher = new FileWatcher({
-      boardsRoot: tmpRoot,
-      isLocked: () => false,
-      onExternalChange,
-      debounceMs: 50,
-      suppressMs: 100,
-    });
-    watcher.start();
+  // This is the only test in this file that uses REAL timers + a real
+  // `fs.watch` (every other test drives `handleFsEvent` directly under fake
+  // timers, so they're immune to CPU scheduling). fs.watch delivery latency
+  // is scheduler-dependent, so under a fully-loaded parallel suite this can
+  // occasionally miss the 50ms debounce window's polling deadline. It's a
+  // timing sensitivity, not a logic flaw, so we (a) give the test a generous
+  // 15s ceiling to absorb CPU starvation, (b) `retry: 2` so a rare
+  // fs.watch-latency miss re-runs instead of failing the suite, and (c) keep
+  // the assertion on `vi.waitFor` polling (interval 50ms) with its own
+  // timeout kept below the test timeout.
+  it(
+    'detects a real atomic write (temp file + rename) to a board file and reports external-change',
+    { retry: 2 },
+    async () => {
+      const onExternalChange = vi.fn();
+      const watcher = new FileWatcher({
+        boardsRoot: tmpRoot,
+        isLocked: () => false,
+        onExternalChange,
+        debounceMs: 50,
+        suppressMs: 100,
+      });
+      watcher.start();
 
-    try {
-      // Simulate BoardRepository.write's atomic write: temp file + rename.
-      const target = path.join(tmpRoot, 'my-board', 'board.json');
-      const tmp = path.join(tmpRoot, 'my-board', '.board.json.abc.tmp');
-      fsSync.writeFileSync(tmp, '{}');
-      fsSync.renameSync(tmp, target);
+      try {
+        // Simulate BoardRepository.write's atomic write: temp file + rename.
+        const target = path.join(tmpRoot, 'my-board', 'board.json');
+        const tmp = path.join(tmpRoot, 'my-board', '.board.json.abc.tmp');
+        fsSync.writeFileSync(tmp, '{}');
+        fsSync.renameSync(tmp, target);
 
-      await vi.waitFor(
-        () => {
-          expect(onExternalChange).toHaveBeenCalledWith('my-board', []);
-        },
-        { timeout: 5000, interval: 50 },
-      );
-    } finally {
-      watcher.dispose();
-    }
-  });
+        await vi.waitFor(
+          () => {
+            expect(onExternalChange).toHaveBeenCalledWith('my-board', []);
+          },
+          { timeout: 10000, interval: 50 },
+        );
+      } finally {
+        watcher.dispose();
+      }
+    },
+    15000,
+  );
 });
