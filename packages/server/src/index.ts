@@ -12,3 +12,10 @@ export * from './services/sse-hub.js';
 export * from './services/file-watcher.js';
 export * from './services/yjs-ws.js';
 export * from './services/mdns.js';
+
+// ── HTTP API layer (P1-T12) ──────────────────────────────────────────────────
+export * from './http/body.js';
+export * from './api/errors.js';
+export * from './api/persist.js';
+export * from './api/ai-broadcast.js';
+export * from './api/router.js';

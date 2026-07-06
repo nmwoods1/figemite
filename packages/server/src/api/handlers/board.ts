@@ -1,0 +1,134 @@
+// ── /api/board + /api/create handlers ────────────────────────────────────────
+//
+// GET    /api/board?board=&path=  — read a board/sub-board (validated+migrated).
+// POST   /api/board               — save a board through the single write funnel.
+// DELETE /api/board?board=&path=  — delete a sub-board (and descendants), or root.
+// POST   /api/create              — seed a new sub-board file if absent.
+
+import type { IncomingMessage, ServerResponse } from 'node:http';
+import {
+  SlugSchema,
+  PathSegmentSchema,
+  emptyBoard,
+  parseBoardFile,
+  type BoardFile,
+} from '@easel/shared';
+import { getQuery, parsePathParam, readJsonBody, sendJson } from '../../http/body.js';
+import { persistBoard } from '../persist.js';
+import { LockedError, NotFoundError, ValidationError } from '../errors.js';
+import type { RequestContext } from '../router.js';
+
+/** Validates and returns the `board` slug query param (throws ValidationError). */
+function requireSlug(query: URLSearchParams): string {
+  const slug = query.get('board') ?? '';
+  if (!SlugSchema.safeParse(slug).success) {
+    throw new ValidationError(`Invalid or missing board: ${JSON.stringify(slug)}`);
+  }
+  return slug;
+}
+
+/**
+ * Validates every sub-board path segment against the shared id grammar, as a
+ * 400 (client error) — BEFORE the repo/path layer would throw the same rejection
+ * as a generic Error (which the router would otherwise map to 500). Returns the
+ * segments unchanged. Rejects with a safe message that does NOT echo the
+ * offending segment (which could contain traversal/path text).
+ */
+function requireSubPath(subPath: string[]): string[] {
+  for (const seg of subPath) {
+    if (!PathSegmentSchema.safeParse(seg).success) {
+      throw new ValidationError('Invalid sub-board path segment');
+    }
+  }
+  return subPath;
+}
+
+/** GET /api/board — returns the board JSON, or 404 if missing. */
+export function handleGetBoard(
+  ctx: RequestContext,
+  req: IncomingMessage,
+  res: ServerResponse,
+): void {
+  const query = getQuery(req);
+  const slug = requireSlug(query);
+  const subPath = requireSubPath(parsePathParam(query));
+  if (!ctx.repo.exists(slug, subPath)) {
+    throw new NotFoundError('not_found');
+  }
+  // `read` validates + migrates; a corrupt file throws and the router maps it
+  // to 500 with a safe message.
+  const board = ctx.repo.read(slug, subPath);
+  sendJson(res, 200, board);
+}
+
+/** POST /api/board — save a board. Body `{ board, path?, data }`. 409 if locked. */
+export async function handleSaveBoard(
+  ctx: RequestContext,
+  req: IncomingMessage,
+  res: ServerResponse,
+): Promise<void> {
+  const body = (await readJsonBody(req)) as { board?: unknown; path?: unknown; data?: unknown };
+  const slug = typeof body.board === 'string' ? body.board : '';
+  if (!SlugSchema.safeParse(slug).success) {
+    throw new ValidationError(`Invalid board: ${JSON.stringify(slug)}`);
+  }
+  const subPath = requireSubPath(Array.isArray(body.path) ? (body.path as string[]) : []);
+
+  if (ctx.ai.isLocked(slug, subPath)) {
+    throw new LockedError('locked');
+  }
+
+  // Validate the payload BEFORE writing — an invalid board is a 400, and never
+  // reaches the disk. `parseBoardFile` migrates legacy payloads too.
+  let data: BoardFile;
+  try {
+    data = parseBoardFile(body.data);
+  } catch (err) {
+    throw new ValidationError(err instanceof Error ? err.message : String(err));
+  }
+
+  persistBoard(ctx, slug, subPath, data, 'save');
+  sendJson(res, 200, { ok: true });
+}
+
+/** DELETE /api/board — delete a sub-board and descendants (root allowed, per legacy). */
+export function handleDeleteBoard(
+  ctx: RequestContext,
+  req: IncomingMessage,
+  res: ServerResponse,
+): void {
+  const query = getQuery(req);
+  const slug = requireSlug(query);
+  const subPath = requireSubPath(parsePathParam(query));
+  ctx.repo.delete(slug, subPath);
+  sendJson(res, 200, { ok: true });
+}
+
+/** POST /api/create — seed a new sub-board file if it doesn't already exist. */
+export async function handleCreateSubBoard(
+  ctx: RequestContext,
+  req: IncomingMessage,
+  res: ServerResponse,
+): Promise<void> {
+  const body = (await readJsonBody(req)) as { board?: unknown; path?: unknown; label?: unknown };
+  const slug = typeof body.board === 'string' ? body.board : '';
+  if (!SlugSchema.safeParse(slug).success) {
+    throw new ValidationError(`Invalid board: ${JSON.stringify(slug)}`);
+  }
+  const segments = requireSubPath(Array.isArray(body.path) ? (body.path as string[]) : []);
+  if (segments.length === 0) {
+    throw new ValidationError('path must have at least one segment');
+  }
+
+  if (ctx.repo.exists(slug, segments)) {
+    sendJson(res, 200, { ok: true, existed: true });
+    return;
+  }
+
+  const rawLabel = typeof body.label === 'string' ? body.label.trim() : '';
+  const label = rawLabel || segments[segments.length - 1];
+  // Route the seed through the funnel so it snapshots + suppresses like any
+  // other write. `emptyBoard` produces a valid, canonical board.
+  persistBoard(ctx, slug, segments, emptyBoard(label), 'save');
+  sendJson(res, 200, { ok: true, existed: false });
+}

@@ -221,7 +221,7 @@ describe('FileWatcher fs.watch integration (real filesystem)', () => {
   // timeout kept below the test timeout.
   it(
     'detects a real atomic write (temp file + rename) to a board file and reports external-change',
-    { retry: 2 },
+    { retry: 2, timeout: 15000 },
     async () => {
       const onExternalChange = vi.fn();
       const watcher = new FileWatcher({
@@ -250,6 +250,5 @@ describe('FileWatcher fs.watch integration (real filesystem)', () => {
         watcher.dispose();
       }
     },
-    15000,
   );
 });
