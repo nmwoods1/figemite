@@ -110,4 +110,21 @@ export class AiSessionManager {
     const record = this.sessions.get(sessionKey(slug, subPath));
     return record ? { locked: record.locked, epoch: record.epoch } : { locked: false, epoch: 0 };
   }
+
+  /**
+   * Cancels every pending auto-end `setTimeout` across all sessions, so
+   * nothing keeps the process (or a test worker) alive after the owning
+   * server shuts down. This is a lifecycle/handle concern only: it does NOT
+   * fire `onChange`, does NOT unlock any session, and does NOT clear session
+   * state — a disposed manager still answers `isLocked`/`status` queries
+   * correctly, it just guarantees no timer will fire after this call.
+   */
+  dispose(): void {
+    for (const record of this.sessions.values()) {
+      if (record.timer) {
+        clearTimeout(record.timer);
+        record.timer = null;
+      }
+    }
+  }
 }

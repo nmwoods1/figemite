@@ -172,3 +172,33 @@ describe('multiple independent keys', () => {
     expect(mgr.isLocked('board-b', [])).toBe(true);
   });
 });
+
+describe('dispose', () => {
+  it('cancels every pending auto-end timer so none fire afterwards', () => {
+    const onChange = vi.fn();
+    const mgr = new AiSessionManager({ autoEndMs: 5000, onChange });
+    mgr.begin('board-a', []);
+    mgr.begin('board-b', []);
+    onChange.mockClear();
+
+    mgr.dispose();
+    vi.advanceTimersByTime(10_000);
+
+    // No auto-end transition fired for either key after dispose.
+    expect(onChange).not.toHaveBeenCalled();
+  });
+
+  it('does not throw when called with no active sessions', () => {
+    const mgr = new AiSessionManager({});
+    expect(() => mgr.dispose()).not.toThrow();
+  });
+
+  it('leaves isLocked/status queryable (does not clear session state, only timers)', () => {
+    const mgr = new AiSessionManager({ autoEndMs: 5000 });
+    mgr.begin('board-a', []);
+    mgr.dispose();
+    // The lock state itself is a query concern, not a lifecycle one — dispose
+    // only guarantees no timer fires later; it does not force-unlock.
+    expect(mgr.isLocked('board-a', [])).toBe(true);
+  });
+});

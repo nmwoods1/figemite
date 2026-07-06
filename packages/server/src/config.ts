@@ -21,4 +21,20 @@ export interface ServerConfig {
   host?: string;
   /** Enables `MdnsService` LAN advertisement. Defaults to `false` — genuinely off unless set. */
   mdns?: boolean;
+  /**
+   * Socket-level timeout budget in ms, applied by `startServer` to the
+   * underlying `http.Server`'s `requestTimeout` / `headersTimeout` /
+   * `keepAliveTimeout`. Bounds how long a slow/stalled client (a slowloris-
+   * style connection that opens a socket and trickles bytes, or never sends a
+   * full request) can hold a connection open. Defaults to 30 seconds.
+   */
+  requestTimeoutMs?: number;
+  /** File-watcher debounce window in ms — see `FileWatcher`. Configurable here so tests can shrink it. */
+  debounceMs?: number;
+  /** File-watcher self-write suppression window in ms — see `FileWatcher`. */
+  suppressMs?: number;
+  /** AI auto-end timeout in ms — see `AiSessionManager`. */
+  autoEndMs?: number;
+  /** SSE heartbeat interval in ms — see `SseHub`. */
+  heartbeatMs?: number;
 }

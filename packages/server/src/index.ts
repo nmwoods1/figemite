@@ -19,3 +19,8 @@ export * from './api/errors.js';
 export * from './api/persist.js';
 export * from './api/ai-broadcast.js';
 export * from './api/router.js';
+
+// ── Composition + static export (P1-T13) ─────────────────────────────────────
+export * from './create-server.js';
+export * from './start-server.js';
+export * from './static-export.js';
