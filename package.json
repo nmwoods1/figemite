@@ -10,6 +10,7 @@
     "packages/*"
   ],
   "scripts": {
+    "dev": "npm -w @easel/client run dev",
     "lint": "eslint .",
     "format": "prettier --write .",
     "format:check": "prettier --check .",

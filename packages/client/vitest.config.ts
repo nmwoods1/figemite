@@ -1,0 +1,14 @@
+import { defineConfig } from 'vitest/config';
+
+// The client is the only package that renders to the DOM, so it's the only
+// one that needs a jsdom test environment; `@easel/shared` and
+// `@easel/server` run fine under Vitest's node default. The root
+// `vitest.config.ts`'s `projects: ['packages/*']` picks this file up
+// automatically for `packages/client`, so `npm test` from the repo root
+// still runs every package's tests, each in the right environment.
+export default defineConfig({
+  test: {
+    environment: 'jsdom',
+    setupFiles: ['./src/test/setup.ts'],
+  },
+});
