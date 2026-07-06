@@ -3,9 +3,12 @@
 // 4-`<Handle>` block copy-pasted across StickyNode/ShapeNode/EmojiNode/
 // IconNode in the legacy prototype.
 //
-// Hidden/non-interactive in read-only mode (gated on `interactive`), since
-// Phase 3 is render-only — edge-drawing interaction lands later, but a
-// read-only board should never show connection affordances at all.
+// CRITICAL: the handle ELEMENTS must exist in the DOM at all times, even on a
+// read-only board — ReactFlow measures each handle's position to compute
+// `handleBounds`, and `getEdgePosition` (error #008) fails to route edges if
+// a node has no handles. So `interactive` gates the handles' BEHAVIOUR
+// (`isConnectable`) and visibility, NOT their existence. A read-only board
+// renders all four handles but non-connectable + visually hidden.
 
 import { afterEach, describe, expect, it } from 'vitest';
 import { cleanup, render } from '@testing-library/react';
@@ -31,10 +34,31 @@ describe('ConnectionHandles', () => {
     expect(handles).toHaveLength(4);
   });
 
-  it('renders no handles when not interactive (read-only)', () => {
+  it('still renders all 4 handles when NOT interactive (so ReactFlow can measure them and route edges)', () => {
     const { container } = renderHandles({ interactive: false });
     const handles = container.querySelectorAll('.react-flow__handle');
-    expect(handles).toHaveLength(0);
+    expect(handles).toHaveLength(4);
+  });
+
+  it('makes handles connectable when interactive', () => {
+    const { container } = renderHandles({ interactive: true });
+    const handles = container.querySelectorAll('.react-flow__handle');
+    for (const handle of handles) {
+      // RF adds the `connectable` class only when isConnectable is true.
+      expect(handle.classList.contains('connectable')).toBe(true);
+    }
+  });
+
+  it('makes handles non-connectable and visually hidden when NOT interactive (read-only)', () => {
+    const { container } = renderHandles({ interactive: false });
+    const handles = container.querySelectorAll('.react-flow__handle');
+    expect(handles).toHaveLength(4);
+    for (const handle of handles) {
+      expect(handle.classList.contains('connectable')).toBe(false);
+      const el = handle as HTMLElement;
+      expect(el.style.opacity).toBe('0');
+      expect(el.style.pointerEvents).toBe('none');
+    }
   });
 
   it('uses default bbox-edge-midpoint anchors by default', () => {

@@ -63,14 +63,18 @@ describe('IconNode', () => {
     expect(screen.queryByRole('button')).not.toBeInTheDocument();
   });
 
-  it('renders 4 connection handles when an onOpenDescription (editable) callback is present', () => {
+  it('renders 4 connectable handles when an onOpenDescription (editable) callback is present', () => {
     const { container } = renderIcon({ onOpenDescription: vi.fn() });
-    expect(container.querySelectorAll('.react-flow__handle')).toHaveLength(4);
+    const handles = container.querySelectorAll('.react-flow__handle');
+    expect(handles).toHaveLength(4);
+    for (const handle of handles) expect(handle.classList.contains('connectable')).toBe(true);
   });
 
-  it('renders no connection handles when fully read-only', () => {
+  it('still renders 4 handles when fully read-only, but non-connectable (so edges route)', () => {
     const { container } = renderIcon();
-    expect(container.querySelectorAll('.react-flow__handle')).toHaveLength(0);
+    const handles = container.querySelectorAll('.react-flow__handle');
+    expect(handles).toHaveLength(4);
+    for (const handle of handles) expect(handle.classList.contains('connectable')).toBe(false);
   });
 
   it('nests connection handles inside the rotation wrapper (handles rotate with the icon)', () => {

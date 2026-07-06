@@ -24,7 +24,7 @@
 // board) gets `fitView` instead, so an empty/fresh board doesn't render
 // pinned at (0,0) zoom 1 regardless of where its content actually is.
 import { useEffect, useMemo } from 'react';
-import { Background, Controls, ReactFlow, ReactFlowProvider } from '@xyflow/react';
+import { Background, ConnectionMode, Controls, ReactFlow, ReactFlowProvider } from '@xyflow/react';
 import type { BoardFile } from '@easel/shared';
 import { createBoardStore } from '../store/board-store.js';
 import { useBoardStore } from '../store/use-board-store.js';
@@ -66,6 +66,14 @@ export function BoardCanvas({ board, readonly }: BoardCanvasProps) {
           edgeTypes={edgeTypes}
           nodes={rf.nodes}
           edges={rf.edges}
+          // Loose connection mode: every node handle is `type="source"` (see
+          // ConnectionHandles), so an edge whose endpoint targets one of them
+          // only resolves if a source handle may also act as a target — which
+          // is exactly what Loose allows. The default (Strict) rejects a
+          // source handle as an edge target, so `getEdgePosition` fails
+          // (error #008) and edges never paint. Matches the legacy prototype,
+          // which set `ConnectionMode.Loose` for the same reason.
+          connectionMode={ConnectionMode.Loose}
           defaultViewport={useFitView ? undefined : board.viewport}
           fitView={useFitView}
           nodesDraggable={!readonly}

@@ -74,14 +74,18 @@ describe('EmojiNode', () => {
     expect(onTextChange).toHaveBeenCalledWith('e1', '🚀');
   });
 
-  it('renders 4 connection handles when editable', () => {
+  it('renders 4 connectable connection handles when editable', () => {
     const { container } = renderEmoji({ onTextChange: vi.fn() });
-    expect(container.querySelectorAll('.react-flow__handle')).toHaveLength(4);
+    const handles = container.querySelectorAll('.react-flow__handle');
+    expect(handles).toHaveLength(4);
+    for (const handle of handles) expect(handle.classList.contains('connectable')).toBe(true);
   });
 
-  it('renders no connection handles when read-only', () => {
+  it('still renders 4 handles when read-only, but non-connectable (so edges route)', () => {
     const { container } = renderEmoji();
-    expect(container.querySelectorAll('.react-flow__handle')).toHaveLength(0);
+    const handles = container.querySelectorAll('.react-flow__handle');
+    expect(handles).toHaveLength(4);
+    for (const handle of handles) expect(handle.classList.contains('connectable')).toBe(false);
   });
 
   it('nests connection handles inside the rotation wrapper (handles rotate with the glyph)', () => {

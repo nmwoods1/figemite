@@ -73,4 +73,12 @@ describe('StickyNode', () => {
     fireEvent.blur(textarea);
     expect(onTextChange).toHaveBeenCalledWith('s1', 'Buy bread');
   });
+
+  it('always renders 4 connection handles, even read-only, so edges to/from it route', () => {
+    // A read-only sticky (no onTextChange) is still an edge endpoint in real
+    // boards (the kitchen-sink fixture's `sticky1 -> sticky2` edge). Handles
+    // must exist in the DOM for ReactFlow to measure them and route the edge.
+    const { container } = renderSticky();
+    expect(container.querySelectorAll('.react-flow__handle')).toHaveLength(4);
+  });
 });

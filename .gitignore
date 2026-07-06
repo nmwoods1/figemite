@@ -9,3 +9,6 @@ public/
 *.tsbuildinfo
 .DS_Store
 .env*
+# session tooling — never versioned
+.claude/
+.playwright-mcp/

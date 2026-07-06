@@ -174,18 +174,21 @@ describe('ShapeNode — text, rotation, description, editing', () => {
 });
 
 describe('ShapeNode — connection handles', () => {
-  it('renders 4 connection handles when editable, at bbox-edge midpoints for non-diamond shapes', () => {
+  it('renders 4 connectable handles when editable, at bbox-edge midpoints for non-diamond shapes', () => {
     const { container } = renderShape({ shape: 'rect', onTextChange: vi.fn() });
     const handles = container.querySelectorAll('.react-flow__handle');
     expect(handles).toHaveLength(4);
     for (const handle of handles) {
       expect((handle as HTMLElement).style.left).toBe('');
+      expect(handle.classList.contains('connectable')).toBe(true);
     }
   });
 
-  it('renders no connection handles when read-only', () => {
+  it('still renders 4 handles when read-only, but non-connectable (so edges route)', () => {
     const { container } = renderShape({ shape: 'rect' });
-    expect(container.querySelectorAll('.react-flow__handle')).toHaveLength(0);
+    const handles = container.querySelectorAll('.react-flow__handle');
+    expect(handles).toHaveLength(4);
+    for (const handle of handles) expect(handle.classList.contains('connectable')).toBe(false);
   });
 
   it("anchors the diamond's handles at its 4 visual vertices, not the bbox edge midpoints", () => {
