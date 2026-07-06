@@ -13,7 +13,10 @@ export type LineStyle = 'solid' | 'dashed';
 export type EdgeKind = 'arrow' | 'cardinality';
 export type Cardinality = '1:1' | '1:N' | 'N:1' | 'N:N';
 
-export type StickyColor = '#fef3c7' | '#dbeafe' | '#dcfce7' | '#fce7f3' | '#ede9fe' | '#e2e8f0';
+// A sticky's fill color as a hex string. Conventionally one of
+// `STICKY_COLORS` (the picker palette) but any hex is valid — matches
+// ShapeNode/FrameNode color.
+export type StickyColor = string;
 
 export interface XY {
   x: number;

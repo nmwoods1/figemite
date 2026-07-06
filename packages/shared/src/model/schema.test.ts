@@ -320,13 +320,15 @@ describe('parseBoardFile: invalid inputs are rejected', () => {
     expect(() => parseBoardFile(broken)).toThrow();
   });
 
-  it('rejects a sticky with a non-palette color', () => {
+  it('accepts a sticky with a free-form (non-palette) hex color', () => {
     const board = validBoardFile();
     const broken = {
       ...board,
       nodes: board.nodes.map((n) => (n.type === 'sticky' ? { ...n, color: '#123456' } : n)),
     };
-    expect(() => parseBoardFile(broken)).toThrow();
+    const result = parseBoardFile(broken);
+    const sticky = result.nodes.find((n) => n.type === 'sticky');
+    expect(sticky?.color).toBe('#123456');
   });
 
   it('rejects a bad cardinality enum value', () => {
@@ -349,7 +351,10 @@ describe('parseBoardFile: invalid inputs are rejected', () => {
 
   it('includes zod issue details in the thrown error message', () => {
     const board = validBoardFile();
-    const broken = { ...board, nodes: [{ ...board.nodes[0], color: '#123456' }] };
+    // color must still be a string (StickyColor is free-form hex, not
+    // unconstrained) — a non-string value is invalid and exercises the same
+    // "zod issue details surface in the message" behavior this test checks.
+    const broken = { ...board, nodes: [{ ...board.nodes[0], color: 123456 }] };
     try {
       parseBoardFile(broken);
       expect.unreachable('expected parseBoardFile to throw');

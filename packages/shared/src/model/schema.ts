@@ -18,7 +18,7 @@ import { z } from 'zod';
 import type { BoardFile, BoardNode, BoardEdge } from './board.js';
 import type { CommentsFile } from './comments.js';
 import type { TagsFile } from './tags.js';
-import { STICKY_COLORS, SHAPE_KINDS, FORMAT_VERSION } from './constants.js';
+import { SHAPE_KINDS, FORMAT_VERSION } from './constants.js';
 
 // ── ID / slug grammar ────────────────────────────────────────────────────────
 //
@@ -91,13 +91,13 @@ export const LineStyleSchema = z.enum(['solid', 'dashed']);
 export const EdgeKindSchema = z.enum(['arrow', 'cardinality']);
 export const CardinalitySchema = z.enum(['1:1', '1:N', 'N:1', 'N:N']);
 
-// z.enum requires a non-empty tuple of literal strings; STICKY_COLORS /
-// SHAPE_KINDS are already exactly that (see constants.ts), so this is also a
-// build-time guard: if a color/shape is added to one but not the other, the
-// tuple types stop lining up.
-export const StickyColorSchema = z.enum(
-  STICKY_COLORS as [(typeof STICKY_COLORS)[number], ...(typeof STICKY_COLORS)[number][]],
-);
+// StickyColor is a free-form hex string (like ShapeNode/FrameNode's `color`)
+// — STICKY_COLORS is only the picker palette/default, not an exhaustive
+// enum, so this validates as a plain string rather than z.enum(STICKY_COLORS).
+export const StickyColorSchema = z.string();
+
+// z.enum requires a non-empty tuple of literal strings; SHAPE_KINDS is
+// already exactly that (see constants.ts).
 export const ShapeKindSchema = z.enum(
   SHAPE_KINDS as [(typeof SHAPE_KINDS)[number], ...(typeof SHAPE_KINDS)[number][]],
 );

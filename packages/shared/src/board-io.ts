@@ -216,6 +216,10 @@ export function pruneEdgesForDeletedNodes(
 
 // ── Color cycling ─────────────────────────────────────────────────────────────
 
+// Cycles through the STICKY_COLORS palette. `current` isn't required to be a
+// palette color (StickyColor is free-form hex) — if it isn't found (indexOf
+// === -1), `(-1 + 1) % length === 0` naturally lands on the first palette
+// color, which is a sensible fallback rather than an error.
 export function nextStickyColor(current: StickyColor): StickyColor {
   const idx = STICKY_COLORS.indexOf(current);
   return STICKY_COLORS[(idx + 1) % STICKY_COLORS.length];

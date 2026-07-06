@@ -1,5 +1,10 @@
 import type { StickyColor, ShapeKind, WH } from './board.js';
 
+// The suggested sticky-color palette shown in the color picker (and the
+// default cycled through by `nextStickyColor`) — not an exhaustive
+// constraint. `StickyColor` is a free-form hex string, so a sticky's `color`
+// may legitimately be a hex value outside this list (e.g. from a legacy
+// board or an external import).
 export const STICKY_COLORS: StickyColor[] = [
   '#fef3c7',
   '#dbeafe',
