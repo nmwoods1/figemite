@@ -190,4 +190,309 @@ describe('useEditableCanvas', () => {
     expect(result.current.selectedNodeIds.has('s1')).toBe(false);
     store.destroy();
   });
+
+  // ── P4-T24: editing callbacks injected into node data ───────────────────────
+
+  describe('injected node-data callbacks', () => {
+    it("wires a sticky node's onTextChange to commit via setNodeText", () => {
+      const store = createBoardStore(fixtureBoard(), { readonly: false });
+      const { result } = renderHook(() => useEditableCanvas(store));
+      const s1 = result.current.nodes.find((n) => n.id === 's1');
+      const onTextChange = s1?.data.onTextChange as (id: string, text: string) => void;
+      expect(onTextChange).toBeTypeOf('function');
+      act(() => {
+        onTextChange('s1', 'updated');
+      });
+      const snap = store.getSnapshot().nodes.find((n) => n.id === 's1');
+      expect(snap).toMatchObject({ text: 'updated' });
+      store.destroy();
+    });
+
+    it("wires a frame node's onTitleChange to commit via setNodeText (title)", () => {
+      const board = fixtureBoard();
+      board.nodes.push({
+        id: 'f1',
+        type: 'frame',
+        pos: { x: 0, y: 0 },
+        order: 2,
+        size: { width: 480, height: 320 },
+        title: 'Old',
+        color: '#fef3c7',
+      });
+      const store = createBoardStore(board, { readonly: false });
+      const { result } = renderHook(() => useEditableCanvas(store));
+      const f1 = result.current.nodes.find((n) => n.id === 'f1');
+      const onTitleChange = f1?.data.onTitleChange as (id: string, title: string) => void;
+      expect(onTitleChange).toBeTypeOf('function');
+      act(() => {
+        onTitleChange('f1', 'New title');
+      });
+      const snap = store.getSnapshot().nodes.find((n) => n.id === 'f1');
+      expect(snap).toMatchObject({ title: 'New title' });
+      store.destroy();
+    });
+
+    it('wires onOpenDescription as a callable no-op seam', () => {
+      const store = createBoardStore(fixtureBoard(), { readonly: false });
+      const { result } = renderHook(() => useEditableCanvas(store));
+      const s1 = result.current.nodes.find((n) => n.id === 's1');
+      const onOpenDescription = s1?.data.onOpenDescription as (id: string) => void;
+      expect(onOpenDescription).toBeTypeOf('function');
+      expect(() => onOpenDescription('s1')).not.toThrow();
+      store.destroy();
+    });
+
+    it('read-only nodes are never given editing callbacks', () => {
+      const store = createBoardStore(fixtureBoard(), { readonly: true });
+      const { result } = renderHook(() => useEditableCanvas(store));
+      const s1 = result.current.nodes.find((n) => n.id === 's1');
+      expect(s1?.data.onTextChange).toBeUndefined();
+      expect(s1?.data.onOpenDescription).toBeUndefined();
+      store.destroy();
+    });
+
+    it('injected callbacks are referentially stable across re-renders (reconciler idempotence)', () => {
+      const store = createBoardStore(fixtureBoard(), { readonly: false });
+      const { result, rerender } = renderHook(() => useEditableCanvas(store));
+      const before = result.current.nodes.find((n) => n.id === 's1')?.data.onTextChange;
+      rerender();
+      const after = result.current.nodes.find((n) => n.id === 's1')?.data.onTextChange;
+      expect(after).toBe(before);
+      store.destroy();
+    });
+
+    it('injected callbacks stay stable across an UNRELATED doc update', () => {
+      const store = createBoardStore(fixtureBoard(), { readonly: false });
+      const { result } = renderHook(() => useEditableCanvas(store));
+      const before = result.current.nodes.find((n) => n.id === 's1')?.data.onTextChange;
+      act(() => {
+        store.moveNode('s2', { x: 42, y: 42 });
+      });
+      const after = result.current.nodes.find((n) => n.id === 's1')?.data.onTextChange;
+      expect(after).toBe(before);
+      store.destroy();
+    });
+
+    it('a doc update caused by a commit through an injected callback does not change node identity for an untouched node', () => {
+      const store = createBoardStore(fixtureBoard(), { readonly: false });
+      const { result } = renderHook(() => useEditableCanvas(store));
+      const s2Before = result.current.nodes.find((n) => n.id === 's2');
+      const onTextChange = result.current.nodes.find((n) => n.id === 's1')?.data.onTextChange as (
+        id: string,
+        text: string,
+      ) => void;
+      act(() => {
+        onTextChange('s1', 'changed');
+      });
+      const s2After = result.current.nodes.find((n) => n.id === 's2');
+      // reconcile.ts's idempotence guarantee: an object untouched by the
+      // commit keeps its reference across the doc tick this commit causes.
+      expect(s2After).toBe(s2Before);
+      store.destroy();
+    });
+
+    it("wires a sticky node's onResizeEnd to commit via resizeNode", () => {
+      const store = createBoardStore(fixtureBoard(), { readonly: false });
+      const { result } = renderHook(() => useEditableCanvas(store));
+      const s1 = result.current.nodes.find((n) => n.id === 's1');
+      const onResizeEnd = s1?.data.onResizeEnd as (
+        id: string,
+        size: { width: number; height: number },
+      ) => void;
+      expect(onResizeEnd).toBeTypeOf('function');
+      act(() => {
+        onResizeEnd('s1', { width: 300, height: 220 });
+      });
+      const snap = store.getSnapshot().nodes.find((n) => n.id === 's1');
+      expect(snap).toMatchObject({ size: { width: 300, height: 220 } });
+      store.destroy();
+    });
+
+    it("wires an emoji node's onResizeEnd (square) to commit a single numeric size via resizeNode", () => {
+      const board = fixtureBoard();
+      board.nodes.push({
+        id: 'em1',
+        type: 'emoji',
+        pos: { x: 0, y: 0 },
+        order: 2,
+        text: '🎉',
+        size: 64,
+      });
+      const store = createBoardStore(board, { readonly: false });
+      const { result } = renderHook(() => useEditableCanvas(store));
+      const em1 = result.current.nodes.find((n) => n.id === 'em1');
+      const onResizeEnd = em1?.data.onResizeEnd as (id: string, size: number) => void;
+      expect(onResizeEnd).toBeTypeOf('function');
+      act(() => {
+        onResizeEnd('em1', 96);
+      });
+      const snap = store.getSnapshot().nodes.find((n) => n.id === 'em1');
+      expect(snap).toMatchObject({ size: 96 });
+      store.destroy();
+    });
+
+    it("wires a shape node's onRotate to commit via rotateNode", () => {
+      const board = fixtureBoard();
+      board.nodes.push({
+        id: 'sh1',
+        type: 'shape',
+        pos: { x: 0, y: 0 },
+        order: 2,
+        size: { width: 160, height: 100 },
+        shape: 'rect',
+        color: '#fff',
+      });
+      const store = createBoardStore(board, { readonly: false });
+      const { result } = renderHook(() => useEditableCanvas(store));
+      const sh1 = result.current.nodes.find((n) => n.id === 'sh1');
+      const onRotate = sh1?.data.onRotate as (id: string, rotation: number) => void;
+      expect(onRotate).toBeTypeOf('function');
+      act(() => {
+        onRotate('sh1', 45);
+      });
+      const snap = store.getSnapshot().nodes.find((n) => n.id === 'sh1');
+      expect(snap).toMatchObject({ rotation: 45 });
+      store.destroy();
+    });
+
+    it('a sticky node never gets onRotate (not a rotatable type)', () => {
+      const store = createBoardStore(fixtureBoard(), { readonly: false });
+      const { result } = renderHook(() => useEditableCanvas(store));
+      const s1 = result.current.nodes.find((n) => n.id === 's1');
+      expect(s1?.data.onRotate).toBeUndefined();
+      store.destroy();
+    });
+
+    it('onResizeEnd/onRotate stay referentially stable across re-renders too', () => {
+      const board = fixtureBoard();
+      board.nodes.push({
+        id: 'sh1',
+        type: 'shape',
+        pos: { x: 0, y: 0 },
+        order: 2,
+        size: { width: 160, height: 100 },
+        shape: 'rect',
+        color: '#fff',
+      });
+      const store = createBoardStore(board, { readonly: false });
+      const { result, rerender } = renderHook(() => useEditableCanvas(store));
+      const sh1Before = result.current.nodes.find((n) => n.id === 'sh1');
+      rerender();
+      const sh1After = result.current.nodes.find((n) => n.id === 'sh1');
+      expect(sh1After?.data.onResizeEnd).toBe(sh1Before?.data.onResizeEnd);
+      expect(sh1After?.data.onRotate).toBe(sh1Before?.data.onRotate);
+      store.destroy();
+    });
+  });
+
+  // ── P4-T24: injected edge-styling callbacks ─────────────────────────────────
+
+  describe('injected edge-data callbacks', () => {
+    it("wires an edge's onLabelChange to commit via setEdgeLabel", () => {
+      const store = createBoardStore(fixtureBoard(), { readonly: false });
+      const { result } = renderHook(() => useEditableCanvas(store));
+      const e1 = result.current.edges.find((e) => e.id === 'e1');
+      const onLabelChange = e1?.data?.onLabelChange as (id: string, label: string) => void;
+      expect(onLabelChange).toBeTypeOf('function');
+      act(() => {
+        onLabelChange('e1', 'triggers');
+      });
+      const snap = store.getSnapshot().edges.find((e) => e.id === 'e1');
+      expect(snap?.label).toBe('triggers');
+      store.destroy();
+    });
+
+    it("wires an arrow edge's onArrowChange to commit via setEdgeArrow", () => {
+      const store = createBoardStore(fixtureBoard(), { readonly: false });
+      const { result } = renderHook(() => useEditableCanvas(store));
+      const e1 = result.current.edges.find((e) => e.id === 'e1');
+      const onArrowChange = e1?.data?.onArrowChange as (id: string, arrow: string) => void;
+      expect(onArrowChange).toBeTypeOf('function');
+      act(() => {
+        onArrowChange('e1', 'both');
+      });
+      const snap = store.getSnapshot().edges.find((e) => e.id === 'e1');
+      expect(snap?.arrow).toBe('both');
+      store.destroy();
+    });
+
+    it("wires an edge's onStyleChange to commit via setEdgeLineStyle", () => {
+      const store = createBoardStore(fixtureBoard(), { readonly: false });
+      const { result } = renderHook(() => useEditableCanvas(store));
+      const e1 = result.current.edges.find((e) => e.id === 'e1');
+      const onStyleChange = e1?.data?.onStyleChange as (id: string, style: string) => void;
+      expect(onStyleChange).toBeTypeOf('function');
+      act(() => {
+        onStyleChange('e1', 'dashed');
+      });
+      const snap = store.getSnapshot().edges.find((e) => e.id === 'e1');
+      expect(snap?.style).toBe('dashed');
+      store.destroy();
+    });
+
+    it("wires a cardinality edge's onCardinalityChange to commit via setEdgeCardinality", () => {
+      const board = fixtureBoard();
+      board.edges.push({
+        id: 'e2',
+        source: 's1',
+        target: 's2',
+        style: 'solid',
+        kind: 'cardinality',
+        cardinality: '1:N',
+      });
+      const store = createBoardStore(board, { readonly: false });
+      const { result } = renderHook(() => useEditableCanvas(store));
+      const e2 = result.current.edges.find((e) => e.id === 'e2');
+      const onCardinalityChange = e2?.data?.onCardinalityChange as (
+        id: string,
+        cardinality: string,
+      ) => void;
+      expect(onCardinalityChange).toBeTypeOf('function');
+      act(() => {
+        onCardinalityChange('e2', 'N:N');
+      });
+      const snap = store.getSnapshot().edges.find((e) => e.id === 'e2');
+      expect(snap?.cardinality).toBe('N:N');
+      store.destroy();
+    });
+
+    it('an arrow edge never gets onCardinalityChange; a cardinality edge never gets onArrowChange', () => {
+      const board = fixtureBoard();
+      board.edges.push({
+        id: 'e2',
+        source: 's1',
+        target: 's2',
+        style: 'solid',
+        kind: 'cardinality',
+        cardinality: '1:N',
+      });
+      const store = createBoardStore(board, { readonly: false });
+      const { result } = renderHook(() => useEditableCanvas(store));
+      const e1 = result.current.edges.find((e) => e.id === 'e1');
+      const e2 = result.current.edges.find((e) => e.id === 'e2');
+      expect(e1?.data?.onCardinalityChange).toBeUndefined();
+      expect(e2?.data?.onArrowChange).toBeUndefined();
+      store.destroy();
+    });
+
+    it('read-only edges never get editing callbacks', () => {
+      const store = createBoardStore(fixtureBoard(), { readonly: true });
+      const { result } = renderHook(() => useEditableCanvas(store));
+      const e1 = result.current.edges.find((e) => e.id === 'e1');
+      expect(e1?.data?.onLabelChange).toBeUndefined();
+      expect(e1?.data?.onArrowChange).toBeUndefined();
+      expect(e1?.data?.onStyleChange).toBeUndefined();
+      store.destroy();
+    });
+
+    it('injected edge callbacks are referentially stable across re-renders', () => {
+      const store = createBoardStore(fixtureBoard(), { readonly: false });
+      const { result, rerender } = renderHook(() => useEditableCanvas(store));
+      const before = result.current.edges.find((e) => e.id === 'e1')?.data?.onLabelChange;
+      rerender();
+      const after = result.current.edges.find((e) => e.id === 'e1')?.data?.onLabelChange;
+      expect(after).toBe(before);
+      store.destroy();
+    });
+  });
 });

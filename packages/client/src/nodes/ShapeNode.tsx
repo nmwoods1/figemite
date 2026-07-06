@@ -3,11 +3,17 @@
 // Ported from figmalade's ShapeNode.tsx (the biggest single port in this
 // task, ~428 lines): the 12 `ShapeKind`s rendered as scalable SVG, each with
 // a shape-specific text inset so labels stay clear of corners the shape
-// carves out (a triangle's tip, a diamond's points, …). Resize/rotate
-// interaction HANDLERS (NodeResizer, RotationHandle drag-to-rotate) and the
-// drill-in badge are Phase 4 / out of scope — `data.rotation` is applied as
-// a static CSS transform via BaseNode, and only the description badge (a
+// carves out (a triangle's tip, a diamond's points, …). The drill-in badge
+// is still out of scope (a later task) — only the description badge (a
 // presence indicator + open-seam) is built.
+//
+// P4-T24: `NodeResizer` and `RotationHandle` are rendered as SIBLINGS of
+// `BaseNode` — NOT inside its rotation-transform wrapper — so neither the
+// resize handles nor the rotation knob spin along with the shape (matching
+// the legacy's identical sibling placement; see EmojiNode.tsx's module doc
+// for the same rationale). `RotationHandle` measures `BaseNode`'s rotation
+// div via its `rotationRef` prop to compute the drag angle around the
+// node's actual (rotating) center.
 //
 // Diamond nuance (ported faithfully): a diamond's visual vertices sit INSET
 // from its bounding-box edges (see `renderShape`'s diamond case — the
@@ -19,14 +25,17 @@
 // `ConnectionHandles`'s `anchors` prop (built for exactly this case, see its
 // module doc) takes those coordinates directly.
 
-import { useMemo } from 'react';
+import { useMemo, useRef } from 'react';
 import type { ReactNode } from 'react';
 import type { NodeProps, Node } from '@xyflow/react';
+import { NodeResizer } from '@xyflow/react';
 import type { ShapeKind } from '@easel/shared';
 import { ConnectionHandles } from './ConnectionHandles.js';
 import type { HandleAnchors } from './ConnectionHandles.js';
 import { BaseNode } from './BaseNode.js';
+import { RotationHandle } from './RotationHandle.js';
 import { useEditableText } from './useEditableText.js';
+import { useIsMultiSelected } from './use-is-multi-selected.js';
 
 export interface ShapeNodeData extends Record<string, unknown> {
   shape: ShapeKind;
@@ -38,7 +47,13 @@ export interface ShapeNodeData extends Record<string, unknown> {
   rotation?: number;
   onTextChange?: (id: string, newText: string) => void;
   onOpenDescription?: (id: string) => void;
+  onResizeEnd?: (id: string, size: { width: number; height: number }) => void;
+  onRotate?: (id: string, rotation: number) => void;
 }
+
+/** Ported from legacy ShapeNode's NodeResizer minWidth/minHeight. */
+const MIN_WIDTH = 60;
+const MIN_HEIGHT = 40;
 
 // ── Shape-specific geometry helpers ─────────────────────────────────────────
 //
@@ -276,6 +291,10 @@ function getDiamondAnchors(w: number, h: number): HandleAnchors {
 
 export function ShapeNode({ id, data, selected }: NodeProps<Node<ShapeNodeData, 'shape'>>) {
   const editable = !!data.onTextChange;
+  const resizable = !!data.onResizeEnd;
+  const rotatable = !!data.onRotate;
+  const multiSelected = useIsMultiSelected();
+  const wrapperRef = useRef<HTMLDivElement>(null);
   const { editing, draft, startEdit, onChange, commit, cancel } = useEditableText(
     data.text ?? '',
     (next) => {
@@ -295,92 +314,121 @@ export function ShapeNode({ id, data, selected }: NodeProps<Node<ShapeNodeData, 
   const diamondAnchors = isDiamond ? getDiamondAnchors(w, h) : undefined;
 
   return (
-    <BaseNode
-      nodeId={id}
-      selected={selected}
-      rotation={data.rotation}
-      description={data.description}
-      onOpenDescription={data.onOpenDescription}
-      onDoubleClick={editable ? startEdit : undefined}
-      descriptionBadgeStyle={
-        isDiamond
-          ? { top: Math.round(h * 0.14), right: 'auto', left: 'calc(50% - 8px)' }
-          : undefined
-      }
-    >
-      <ConnectionHandles interactive={editable} anchors={diamondAnchors} />
+    <>
+      <NodeResizer
+        nodeId={id}
+        isVisible={!!selected && resizable && !multiSelected}
+        minWidth={MIN_WIDTH}
+        minHeight={MIN_HEIGHT}
+        handleStyle={{
+          width: 8,
+          height: 8,
+          background: '#fff',
+          border: '1.5px solid #94a3b8',
+          borderRadius: 2,
+        }}
+        onResizeEnd={(_event, params) =>
+          data.onResizeEnd?.(id, { width: params.width, height: params.height })
+        }
+      />
 
-      <div style={{ width: '100%', height: '100%', position: 'relative', cursor: 'default' }}>
-        <svg
-          width={w}
-          height={h}
-          viewBox={`0 0 ${w} ${h}`}
-          style={{ display: 'block', position: 'absolute', inset: 0, pointerEvents: 'none' }}
-        >
-          {element}
-        </svg>
+      {selected && rotatable && !multiSelected && (
+        <RotationHandle
+          nodeId={id}
+          rotation={data.rotation ?? 0}
+          wrapperRef={wrapperRef}
+          onRotate={(nid, deg) => data.onRotate?.(nid, deg)}
+        />
+      )}
 
-        <div
-          style={{
-            position: 'absolute',
-            top: textInset.top,
-            right: textInset.right,
-            bottom: textInset.bottom,
-            left: textInset.left,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            overflow: 'hidden',
-            pointerEvents: 'auto',
-          }}
-        >
-          {editing ? (
-            <textarea
-              className="nodrag"
-              value={draft}
-              onChange={(e) => onChange(e.target.value)}
-              onBlur={commit}
-              onMouseDown={(e) => e.stopPropagation()}
-              onKeyDown={(e) => {
-                if (e.key === 'Escape') cancel();
-                if (e.key === 'Enter' && !e.shiftKey) {
-                  e.preventDefault();
-                  commit();
-                }
-                e.stopPropagation();
-              }}
-              style={{
-                border: 'none',
-                outline: 'none',
-                background: 'transparent',
-                resize: 'none',
-                fontSize: 13,
-                fontWeight: 600,
-                color: '#1e293b',
-                textAlign: 'center',
-                lineHeight: 1.4,
-                width: '100%',
-                fontFamily: 'inherit',
-              }}
-            />
-          ) : (
-            <span
-              style={{
-                fontSize: 13,
-                fontWeight: 600,
-                color: '#1e293b',
-                textAlign: 'center',
-                lineHeight: 1.4,
-                whiteSpace: 'pre-wrap',
-                wordBreak: 'break-word',
-                userSelect: 'none',
-              }}
-            >
-              {data.text || ''}
-            </span>
-          )}
+      <BaseNode
+        nodeId={id}
+        selected={selected}
+        rotation={data.rotation}
+        description={data.description}
+        onOpenDescription={data.onOpenDescription}
+        onDoubleClick={editable ? startEdit : undefined}
+        rotationRef={wrapperRef}
+        descriptionBadgeStyle={
+          isDiamond
+            ? { top: Math.round(h * 0.14), right: 'auto', left: 'calc(50% - 8px)' }
+            : undefined
+        }
+      >
+        <ConnectionHandles interactive={editable} anchors={diamondAnchors} />
+
+        <div style={{ width: '100%', height: '100%', position: 'relative', cursor: 'default' }}>
+          <svg
+            width={w}
+            height={h}
+            viewBox={`0 0 ${w} ${h}`}
+            style={{ display: 'block', position: 'absolute', inset: 0, pointerEvents: 'none' }}
+          >
+            {element}
+          </svg>
+
+          <div
+            style={{
+              position: 'absolute',
+              top: textInset.top,
+              right: textInset.right,
+              bottom: textInset.bottom,
+              left: textInset.left,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              overflow: 'hidden',
+              pointerEvents: 'auto',
+            }}
+          >
+            {editing ? (
+              <textarea
+                className="nodrag"
+                value={draft}
+                onChange={(e) => onChange(e.target.value)}
+                onBlur={commit}
+                onMouseDown={(e) => e.stopPropagation()}
+                onKeyDown={(e) => {
+                  if (e.key === 'Escape') cancel();
+                  if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+                    commit();
+                  }
+                  e.stopPropagation();
+                }}
+                style={{
+                  border: 'none',
+                  outline: 'none',
+                  background: 'transparent',
+                  resize: 'none',
+                  fontSize: 13,
+                  fontWeight: 600,
+                  color: '#1e293b',
+                  textAlign: 'center',
+                  lineHeight: 1.4,
+                  width: '100%',
+                  fontFamily: 'inherit',
+                }}
+              />
+            ) : (
+              <span
+                style={{
+                  fontSize: 13,
+                  fontWeight: 600,
+                  color: '#1e293b',
+                  textAlign: 'center',
+                  lineHeight: 1.4,
+                  whiteSpace: 'pre-wrap',
+                  wordBreak: 'break-word',
+                  userSelect: 'none',
+                }}
+              >
+                {data.text || ''}
+              </span>
+            )}
+          </div>
         </div>
-      </div>
-    </BaseNode>
+      </BaseNode>
+    </>
   );
 }

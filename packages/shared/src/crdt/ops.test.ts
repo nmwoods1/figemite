@@ -248,6 +248,24 @@ describe('edge ops', () => {
     expect(() => updateEdge(doc, 'missing', { label: 'x' })).not.toThrow();
     expect(getSnapshot(doc).edges).toHaveLength(0);
   });
+
+  it('updateEdge with a field explicitly set to undefined REMOVES that key rather than leaving a ghost `undefined` value', () => {
+    // A patch of `{ arrow: undefined }` (e.g. clearing an edge's arrow when
+    // switching kind 'arrow' -> 'cardinality') must actually delete the key
+    // from the merged object, not just overwrite it with `undefined` — a
+    // ghost own-enumerable `arrow: undefined` key would survive a CRDT
+    // encode/decode round-trip (propagating to remote peers) even though
+    // every reader treats `undefined` and "absent" the same way.
+    const doc = new Y.Doc();
+    seedEndpoints(doc);
+    addEdge(doc, { ...makeEdge('e', 'a', 'b'), arrow: 'end' });
+
+    updateEdge(doc, 'e', { arrow: undefined });
+
+    const edge = findEdge(doc, 'e');
+    expect(edge).toBeDefined();
+    expect('arrow' in (edge as object)).toBe(false);
+  });
 });
 
 describe('getSnapshot self-consistency', () => {

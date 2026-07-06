@@ -3,14 +3,33 @@
 // editing, no connection handles, no rotation (none exist in the legacy
 // component either).
 
-import { afterEach, describe, expect, it } from 'vitest';
+import { createElement } from 'react';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, render } from '@testing-library/react';
+import type { ComponentProps } from 'react';
+import { NodeResizer } from '@xyflow/react';
 import { RfTestHarness, makeNodeProps } from '../test/rf.js';
 import { DrawingNode } from './DrawingNode.js';
 import type { DrawingNodeData } from './DrawingNode.js';
 
+// See StickyNode.test.tsx's identical technique/rationale.
+const resizerCalls: ComponentProps<typeof NodeResizer>[] = [];
+vi.mock('@xyflow/react', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@xyflow/react')>();
+  const Wrapped = (props: ComponentProps<typeof actual.NodeResizer>) => {
+    resizerCalls.push(props);
+    return createElement(actual.NodeResizer, props);
+  };
+  return { ...actual, NodeResizer: Wrapped };
+});
+
+function lastResizerProps(): ComponentProps<typeof NodeResizer> {
+  return resizerCalls[resizerCalls.length - 1];
+}
+
 afterEach(() => {
   cleanup();
+  resizerCalls.length = 0;
 });
 
 function renderDrawing(data: Partial<DrawingNodeData> = {}, selected = false) {
@@ -58,5 +77,35 @@ describe('DrawingNode', () => {
     const svg = container.querySelector('svg');
     expect(svg?.getAttribute('width')).toBe('200');
     expect(svg?.getAttribute('height')).toBe('150');
+  });
+
+  // ── P4-T24: resize ───────────────────────────────────────────────────────
+
+  it('renders NodeResizer visible when selected and editable (has onResizeEnd)', () => {
+    renderDrawing({ onResizeEnd: vi.fn() }, true);
+    expect(lastResizerProps().isVisible).toBe(true);
+  });
+
+  it('renders NodeResizer NOT visible when not selected', () => {
+    renderDrawing({ onResizeEnd: vi.fn() }, false);
+    expect(lastResizerProps().isVisible).toBe(false);
+  });
+
+  it('renders NodeResizer NOT visible when read-only (no onResizeEnd)', () => {
+    renderDrawing({}, true);
+    expect(lastResizerProps().isVisible).toBe(false);
+  });
+
+  it('applies a minimum size floor (matching the legacy multi-select MIN_BBOX)', () => {
+    renderDrawing({ onResizeEnd: vi.fn() }, true);
+    expect(lastResizerProps().minWidth).toBe(20);
+    expect(lastResizerProps().minHeight).toBe(20);
+  });
+
+  it('commits the new size via onResizeEnd on resize end', () => {
+    const onResizeEnd = vi.fn();
+    renderDrawing({ onResizeEnd }, true);
+    lastResizerProps().onResizeEnd?.({} as never, { x: 0, y: 0, width: 240, height: 160 });
+    expect(onResizeEnd).toHaveBeenCalledWith('d1', { width: 240, height: 160 });
   });
 });

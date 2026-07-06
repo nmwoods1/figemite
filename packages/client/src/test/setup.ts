@@ -14,3 +14,21 @@ if (typeof globalThis.ResizeObserver === 'undefined') {
   }
   globalThis.ResizeObserver = ResizeObserverStub as unknown as typeof ResizeObserver;
 }
+
+// ── Pointer Capture polyfill ─────────────────────────────────────────────────
+//
+// jsdom doesn't implement Element.setPointerCapture/releasePointerCapture/
+// hasPointerCapture, but RotationHandle (P4-T24, ported from figmalade's
+// RotationHandle.tsx) calls `setPointerCapture` on pointerdown so the drag
+// keeps tracking even if the cursor leaves the small handle. No-op stubs are
+// enough for tests: we assert the resulting rotation math, not real OS-level
+// pointer capture semantics.
+if (typeof Element.prototype.setPointerCapture !== 'function') {
+  Element.prototype.setPointerCapture = () => {};
+}
+if (typeof Element.prototype.releasePointerCapture !== 'function') {
+  Element.prototype.releasePointerCapture = () => {};
+}
+if (typeof Element.prototype.hasPointerCapture !== 'function') {
+  Element.prototype.hasPointerCapture = () => false;
+}

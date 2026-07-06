@@ -1,6 +1,7 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import type { BoardEdge, BoardNode } from '@easel/shared';
 import { boardNodeToRf, boardEdgeToRf, boardToRf } from './rf-adapters.js';
+import type { EdgeCallbacks, NodeCallbacks } from './rf-adapters.js';
 
 function sticky(overrides: Partial<BoardNode> = {}): BoardNode {
   return {
@@ -166,6 +167,220 @@ describe('boardNodeToRf', () => {
     expect(rf.draggable).toBe(false);
     expect(rf.selectable).toBe(false);
   });
+
+  // ── P4-T24: editing-callback injection (editable path only) ────────────────
+
+  function fixtureCallbacks(): NodeCallbacks {
+    return {
+      onTextChange: vi.fn(),
+      onTitleChange: vi.fn(),
+      onOpenDescription: vi.fn(),
+      onResizeEnd: vi.fn(),
+      onResizeEndSquare: vi.fn(),
+      onRotate: vi.fn(),
+    };
+  }
+
+  it('injects onTextChange into a sticky node when callbacks are given', () => {
+    const callbacks = fixtureCallbacks();
+    const rf = boardNodeToRf(sticky(), false, callbacks);
+    expect(rf.data.onTextChange).toBe(callbacks.onTextChange);
+  });
+
+  it('injects onTextChange (not onTitleChange) into a text/shape/emoji node', () => {
+    const callbacks = fixtureCallbacks();
+    const textNode: BoardNode = {
+      id: 't1',
+      type: 'text',
+      pos: { x: 0, y: 0 },
+      order: 0,
+      text: 'x',
+    };
+    const rf = boardNodeToRf(textNode, false, callbacks);
+    expect(rf.data.onTextChange).toBe(callbacks.onTextChange);
+    expect(rf.data.onTitleChange).toBeUndefined();
+  });
+
+  it('injects onTitleChange (not onTextChange) into a frame node', () => {
+    const callbacks = fixtureCallbacks();
+    const frame: BoardNode = {
+      id: 'f1',
+      type: 'frame',
+      pos: { x: 0, y: 0 },
+      order: 0,
+      size: { width: 480, height: 320 },
+      title: 'Frame',
+      color: '#fef3c7',
+    };
+    const rf = boardNodeToRf(frame, false, callbacks);
+    expect(rf.data.onTitleChange).toBe(callbacks.onTitleChange);
+    expect(rf.data.onTextChange).toBeUndefined();
+  });
+
+  it('injects onOpenDescription into every describable node type', () => {
+    const callbacks = fixtureCallbacks();
+    const rf = boardNodeToRf(sticky(), false, callbacks);
+    expect(rf.data.onOpenDescription).toBe(callbacks.onOpenDescription);
+  });
+
+  it('an icon node (no text) still gets onOpenDescription but no onTextChange', () => {
+    const callbacks = fixtureCallbacks();
+    const icon: BoardNode = {
+      id: 'i1',
+      type: 'icon',
+      pos: { x: 0, y: 0 },
+      order: 0,
+      name: 'star',
+      size: 48,
+      color: '#000',
+    };
+    const rf = boardNodeToRf(icon, false, callbacks);
+    expect(rf.data.onOpenDescription).toBe(callbacks.onOpenDescription);
+    expect(rf.data.onTextChange).toBeUndefined();
+  });
+
+  it('a drawing node gets no editing callbacks at all (no text, no description)', () => {
+    const callbacks = fixtureCallbacks();
+    const drawing: BoardNode = {
+      id: 'd1',
+      type: 'drawing',
+      pos: { x: 0, y: 0 },
+      order: 0,
+      size: { width: 100, height: 80 },
+      points: [],
+      color: '#000',
+      strokeWidth: 2,
+    };
+    const rf = boardNodeToRf(drawing, false, callbacks);
+    expect(rf.data.onTextChange).toBeUndefined();
+    expect(rf.data.onOpenDescription).toBeUndefined();
+  });
+
+  it('read-only nodes get NO callbacks even when callbacks are passed (seams stay inert)', () => {
+    const callbacks = fixtureCallbacks();
+    const rf = boardNodeToRf(sticky(), true, callbacks);
+    expect(rf.data.onTextChange).toBeUndefined();
+    expect(rf.data.onOpenDescription).toBeUndefined();
+  });
+
+  it('omitting callbacks entirely leaves data callback-free (read-only path unaffected)', () => {
+    const rf = boardNodeToRf(sticky(), false);
+    expect(rf.data.onTextChange).toBeUndefined();
+    expect(rf.data.onOpenDescription).toBeUndefined();
+  });
+
+  it('boardToRf forwards callbacks to every node via boardNodeToRf', () => {
+    const callbacks = fixtureCallbacks();
+    const { nodes } = boardToRf({ nodes: [sticky()], edges: [] }, false, callbacks);
+    expect(nodes[0].data.onTextChange).toBe(callbacks.onTextChange);
+  });
+
+  // ── P4-T24: resize/rotate callback injection ────────────────────────────────
+
+  it('injects the WH onResizeEnd into a sticky node', () => {
+    const callbacks = fixtureCallbacks();
+    const rf = boardNodeToRf(sticky(), false, callbacks);
+    expect(rf.data.onResizeEnd).toBe(callbacks.onResizeEnd);
+  });
+
+  it('injects the WH onResizeEnd into shape/frame/drawing nodes', () => {
+    const callbacks = fixtureCallbacks();
+    const frame: BoardNode = {
+      id: 'f1',
+      type: 'frame',
+      pos: { x: 0, y: 0 },
+      order: 0,
+      size: { width: 480, height: 320 },
+      title: 'Frame',
+      color: '#fef3c7',
+    };
+    const drawing: BoardNode = {
+      id: 'd1',
+      type: 'drawing',
+      pos: { x: 0, y: 0 },
+      order: 0,
+      size: { width: 100, height: 80 },
+      points: [],
+      color: '#000',
+      strokeWidth: 2,
+    };
+    expect(boardNodeToRf(frame, false, callbacks).data.onResizeEnd).toBe(callbacks.onResizeEnd);
+    expect(boardNodeToRf(drawing, false, callbacks).data.onResizeEnd).toBe(callbacks.onResizeEnd);
+  });
+
+  it('injects the SQUARE onResizeEnd (not the WH one) into emoji/icon nodes', () => {
+    const callbacks = fixtureCallbacks();
+    const emoji: BoardNode = {
+      id: 'em1',
+      type: 'emoji',
+      pos: { x: 0, y: 0 },
+      order: 0,
+      text: '🎉',
+      size: 64,
+    };
+    const icon: BoardNode = {
+      id: 'i1',
+      type: 'icon',
+      pos: { x: 0, y: 0 },
+      order: 0,
+      name: 'star',
+      size: 48,
+      color: '#000',
+    };
+    expect(boardNodeToRf(emoji, false, callbacks).data.onResizeEnd).toBe(
+      callbacks.onResizeEndSquare,
+    );
+    expect(boardNodeToRf(icon, false, callbacks).data.onResizeEnd).toBe(
+      callbacks.onResizeEndSquare,
+    );
+  });
+
+  it('does not inject any onResizeEnd into a text node (not resizable)', () => {
+    const callbacks = fixtureCallbacks();
+    const textNode: BoardNode = {
+      id: 't1',
+      type: 'text',
+      pos: { x: 0, y: 0 },
+      order: 0,
+      text: 'x',
+    };
+    const rf = boardNodeToRf(textNode, false, callbacks);
+    expect(rf.data.onResizeEnd).toBeUndefined();
+  });
+
+  it('injects onRotate into shape/emoji/icon nodes only', () => {
+    const callbacks = fixtureCallbacks();
+    const shape: BoardNode = {
+      id: 'sh1',
+      type: 'shape',
+      pos: { x: 0, y: 0 },
+      order: 0,
+      size: { width: 160, height: 100 },
+      shape: 'rect',
+      color: '#fff',
+    };
+    const emoji: BoardNode = {
+      id: 'em1',
+      type: 'emoji',
+      pos: { x: 0, y: 0 },
+      order: 0,
+      text: '🎉',
+      size: 64,
+    };
+    const icon: BoardNode = {
+      id: 'i1',
+      type: 'icon',
+      pos: { x: 0, y: 0 },
+      order: 0,
+      name: 'star',
+      size: 48,
+      color: '#000',
+    };
+    expect(boardNodeToRf(shape, false, callbacks).data.onRotate).toBe(callbacks.onRotate);
+    expect(boardNodeToRf(emoji, false, callbacks).data.onRotate).toBe(callbacks.onRotate);
+    expect(boardNodeToRf(icon, false, callbacks).data.onRotate).toBe(callbacks.onRotate);
+    expect(boardNodeToRf(sticky(), false, callbacks).data.onRotate).toBeUndefined();
+  });
 });
 
 describe('boardEdgeToRf', () => {
@@ -222,6 +437,59 @@ describe('boardEdgeToRf', () => {
     };
     const rf = boardEdgeToRf(edge);
     expect(rf.data).toMatchObject({ label: 'flows to' });
+  });
+
+  // ── P4-T24: edge-styling callback injection (editable path only) ───────────
+
+  function fixtureEdgeCallbacks(): EdgeCallbacks {
+    return {
+      onLabelChange: vi.fn(),
+      onArrowChange: vi.fn(),
+      onStyleChange: vi.fn(),
+      onCardinalityChange: vi.fn(),
+    };
+  }
+
+  it('injects onLabelChange/onArrowChange/onStyleChange into an arrow edge', () => {
+    const edge: BoardEdge = { id: 'e1', source: 'a', target: 'b', style: 'solid', kind: 'arrow' };
+    const callbacks = fixtureEdgeCallbacks();
+    const rf = boardEdgeToRf(edge, callbacks);
+    expect(rf.data?.onLabelChange).toBe(callbacks.onLabelChange);
+    expect(rf.data?.onArrowChange).toBe(callbacks.onArrowChange);
+    expect(rf.data?.onStyleChange).toBe(callbacks.onStyleChange);
+    expect(rf.data?.onCardinalityChange).toBeUndefined();
+  });
+
+  it('injects onLabelChange/onStyleChange/onCardinalityChange (not onArrowChange) into a cardinality edge', () => {
+    const edge: BoardEdge = {
+      id: 'e1',
+      source: 'a',
+      target: 'b',
+      style: 'solid',
+      kind: 'cardinality',
+    };
+    const callbacks = fixtureEdgeCallbacks();
+    const rf = boardEdgeToRf(edge, callbacks);
+    expect(rf.data?.onLabelChange).toBe(callbacks.onLabelChange);
+    expect(rf.data?.onStyleChange).toBe(callbacks.onStyleChange);
+    expect(rf.data?.onCardinalityChange).toBe(callbacks.onCardinalityChange);
+    expect(rf.data?.onArrowChange).toBeUndefined();
+  });
+
+  it('omitting callbacks leaves edge data callback-free (read-only path)', () => {
+    const edge: BoardEdge = { id: 'e1', source: 'a', target: 'b', style: 'solid' };
+    const rf = boardEdgeToRf(edge);
+    expect(rf.data?.onLabelChange).toBeUndefined();
+    expect(rf.data?.onArrowChange).toBeUndefined();
+    expect(rf.data?.onStyleChange).toBeUndefined();
+    expect(rf.data?.onCardinalityChange).toBeUndefined();
+  });
+
+  it('boardToRf forwards edge callbacks to every edge via boardEdgeToRf', () => {
+    const callbacks = fixtureEdgeCallbacks();
+    const edges: BoardEdge[] = [{ id: 'e1', source: 'a', target: 'b', style: 'solid' }];
+    const { edges: rfEdges } = boardToRf({ nodes: [], edges }, false, undefined, callbacks);
+    expect(rfEdges[0].data?.onLabelChange).toBe(callbacks.onLabelChange);
   });
 });
 

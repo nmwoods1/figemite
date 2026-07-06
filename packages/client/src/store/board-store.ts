@@ -28,8 +28,21 @@ import {
   getSnapshot as getDocSnapshot,
   loadBoardIntoDoc,
   moveNode as moveNodeOp,
+  setNodeText as setNodeTextOp,
+  updateEdge as updateEdgeOp,
+  updateNode as updateNodeOp,
 } from '@easel/shared';
-import type { BoardEdge, BoardFile, BoardNode, XY } from '@easel/shared';
+import type {
+  ArrowStyle,
+  BoardEdge,
+  BoardFile,
+  BoardNode,
+  Cardinality,
+  EdgeKind,
+  LineStyle,
+  WH,
+  XY,
+} from '@easel/shared';
 import type { Viewport } from '../canvas/coords.js';
 
 export type { Viewport };
@@ -73,6 +86,41 @@ export interface BoardStore {
   addEdge(edge: BoardEdge): void;
   /** Delete edges from the doc. No-op if read-only. */
   deleteEdges(ids: string[]): void;
+
+  /** Commit a node's text/title (sticky/text/shape/emoji's `text`, frame's
+   * `title`) to the doc via `nodeTexts`. No-op if read-only. */
+  setNodeText(id: string, text: string): void;
+  /** Commit a node's final size — `WH` for sticky/shape/frame/drawing, a
+   * number for emoji/icon's square glyph size. No-op if read-only. */
+  resizeNode(id: string, size: WH | number): void;
+  /** Commit a node's rotation (degrees). No-op if read-only. */
+  rotateNode(id: string, rotation: number): void;
+  /**
+   * Commit a combined position + size (+ points, for a drawing) patch in ONE
+   * transaction — used by the multi-select group resize (P4-T24), which
+   * needs to move AND resize every selected node atomically rather than as
+   * two separate ops (moveNode then resizeNode) per node. No-op if read-only.
+   */
+  applyNodePatch(id: string, patch: { pos: XY; size?: WH | number; points?: XY[] }): void;
+
+  // ── Edge styling (P4-T24; toolbar UI is P4-T25) ─────────────────────────────
+
+  /** Set an edge's label (the inline-editable verb/description). An empty
+   * string clears it. No-op if read-only. */
+  setEdgeLabel(id: string, label: string): void;
+  /** Set an edge's arrowhead style. No-op if read-only. */
+  setEdgeArrow(id: string, arrow: ArrowStyle): void;
+  /** Set an edge's line style (solid/dashed). No-op if read-only. */
+  setEdgeLineStyle(id: string, style: LineStyle): void;
+  /** Set an edge's cardinality value (meaningful when kind === 'cardinality'). No-op if read-only. */
+  setEdgeCardinality(id: string, cardinality: Cardinality): void;
+  /**
+   * Switch an edge between 'arrow' and 'cardinality' kind, moving the
+   * kind-specific fields appropriately: switching TO 'cardinality' sets a
+   * default cardinality ('1:N') and clears `arrow`; switching TO 'arrow' sets
+   * a default arrow ('end') and clears `cardinality`. No-op if read-only.
+   */
+  setEdgeKind(id: string, kind: EdgeKind): void;
 
   /** Detach all observers and destroy the underlying Y.Doc. */
   destroy(): void;
@@ -150,6 +198,61 @@ export function createBoardStore(initialBoard: BoardFile, opts: BoardStoreOption
     deleteEdges(ids: string[]) {
       if (opts.readonly) return;
       for (const id of ids) deleteEdgeOp(doc, id);
+    },
+
+    setNodeText(id: string, text: string) {
+      if (opts.readonly) return;
+      setNodeTextOp(doc, id, text);
+    },
+
+    resizeNode(id: string, size: WH | number) {
+      if (opts.readonly) return;
+      updateNodeOp(doc, id, { size } as Partial<BoardNode>);
+    },
+
+    rotateNode(id: string, rotation: number) {
+      if (opts.readonly) return;
+      updateNodeOp(doc, id, { rotation } as Partial<BoardNode>);
+    },
+
+    applyNodePatch(id: string, patch: { pos: XY; size?: WH | number; points?: XY[] }) {
+      if (opts.readonly) return;
+      updateNodeOp(doc, id, { ...patch } as Partial<BoardNode>);
+    },
+
+    setEdgeLabel(id: string, label: string) {
+      if (opts.readonly) return;
+      updateEdgeOp(doc, id, { label: label || undefined });
+    },
+
+    setEdgeArrow(id: string, arrow: ArrowStyle) {
+      if (opts.readonly) return;
+      updateEdgeOp(doc, id, { arrow });
+    },
+
+    setEdgeLineStyle(id: string, style: LineStyle) {
+      if (opts.readonly) return;
+      updateEdgeOp(doc, id, { style });
+    },
+
+    setEdgeCardinality(id: string, cardinality: Cardinality) {
+      if (opts.readonly) return;
+      updateEdgeOp(doc, id, { cardinality });
+    },
+
+    setEdgeKind(id: string, kind: EdgeKind) {
+      if (opts.readonly) return;
+      if (kind === 'cardinality') {
+        const existing = snapshot.edges.find((e) => e.id === id);
+        updateEdgeOp(doc, id, {
+          kind,
+          cardinality: existing?.cardinality ?? '1:N',
+          arrow: undefined,
+        });
+      } else {
+        const existing = snapshot.edges.find((e) => e.id === id);
+        updateEdgeOp(doc, id, { kind, arrow: existing?.arrow ?? 'end', cardinality: undefined });
+      }
     },
 
     destroy() {

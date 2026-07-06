@@ -15,7 +15,7 @@
 
 import { createElement } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { act, cleanup, render, screen } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
 import type { ComponentProps } from 'react';
 import { ReactFlow } from '@xyflow/react';
 import type { Connection } from '@xyflow/react';
@@ -200,5 +200,76 @@ describe('BoardCanvas', () => {
     const after = lastReactFlowProps().edges ?? [];
     expect(after.length).toBe(before.length + 1);
     expect(after.some((e) => e.source === 'sh1' && e.target === 's1')).toBe(true);
+  });
+
+  // ── P4-T24: end-to-end text editing (double-click -> commit -> re-render) ──
+  // Proves the FULL pipeline: BoardCanvas mounts a real store, useEditableCanvas
+  // injects a real (non-mocked) onTextChange/onTitleChange into the node's
+  // data, and double-click -> edit -> commit lands in the doc and flows back
+  // out through the doc->RF reconcile into the rendered DOM.
+
+  it('double-click, edit, and commit a sticky note updates the rendered text (real store, no mocks)', () => {
+    render(<BoardCanvas board={fixtureBoard()} readonly={false} />);
+    fireEvent.doubleClick(screen.getByText('Buy milk'));
+    const textarea = screen.getByRole('textbox');
+    fireEvent.change(textarea, { target: { value: 'Buy bread' } });
+    fireEvent.blur(textarea);
+    expect(screen.getByText('Buy bread')).toBeInTheDocument();
+    expect(screen.queryByText('Buy milk')).not.toBeInTheDocument();
+  });
+
+  it('Escape reverts a sticky note edit without committing (rendered text unchanged)', () => {
+    render(<BoardCanvas board={fixtureBoard()} readonly={false} />);
+    fireEvent.doubleClick(screen.getByText('Buy milk'));
+    const textarea = screen.getByRole('textbox');
+    fireEvent.change(textarea, { target: { value: 'Should not stick' } });
+    fireEvent.keyDown(textarea, { key: 'Escape' });
+    expect(screen.getByText('Buy milk')).toBeInTheDocument();
+    expect(screen.queryByText('Should not stick')).not.toBeInTheDocument();
+  });
+
+  it("double-click, edit, and commit a frame's title updates the rendered title (real store, via setNodeText)", () => {
+    render(<BoardCanvas board={fixtureBoard()} readonly={false} />);
+    fireEvent.doubleClick(screen.getByText('Frame one'));
+    const input = screen.getByRole('textbox');
+    fireEvent.change(input, { target: { value: 'Frame two' } });
+    fireEvent.keyDown(input, { key: 'Enter' });
+    expect(screen.getByText('Frame two')).toBeInTheDocument();
+    expect(screen.queryByText('Frame one')).not.toBeInTheDocument();
+  });
+
+  it('a read-only board never enters edit mode on double-click (seam stays inert)', () => {
+    render(<BoardCanvas board={fixtureBoard()} readonly={true} />);
+    fireEvent.doubleClick(screen.getByText('Buy milk'));
+    expect(screen.queryByRole('textbox')).not.toBeInTheDocument();
+  });
+
+  // ── P4-T24: multi-select group resize overlay ───────────────────────────
+
+  it('renders the multi-select group-resize overlay (8 handles) when 2+ nodes are selected', () => {
+    const { container } = render(<BoardCanvas board={fixtureBoard()} readonly={false} />);
+    act(() => {
+      lastReactFlowProps().onSelectionChange?.({
+        nodes: [{ id: 's1' } as never, { id: 'sh1' } as never],
+        edges: [],
+      });
+    });
+    expect(container.querySelectorAll('[data-testid="multi-resize-handle"]')).toHaveLength(8);
+  });
+
+  it('does not render the multi-select overlay with 0 or 1 selected nodes', () => {
+    const { container } = render(<BoardCanvas board={fixtureBoard()} readonly={false} />);
+    act(() => {
+      lastReactFlowProps().onSelectionChange?.({
+        nodes: [{ id: 's1' } as never],
+        edges: [],
+      });
+    });
+    expect(container.querySelectorAll('[data-testid="multi-resize-handle"]')).toHaveLength(0);
+  });
+
+  it('does not render the multi-select overlay in read-only mode', () => {
+    const { container } = render(<BoardCanvas board={fixtureBoard()} readonly={true} />);
+    expect(container.querySelectorAll('[data-testid="multi-resize-handle"]')).toHaveLength(0);
   });
 });

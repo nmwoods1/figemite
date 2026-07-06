@@ -3,14 +3,33 @@
 // a container, not an edge endpoint) and no rotation — none of those are
 // added here either, matching legacy behaviour faithfully.
 
+import { createElement } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, render, screen, fireEvent } from '@testing-library/react';
+import type { ComponentProps } from 'react';
+import { NodeResizer } from '@xyflow/react';
 import { RfTestHarness, makeNodeProps } from '../test/rf.js';
 import { FrameNode } from './FrameNode.js';
 import type { FrameNodeData } from './FrameNode.js';
 
+// See StickyNode.test.tsx's identical technique/rationale.
+const resizerCalls: ComponentProps<typeof NodeResizer>[] = [];
+vi.mock('@xyflow/react', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@xyflow/react')>();
+  const Wrapped = (props: ComponentProps<typeof actual.NodeResizer>) => {
+    resizerCalls.push(props);
+    return createElement(actual.NodeResizer, props);
+  };
+  return { ...actual, NodeResizer: Wrapped };
+});
+
+function lastResizerProps(): ComponentProps<typeof NodeResizer> {
+  return resizerCalls[resizerCalls.length - 1];
+}
+
 afterEach(() => {
   cleanup();
+  resizerCalls.length = 0;
 });
 
 function renderFrame(data: Partial<FrameNodeData> = {}, selected = false) {
@@ -60,5 +79,30 @@ describe('FrameNode', () => {
     fireEvent.change(input, { target: { value: 'Phase 2' } });
     fireEvent.keyDown(input, { key: 'Enter' });
     expect(onTitleChange).toHaveBeenCalledWith('f1', 'Phase 2');
+  });
+
+  // ── P4-T24: resize ───────────────────────────────────────────────────────
+
+  it('renders NodeResizer visible when selected and editable (has onResizeEnd)', () => {
+    renderFrame({ onResizeEnd: vi.fn() }, true);
+    expect(lastResizerProps().isVisible).toBe(true);
+  });
+
+  it('renders NodeResizer NOT visible when read-only (no onResizeEnd)', () => {
+    renderFrame({}, true);
+    expect(lastResizerProps().isVisible).toBe(false);
+  });
+
+  it('applies the ported legacy min size (120x80)', () => {
+    renderFrame({ onResizeEnd: vi.fn() }, true);
+    expect(lastResizerProps().minWidth).toBe(120);
+    expect(lastResizerProps().minHeight).toBe(80);
+  });
+
+  it('commits the new size via onResizeEnd on resize end', () => {
+    const onResizeEnd = vi.fn();
+    renderFrame({ onResizeEnd }, true);
+    lastResizerProps().onResizeEnd?.({} as never, { x: 0, y: 0, width: 520, height: 360 });
+    expect(onResizeEnd).toHaveBeenCalledWith('f1', { width: 520, height: 360 });
   });
 });

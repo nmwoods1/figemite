@@ -3,6 +3,7 @@
 // badge slot, and the double-click-to-edit affordance (only active when
 // `onDoubleClick` is actually provided — the seam for read-only boards).
 
+import { createRef } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, render, screen, fireEvent } from '@testing-library/react';
 import { BaseNode } from './BaseNode.js';
@@ -99,5 +100,16 @@ describe('BaseNode', () => {
     );
     const root = container.firstElementChild as HTMLElement;
     expect(root.dataset.selected).toBe('true');
+  });
+
+  it('forwards rotationRef to the rotation wrapper div (so RotationHandle can measure it)', () => {
+    const ref = createRef<HTMLDivElement>();
+    render(
+      <BaseNode nodeId="n1" rotationRef={ref}>
+        <div>content</div>
+      </BaseNode>,
+    );
+    expect(ref.current).not.toBeNull();
+    expect(ref.current?.dataset.testid).toBe('base-node-rotation');
   });
 });

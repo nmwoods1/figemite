@@ -21,7 +21,7 @@
 // viewport (all-zero, the BoardFile default for a freshly created board) gets
 // `fitView` instead, so an empty/fresh board doesn't render pinned at (0,0)
 // zoom 1 regardless of where its content actually is.
-import { useEffect, useMemo } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
 import { Background, ConnectionMode, Controls, ReactFlow, ReactFlowProvider } from '@xyflow/react';
 // RF's base stylesheet — without this, ReactFlow renders unstyled (its own
 // `#013` "The React Flow parent container needs a width and a height..."-
@@ -35,7 +35,9 @@ import { createBoardStore } from '../store/board-store.js';
 import type { BoardStore } from '../store/board-store.js';
 import { useBoardStore } from '../store/use-board-store.js';
 import { useEditableCanvas } from '../hooks/useEditableCanvas.js';
+import { useMultiSelectResize } from '../hooks/useMultiSelectResize.js';
 import { boardToRf } from './rf-adapters.js';
+import { MultiSelectResizer } from './MultiSelectResizer.js';
 import { nodeTypes } from '../nodes/index.js';
 import { edgeTypes } from '../edges/index.js';
 
@@ -91,31 +93,48 @@ function ReadOnlyCanvas({ store, fitView, viewport }: PaneProps) {
   );
 }
 
-/** Editable pane (P4-T22): interaction handlers commit to the doc via the store. */
+/** Editable pane (P4-T22): interaction handlers commit to the doc via the store.
+ * P4-T24 adds the multi-select group-resize overlay: `MultiSelectResizer`
+ * renders (as a sibling of `<ReactFlow>`, inside the same measured
+ * container) whenever 2+ nodes are selected, and `useMultiSelectResize`
+ * commits its scale events to the doc. Individual nodes' own `NodeResizer`s
+ * self-suppress via `useIsMultiSelected` (nodes/use-is-multi-selected.ts)
+ * reading RF's own selection store directly, so no extra wiring is needed
+ * here to hide them. */
 function EditableCanvas({ store, fitView, viewport }: PaneProps) {
   const editable = useEditableCanvas(store);
+  const multiSelect = useMultiSelectResize(store, editable.selectedNodeIds);
+  const containerRef = useRef<HTMLDivElement>(null);
 
   return (
-    <ReactFlow
-      {...commonReactFlowProps}
-      nodes={editable.nodes}
-      edges={editable.edges}
-      onNodesChange={editable.onNodesChange}
-      onEdgesChange={editable.onEdgesChange}
-      onNodeDragStop={editable.onNodeDragStop}
-      onNodesDelete={editable.onNodesDelete}
-      onConnect={editable.onConnect}
-      onEdgesDelete={editable.onEdgesDelete}
-      onSelectionChange={editable.onSelectionChange}
-      defaultViewport={fitView ? undefined : viewport}
-      fitView={fitView}
-      nodesDraggable
-      nodesConnectable
-      elementsSelectable
-    >
-      <Background />
-      <Controls />
-    </ReactFlow>
+    <div ref={containerRef} style={{ width: '100%', height: '100%', position: 'relative' }}>
+      <ReactFlow
+        {...commonReactFlowProps}
+        nodes={editable.nodes}
+        edges={editable.edges}
+        onNodesChange={editable.onNodesChange}
+        onEdgesChange={editable.onEdgesChange}
+        onNodeDragStop={editable.onNodeDragStop}
+        onNodesDelete={editable.onNodesDelete}
+        onConnect={editable.onConnect}
+        onEdgesDelete={editable.onEdgesDelete}
+        onSelectionChange={editable.onSelectionChange}
+        defaultViewport={fitView ? undefined : viewport}
+        fitView={fitView}
+        nodesDraggable
+        nodesConnectable
+        elementsSelectable
+      >
+        <Background />
+        <Controls />
+      </ReactFlow>
+      <MultiSelectResizer
+        selectedNodes={multiSelect.selectedNodes}
+        containerRef={containerRef}
+        onStart={multiSelect.onScaleStart}
+        onScale={multiSelect.onScale}
+      />
+    </div>
   );
 }
 

@@ -20,7 +20,7 @@
 // sticky uses a box-shadow ring, frame a solid-vs-dashed border, etc. — so
 // BaseNode doesn't impose one shared visual).
 
-import type { CSSProperties, ReactNode } from 'react';
+import type { CSSProperties, ReactNode, RefObject } from 'react';
 import type { DescriptionBadgeProps } from './DescriptionBadge.js';
 import { DescriptionBadge } from './DescriptionBadge.js';
 
@@ -41,6 +41,11 @@ export interface BaseNodeProps {
    * a center-top anchor instead of the default top-right corner). */
   descriptionBadgeStyle?: CSSProperties;
   style?: CSSProperties;
+  /** Forwarded onto the rotation wrapper div (P4-T24) — `RotationHandle`
+   * measures this element's `getBoundingClientRect()` to compute the drag
+   * angle around the node's actual (rotating) center, so it needs a ref to
+   * the SAME div `rotation`'s CSS transform is applied to. */
+  rotationRef?: RefObject<HTMLDivElement | null>;
 }
 
 /** Shared chrome wrapper every node component composes: rotation, the
@@ -55,6 +60,7 @@ export function BaseNode({
   onDoubleClick,
   descriptionBadgeStyle,
   style,
+  rotationRef,
 }: BaseNodeProps) {
   const editable = !!onDoubleClick;
 
@@ -72,6 +78,7 @@ export function BaseNode({
       style={{ width: '100%', height: '100%', position: 'relative', ...style }}
     >
       <div
+        ref={rotationRef}
         data-testid="base-node-rotation"
         onDoubleClick={onDoubleClick}
         style={{

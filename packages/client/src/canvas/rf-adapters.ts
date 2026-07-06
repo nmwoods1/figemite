@@ -77,14 +77,105 @@ function nodeSize(node: BoardNode): { width?: number; height?: number } {
   return {};
 }
 
+// ── Editing-callback injection (P4-T24, editable path only) ──────────────────
+//
+// `useEditableCanvas` builds ONE `NodeCallbacks` bag per store (memoized —
+// see its module doc) and passes it through `boardToRf` → `boardNodeToRf` on
+// every doc-driven rebuild. EVERY function in this bag is created exactly
+// once (inside that `useMemo`, closing only over the stable `store`) and
+// reused as-is here — `callbacksForNode` only ever PICKS which existing
+// reference(s) to attach to a given node's `data`, it never wraps/recreates
+// one. That's load-bearing: if it allocated a new closure per node per call
+// (e.g. to adapt `onResizeEnd`'s `{width,height}` shape to emoji/icon's
+// single-number `size`), `data` would get a fresh function identity on every
+// doc-driven rebuild, and `reconcile.ts`'s shallow `data` diff would see a
+// "changed" node every tick — defeating its reference-stability guarantee
+// (see reconcile.ts's module doc, point 2). So the width/height -> number
+// squash for emoji/icon lives in `onResizeEndSquare` itself (still ONE
+// stable function), not in a per-call wrapper here.
+//
+// Which callback(s) a node type receives mirrors `@easel/shared`'s
+// `nodeText` accessor (the frame/text-bearing/none split) for text editing,
+// plus `onOpenDescription` for every node type whose component actually
+// renders a `DescriptionBadge` (sticky/text/shape/emoji/icon — NOT frame or
+// drawing), `onResizeEnd`/`onResizeEndSquare` for the resizable types
+// (sticky/shape/frame/drawing use WH; emoji/icon use the aspect-locked
+// numeric-size variant), and `onRotate` for the rotatable types
+// (shape/emoji/icon) — see nodes/*.tsx for each component's own gating.
+export interface NodeCallbacks {
+  onTextChange: (id: string, text: string) => void;
+  onTitleChange: (id: string, title: string) => void;
+  onOpenDescription: (id: string) => void;
+  /** WH-sized nodes (sticky/shape/frame/drawing). */
+  onResizeEnd: (id: string, size: { width: number; height: number }) => void;
+  /** Numeric-sized nodes (emoji/icon) — EmojiNode/IconNode already squash
+   * their aspect-locked `{width,height}` down to a single number (`Math.max`)
+   * before calling `data.onResizeEnd` (see their own module docs), so this
+   * stable function's signature matches that number directly. */
+  onResizeEndSquare: (id: string, size: number) => void;
+  onRotate: (id: string, rotation: number) => void;
+}
+
+const DESCRIBABLE_TYPES = new Set<BoardNode['type']>(['sticky', 'text', 'shape', 'emoji', 'icon']);
+
+const WH_RESIZABLE_TYPES = new Set<BoardNode['type']>(['sticky', 'shape', 'frame', 'drawing']);
+const SQUARE_RESIZABLE_TYPES = new Set<BoardNode['type']>(['emoji', 'icon']);
+const ROTATABLE_TYPES = new Set<BoardNode['type']>(['shape', 'emoji', 'icon']);
+
+/** The editing callbacks a given node TYPE should receive, per the module doc's
+ * type→callback mapping. Returns `{}` (no keys) for a read-only render. */
+function callbacksForNode(node: BoardNode, callbacks?: NodeCallbacks): RfNodeData {
+  if (!callbacks) return {};
+  const extra: RfNodeData = {};
+
+  if (node.type === 'frame') {
+    extra.onTitleChange = callbacks.onTitleChange;
+  } else if (
+    node.type === 'sticky' ||
+    node.type === 'text' ||
+    node.type === 'shape' ||
+    node.type === 'emoji'
+  ) {
+    extra.onTextChange = callbacks.onTextChange;
+  }
+
+  if (DESCRIBABLE_TYPES.has(node.type)) {
+    extra.onOpenDescription = callbacks.onOpenDescription;
+  }
+
+  if (WH_RESIZABLE_TYPES.has(node.type)) {
+    extra.onResizeEnd = callbacks.onResizeEnd;
+  } else if (SQUARE_RESIZABLE_TYPES.has(node.type)) {
+    // EmojiNode/IconNode's `data.onResizeEnd` takes a single number, not
+    // `{width,height}` — `onResizeEndSquare` IS that number-shaped stable
+    // function (see the interface doc), so it's assigned to the same
+    // `data.onResizeEnd` key the node component reads.
+    extra.onResizeEnd = callbacks.onResizeEndSquare;
+  }
+
+  if (ROTATABLE_TYPES.has(node.type)) {
+    extra.onRotate = callbacks.onRotate;
+  }
+
+  return extra;
+}
+
 /**
  * Map a single {@link BoardNode} to its ReactFlow node. `zIndex` mirrors the
  * legacy's frame-behind-non-frame rule (see module doc); `order` (not `pos`)
  * decides the exact zIndex so within-partition stacking is meaningful.
- * `readonly` drives `draggable`/`selectable` (both false when true — Phase 4
- * wires up real interaction handlers for the non-readonly case).
+ * `readonly` drives `draggable`/`selectable` (both false when true).
+ * `callbacks`, when given AND `readonly` is false, augments `data` with the
+ * editing callbacks this node's type needs (see the module doc above) — the
+ * seams in BaseNode/useEditableText/ConnectionHandles/DescriptionBadge go
+ * live only when their gating callback is present, so a read-only render
+ * (or omitting `callbacks`) leaves every seam inert.
  */
-export function boardNodeToRf(node: BoardNode, readonly: boolean): BoardRfNode {
+export function boardNodeToRf(
+  node: BoardNode,
+  readonly: boolean,
+  callbacks?: NodeCallbacks,
+): BoardRfNode {
   const { width, height } = nodeSize(node);
   const zIndex =
     node.type === 'frame' ? FRAME_ZINDEX_BASE + node.order : NON_FRAME_ZINDEX_BASE + node.order;
@@ -93,7 +184,7 @@ export function boardNodeToRf(node: BoardNode, readonly: boolean): BoardRfNode {
     id: node.id,
     type: node.type,
     position: { x: node.pos.x, y: node.pos.y },
-    data: nodeData(node),
+    data: { ...nodeData(node), ...(readonly ? {} : callbacksForNode(node, callbacks)) },
     ...(width !== undefined ? { width } : {}),
     ...(height !== undefined ? { height } : {}),
     zIndex,
@@ -102,13 +193,32 @@ export function boardNodeToRf(node: BoardNode, readonly: boolean): BoardRfNode {
   };
 }
 
+// ── Edge-styling callback injection (P4-T24, editable path only) ─────────────
+//
+// Same stability contract as `NodeCallbacks` (see that interface's doc):
+// `useEditableCanvas` builds ONE `EdgeCallbacks` bag per store, and
+// `boardEdgeToRf` only picks which of its (already-stable) functions to
+// attach — never wraps/recreates one — so `data` doesn't churn on every
+// doc-driven rebuild. `onLabelChange`/`onStyleChange` apply to every edge
+// (ArrowEdge and CardinalityEdge both support inline label editing and are
+// both style-able); `onArrowChange` only makes sense for an 'arrow'-kind
+// edge, `onCardinalityChange` only for a 'cardinality'-kind edge.
+export interface EdgeCallbacks {
+  onLabelChange: (id: string, label: string) => void;
+  onArrowChange: (id: string, arrow: BoardEdge['arrow']) => void;
+  onStyleChange: (id: string, style: BoardEdge['style']) => void;
+  onCardinalityChange: (id: string, cardinality: BoardEdge['cardinality']) => void;
+}
+
 /**
  * Map a single {@link BoardEdge} to its ReactFlow edge. `type` is
  * `'cardinality'` when `edge.kind === 'cardinality'`, else `'arrow'`
  * (matching `kind`'s own default-to-'arrow' contract). `data` carries the
- * style/arrow/cardinality/label fields the edge component needs.
+ * style/arrow/cardinality/label fields the edge component needs, plus (when
+ * `callbacks` is given) the editing callbacks ArrowEdge/CardinalityEdge's
+ * inline seams need — see `EdgeCallbacks`'s doc for the kind-specific split.
  */
-export function boardEdgeToRf(edge: BoardEdge): BoardRfEdge {
+export function boardEdgeToRf(edge: BoardEdge, callbacks?: EdgeCallbacks): BoardRfEdge {
   const kind = edge.kind ?? 'arrow';
   return {
     id: edge.id,
@@ -123,6 +233,15 @@ export function boardEdgeToRf(edge: BoardEdge): BoardRfEdge {
       kind,
       arrow: edge.arrow ?? 'end',
       cardinality: edge.cardinality ?? '1:N',
+      ...(callbacks
+        ? {
+            onLabelChange: callbacks.onLabelChange,
+            onStyleChange: callbacks.onStyleChange,
+            ...(kind === 'cardinality'
+              ? { onCardinalityChange: callbacks.onCardinalityChange }
+              : { onArrowChange: callbacks.onArrowChange }),
+          }
+        : {}),
     },
   };
 }
@@ -137,12 +256,14 @@ export function boardEdgeToRf(edge: BoardEdge): BoardRfEdge {
 export function boardToRf(
   board: { nodes: BoardNode[]; edges: BoardEdge[] },
   readonly: boolean,
+  nodeCallbacks?: NodeCallbacks,
+  edgeCallbacks?: EdgeCallbacks,
 ): { nodes: BoardRfNode[]; edges: BoardRfEdge[] } {
   const frames = board.nodes.filter((n) => n.type === 'frame').sort((a, b) => a.order - b.order);
   const nonFrames = board.nodes.filter((n) => n.type !== 'frame').sort((a, b) => a.order - b.order);
 
-  const nodes = [...frames, ...nonFrames].map((n) => boardNodeToRf(n, readonly));
-  const edges = board.edges.map(boardEdgeToRf);
+  const nodes = [...frames, ...nonFrames].map((n) => boardNodeToRf(n, readonly, nodeCallbacks));
+  const edges = board.edges.map((e) => boardEdgeToRf(e, readonly ? undefined : edgeCallbacks));
 
   return { nodes, edges };
 }

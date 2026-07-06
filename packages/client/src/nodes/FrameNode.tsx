@@ -11,10 +11,16 @@
 // so frames drag only by their title bar, not their whole body (matching the
 // legacy's drag-handle convention) — that wiring is Phase 4/T20, but the
 // className needs to already be present for it to have something to select.
+//
+// P4-T24: `NodeResizer` is wired (still no rotation — frames don't rotate in
+// the legacy either), gated on `selected && !!data.onResizeEnd &&
+// !useIsMultiSelected()`.
 
 import type { NodeProps, Node } from '@xyflow/react';
+import { NodeResizer } from '@xyflow/react';
 import { hexToRgba } from './color.js';
 import { useEditableText } from './useEditableText.js';
+import { useIsMultiSelected } from './use-is-multi-selected.js';
 
 export interface FrameNodeData extends Record<string, unknown> {
   title: string;
@@ -22,10 +28,17 @@ export interface FrameNodeData extends Record<string, unknown> {
   width: number;
   height: number;
   onTitleChange?: (id: string, newTitle: string) => void;
+  onResizeEnd?: (id: string, size: { width: number; height: number }) => void;
 }
+
+/** Ported from legacy FrameNode's NodeResizer minWidth/minHeight. */
+const MIN_WIDTH = 120;
+const MIN_HEIGHT = 80;
 
 export function FrameNode({ id, data, selected }: NodeProps<Node<FrameNodeData, 'frame'>>) {
   const editable = !!data.onTitleChange;
+  const resizable = !!data.onResizeEnd;
+  const multiSelected = useIsMultiSelected();
   const { editing, draft, startEdit, onChange, commit, cancel } = useEditableText(
     data.title,
     (next) => {
@@ -51,6 +64,23 @@ export function FrameNode({ id, data, selected }: NodeProps<Node<FrameNodeData, 
         cursor: 'default',
       }}
     >
+      <NodeResizer
+        nodeId={id}
+        isVisible={!!selected && resizable && !multiSelected}
+        minWidth={MIN_WIDTH}
+        minHeight={MIN_HEIGHT}
+        lineStyle={{ borderColor: border, borderWidth: 1 }}
+        handleStyle={{
+          width: 8,
+          height: 8,
+          background: '#fff',
+          border: `1.5px solid ${border}`,
+          borderRadius: 2,
+        }}
+        onResizeEnd={(_event, params) =>
+          data.onResizeEnd?.(id, { width: params.width, height: params.height })
+        }
+      />
       <div
         className="frame-drag-handle"
         onDoubleClick={(e) => {

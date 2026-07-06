@@ -48,10 +48,64 @@ import type { BoardEdge } from '@easel/shared';
 import type { BoardStore } from '../store/board-store.js';
 import { useBoardStore } from '../store/use-board-store.js';
 import { boardToRf } from '../canvas/rf-adapters.js';
-import type { BoardRfEdge, BoardRfNode } from '../canvas/rf-adapters.js';
+import type {
+  BoardRfEdge,
+  BoardRfNode,
+  EdgeCallbacks,
+  NodeCallbacks,
+} from '../canvas/rf-adapters.js';
 import { reconcileEdges, reconcileNodes } from '../canvas/reconcile.js';
 import { useSelection } from './useSelection.js';
 import type { SelectionParams } from './useSelection.js';
+
+/**
+ * Build the `NodeCallbacks` bag ONCE per store (memoized on `store` alone,
+ * which is itself stable for a `BoardCanvas` instance's lifetime — see
+ * `BoardCanvas.tsx`'s `useMemo(() => createBoardStore(...), [board, readonly])`).
+ * Each returned function closes only over `store` (never over `snapshot` or
+ * any other per-render value), so the bag — and every function in it — keeps
+ * the SAME reference across every re-render of `useEditableCanvas`. That
+ * stability is what `rf-adapters.ts`'s `callbacksForNode` relies on to avoid
+ * making `reconcile.ts`'s shallow `data` diff see a "change" on every tick
+ * (see this module's and rf-adapters.ts's docs on the callback-stability
+ * requirement).
+ */
+function useNodeCallbacks(store: BoardStore): NodeCallbacks {
+  return useMemo<NodeCallbacks>(
+    () => ({
+      onTextChange: (id: string, text: string) => store.setNodeText(id, text),
+      onTitleChange: (id: string, title: string) => store.setNodeText(id, title),
+      // Seam only (P4-T25 supplies the real modal); wiring it here — rather
+      // than leaving it undefined — is what makes the DescriptionBadge seam
+      // in every describable node component clickable per this task's scope.
+      onOpenDescription: () => {},
+      onResizeEnd: (id: string, size: { width: number; height: number }) =>
+        store.resizeNode(id, size),
+      onResizeEndSquare: (id: string, size: number) => store.resizeNode(id, size),
+      onRotate: (id: string, rotation: number) => store.rotateNode(id, rotation),
+    }),
+    [store],
+  );
+}
+
+/**
+ * Build the `EdgeCallbacks` bag ONCE per store — same stability contract as
+ * {@link useNodeCallbacks} (see its doc): every function closes only over
+ * `store`, so `rf-adapters.ts`'s `boardEdgeToRf` attaching them to edge
+ * `data` never churns the reconciler's shallow diff.
+ */
+function useEdgeCallbacks(store: BoardStore): EdgeCallbacks {
+  return useMemo<EdgeCallbacks>(
+    () => ({
+      onLabelChange: (id: string, label: string) => store.setEdgeLabel(id, label),
+      onArrowChange: (id: string, arrow) => store.setEdgeArrow(id, arrow ?? 'end'),
+      onStyleChange: (id: string, style) => store.setEdgeLineStyle(id, style ?? 'solid'),
+      onCardinalityChange: (id: string, cardinality) =>
+        store.setEdgeCardinality(id, cardinality ?? '1:N'),
+    }),
+    [store],
+  );
+}
 
 export interface EditableCanvasProps {
   nodes: BoardRfNode[];
@@ -71,10 +125,28 @@ export interface EditableCanvasProps {
 export function useEditableCanvas(store: BoardStore): EditableCanvasProps {
   const snapshot = useBoardStore(store);
   const selection = useSelection();
+  const nodeCallbacks = useNodeCallbacks(store);
+  const edgeCallbacks = useEdgeCallbacks(store);
 
-  // Doc-derived RF shape (rebuilt only when the doc snapshot changes). Editable,
-  // so `readonly=false` → nodes come back draggable/selectable.
-  const docRf = useMemo(() => boardToRf(snapshot, false), [snapshot]);
+  // Doc-derived RF shape (rebuilt only when the doc snapshot OR the (stable)
+  // callbacks bag changes). BoardCanvas only ever calls this hook for the
+  // non-readonly pane, but `store.readonly` is checked directly (rather than
+  // trusting the caller) so a read-only STORE never receives editing
+  // callbacks even if this hook were invoked against one — every mutation
+  // method on a read-only store is already a no-op (board-store.ts), and
+  // withholding the callbacks entirely keeps every node seam
+  // (useEditableText/ConnectionHandles/DescriptionBadge) inert too, matching
+  // "keep read-only nodes callback-free" (P4-T24).
+  const docRf = useMemo(
+    () =>
+      boardToRf(
+        snapshot,
+        false,
+        store.readonly ? undefined : nodeCallbacks,
+        store.readonly ? undefined : edgeCallbacks,
+      ),
+    [snapshot, nodeCallbacks, edgeCallbacks, store.readonly],
+  );
 
   const [nodes, setNodes, onNodesChange] = useNodesState<BoardRfNode>(docRf.nodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState<BoardRfEdge>(docRf.edges);

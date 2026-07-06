@@ -225,7 +225,16 @@ export function addEdge(doc: Y.Doc, edge: BoardEdge, origin: Origin = LOCAL_ORIG
   }, origin);
 }
 
-/** Merge a patch into an existing edge (its `id` is preserved). No-op if absent. */
+/**
+ * Merge a patch into an existing edge (its `id` is preserved). No-op if
+ * absent. A patch field explicitly set to `undefined` (e.g. clearing
+ * `arrow` when switching an edge's `kind` to `'cardinality'`) REMOVES that
+ * key from the merged object entirely, rather than leaving an own-
+ * enumerable `key: undefined` — a ghost key would otherwise survive a CRDT
+ * encode/decode round-trip (propagating the phantom key to remote peers)
+ * even though every reader already treats `undefined` and "absent"
+ * identically via `??`/optional-chaining.
+ */
 export function updateEdge(
   doc: Y.Doc,
   id: string,
@@ -236,7 +245,11 @@ export function updateEdge(
   const existing = edm.get(id);
   if (!existing) return;
   doc.transact(() => {
-    edm.set(id, { ...existing, ...patch, id });
+    const merged: BoardEdge = { ...existing, ...patch, id };
+    for (const key of Object.keys(patch) as (keyof BoardEdge)[]) {
+      if (patch[key] === undefined) delete merged[key];
+    }
+    edm.set(id, merged);
   }, origin);
 }
 

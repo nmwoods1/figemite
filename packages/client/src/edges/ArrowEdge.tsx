@@ -2,22 +2,27 @@
 //
 // Ported from figmalade's ArrowEdge.tsx: a bezier path with arrowhead markers
 // per `data.arrow` (`none`/`end`/`both`), solid/dashed stroke per `data.style`,
-// and an optional label. Deviation from the legacy: no label-editing UI
-// (double-click-to-edit input, `onLabelChange`/`onArrowChange`/`onStyleChange`
-// callbacks) — Phase 3 is read-only end to end, so this only ever renders.
-// Label editing is a Phase-4 seam: when it lands, gate the edit affordance on
-// a write callback in `data` (e.g. `data.onLabelChange`), mirroring how
-// BaseNode/node components gate their own double-click-to-edit on
-// `data.onTextChange` (see nodes/BaseNode.tsx's module doc).
+// and an optional label. P4-T24 wires the inline label-editing seam (ported
+// from the legacy): double-click the label region to edit, Enter/blur
+// commits via `data.onLabelChange`, Escape reverts — using the SAME
+// `useEditableText` state machine every node's text edit uses (nodes/
+// useEditableText.ts), gated the same way (`data.onLabelChange` present ⇒
+// editable). When selected, editable, and no label exists yet, a small "+"
+// affordance invites adding one (matches the legacy exactly).
+// `onArrowChange`/`onStyleChange` are NOT inline affordances in the legacy
+// either — those are toolbar-driven (P4-T25); this task only adds the store
+// ops (`board-store.ts`'s `setEdgeArrow`/`setEdgeLineStyle`) they'll call.
 
 import { BaseEdge, EdgeLabelRenderer, getBezierPath } from '@xyflow/react';
 import type { Edge, EdgeProps } from '@xyflow/react';
 import type { ArrowStyle, LineStyle } from '@easel/shared';
+import { useEditableText } from '../nodes/useEditableText.js';
 
 export interface ArrowEdgeData extends Record<string, unknown> {
   label?: string;
   style: LineStyle;
   arrow: ArrowStyle;
+  onLabelChange?: (id: string, label: string) => void;
 }
 
 export function ArrowEdge({
@@ -31,6 +36,12 @@ export function ArrowEdge({
   data,
   selected,
 }: EdgeProps<Edge<ArrowEdgeData, 'arrow'>>) {
+  const editable = !!data?.onLabelChange;
+  const { editing, draft, startEdit, onChange, commit, cancel } = useEditableText(
+    data?.label ?? '',
+    (next) => data?.onLabelChange?.(id, next.trim()),
+  );
+
   const [edgePath, labelX, labelY] = getBezierPath({
     sourceX,
     sourceY,
@@ -88,31 +99,73 @@ export function ArrowEdge({
         }}
       />
 
-      {data?.label && (
+      {(data?.label || editing || (selected && editable)) && (
         <EdgeLabelRenderer>
           <div
+            className="nodrag nopan"
             style={{
               position: 'absolute',
               transform: `translate(-50%, -50%) translate(${labelX}px,${labelY}px)`,
-              pointerEvents: 'none',
+              pointerEvents: 'all',
               zIndex: selected ? 10 : 5,
             }}
+            onDoubleClick={editable ? startEdit : undefined}
           >
-            <span
-              style={{
-                fontSize: 11,
-                fontWeight: 500,
-                color: '#475569',
-                background: '#fff',
-                border: '1px solid transparent',
-                padding: '1px 5px',
-                borderRadius: 4,
-                userSelect: 'none',
-                display: 'block',
-              }}
-            >
-              {data.label}
-            </span>
+            {editing ? (
+              <input
+                value={draft}
+                onChange={(e) => onChange(e.target.value)}
+                onBlur={commit}
+                onMouseDown={(e) => e.stopPropagation()}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') commit();
+                  if (e.key === 'Escape') cancel();
+                  e.stopPropagation();
+                }}
+                style={{
+                  fontSize: 11,
+                  fontFamily: 'inherit',
+                  background: '#fff',
+                  border: '1px solid #94a3b8',
+                  borderRadius: 4,
+                  padding: '1px 5px',
+                  outline: 'none',
+                  minWidth: 40,
+                  width: Math.max(40, draft.length * 7),
+                  color: '#475569',
+                }}
+              />
+            ) : data?.label ? (
+              <span
+                style={{
+                  fontSize: 11,
+                  fontWeight: 500,
+                  color: '#475569',
+                  background: '#fff',
+                  border: '1px solid transparent',
+                  padding: '1px 5px',
+                  borderRadius: 4,
+                  userSelect: 'none',
+                  display: 'block',
+                }}
+              >
+                {data.label}
+              </span>
+            ) : (
+              <span
+                style={{
+                  fontSize: 10,
+                  color: '#94a3b8',
+                  userSelect: 'none',
+                  display: 'block',
+                  padding: '1px 5px',
+                  cursor: 'text',
+                }}
+                title="Double-click to add label"
+              >
+                +
+              </span>
+            )}
           </div>
         </EdgeLabelRenderer>
       )}

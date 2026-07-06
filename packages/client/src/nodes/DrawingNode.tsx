@@ -4,11 +4,17 @@
 // stroke. `points` are relative to the node's `pos` so dragging only updates
 // `pos` — the SVG path doesn't need rewriting on move. No editing, no
 // connection handles, no rotation — none exist for drawings in the legacy
-// model either.
+// model either. Per-node NodeResizer (P4-T24) IS added here even though the
+// legacy had none for DrawingNode individually (only via its multi-select
+// group resize, which also scales the stroke's `points` — see
+// canvas/coords.ts and the multi-select resize wiring), per this task's
+// explicit resizable-types list.
 
 import type { NodeProps, Node } from '@xyflow/react';
+import { NodeResizer } from '@xyflow/react';
 import type { XY } from '@easel/shared';
 import { smoothPath } from '../lib/draw-utils.js';
+import { useIsMultiSelected } from './use-is-multi-selected.js';
 
 export interface DrawingNodeData extends Record<string, unknown> {
   points: XY[];
@@ -16,9 +22,19 @@ export interface DrawingNodeData extends Record<string, unknown> {
   strokeWidth: number;
   width: number;
   height: number;
+  onResizeEnd?: (id: string, size: { width: number; height: number }) => void;
 }
 
-export function DrawingNode({ data, selected }: NodeProps<Node<DrawingNodeData, 'drawing'>>) {
+/** No per-node min size existed in the legacy (DrawingNode had no individual
+ * NodeResizer there — see this file's module doc); floor matches the
+ * legacy's multi-select group-resize MIN_BBOX so a drawing can never be
+ * resized down to nothing either way. */
+const MIN_WIDTH = 20;
+const MIN_HEIGHT = 20;
+
+export function DrawingNode({ id, data, selected }: NodeProps<Node<DrawingNodeData, 'drawing'>>) {
+  const resizable = !!data.onResizeEnd;
+  const multiSelected = useIsMultiSelected();
   const d = smoothPath(data.points);
 
   return (
@@ -36,6 +52,22 @@ export function DrawingNode({ data, selected }: NodeProps<Node<DrawingNodeData, 
         cursor: 'default',
       }}
     >
+      <NodeResizer
+        nodeId={id}
+        isVisible={!!selected && resizable && !multiSelected}
+        minWidth={MIN_WIDTH}
+        minHeight={MIN_HEIGHT}
+        handleStyle={{
+          width: 8,
+          height: 8,
+          background: '#fff',
+          border: '1.5px solid #94a3b8',
+          borderRadius: 2,
+        }}
+        onResizeEnd={(_event, params) =>
+          data.onResizeEnd?.(id, { width: params.width, height: params.height })
+        }
+      />
       <svg
         width={data.width}
         height={data.height}

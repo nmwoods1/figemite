@@ -4,15 +4,34 @@
 // ShapeNode.tsx — the biggest port in this task. Resize/rotate interaction
 // HANDLERS are Phase 4; `data.rotation` is applied as a static CSS transform.
 
+import { createElement } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, render, screen, fireEvent } from '@testing-library/react';
+import type { ComponentProps } from 'react';
+import { NodeResizer } from '@xyflow/react';
 import { RfTestHarness, makeNodeProps } from '../test/rf.js';
 import { ShapeNode } from './ShapeNode.js';
 import type { ShapeNodeData } from './ShapeNode.js';
 import type { ShapeKind } from '@easel/shared';
 
+// See StickyNode.test.tsx's identical technique/rationale.
+const resizerCalls: ComponentProps<typeof NodeResizer>[] = [];
+vi.mock('@xyflow/react', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@xyflow/react')>();
+  const Wrapped = (props: ComponentProps<typeof actual.NodeResizer>) => {
+    resizerCalls.push(props);
+    return createElement(actual.NodeResizer, props);
+  };
+  return { ...actual, NodeResizer: Wrapped };
+});
+
+function lastResizerProps(): ComponentProps<typeof NodeResizer> {
+  return resizerCalls[resizerCalls.length - 1];
+}
+
 afterEach(() => {
   cleanup();
+  resizerCalls.length = 0;
 });
 
 function renderShape(data: Partial<ShapeNodeData> = {}, selected = false) {
@@ -211,5 +230,72 @@ describe('ShapeNode — connection handles', () => {
     expect(bottom.style.top).toBe('99px');
     expect(left.style.left).toBe('1px');
     expect(left.style.top).toBe('50px');
+  });
+});
+
+describe('ShapeNode — resize', () => {
+  it('renders NodeResizer visible when selected and editable (has onResizeEnd)', () => {
+    renderShape({ onResizeEnd: vi.fn() }, true);
+    expect(lastResizerProps().isVisible).toBe(true);
+  });
+
+  it('renders NodeResizer NOT visible when read-only (no onResizeEnd)', () => {
+    renderShape({}, true);
+    expect(lastResizerProps().isVisible).toBe(false);
+  });
+
+  it('applies the ported legacy min size (60x40)', () => {
+    renderShape({ onResizeEnd: vi.fn() }, true);
+    expect(lastResizerProps().minWidth).toBe(60);
+    expect(lastResizerProps().minHeight).toBe(40);
+  });
+
+  it('commits the new size via onResizeEnd on resize end', () => {
+    const onResizeEnd = vi.fn();
+    renderShape({ onResizeEnd }, true);
+    lastResizerProps().onResizeEnd?.({} as never, { x: 0, y: 0, width: 200, height: 130 });
+    expect(onResizeEnd).toHaveBeenCalledWith('sh1', { width: 200, height: 130 });
+  });
+});
+
+describe('ShapeNode — rotation', () => {
+  it('renders a rotation handle when selected, editable, and onRotate is provided', () => {
+    renderShape({ onRotate: vi.fn() }, true);
+    expect(screen.getByTitle(/Rotate/)).toBeInTheDocument();
+  });
+
+  it('does not render a rotation handle when not selected', () => {
+    renderShape({ onRotate: vi.fn() }, false);
+    expect(screen.queryByTitle(/Rotate/)).not.toBeInTheDocument();
+  });
+
+  it('does not render a rotation handle when read-only (no onRotate)', () => {
+    renderShape({}, true);
+    expect(screen.queryByTitle(/Rotate/)).not.toBeInTheDocument();
+  });
+
+  it('commits a rotation via onRotate on drag', () => {
+    const onRotate = vi.fn();
+    const { container } = renderShape({ rotation: 0, onRotate }, true);
+    const handle = screen.getByTitle(/Rotate/);
+    const wrapper = container.querySelector('[data-testid="base-node-rotation"]') as HTMLElement;
+    vi.spyOn(wrapper, 'getBoundingClientRect').mockReturnValue({
+      left: 0,
+      top: 0,
+      right: 160,
+      bottom: 100,
+      width: 160,
+      height: 100,
+      x: 0,
+      y: 0,
+      toJSON() {},
+    });
+    fireEvent.pointerDown(handle, { clientX: 80, clientY: 0, pointerId: 1 });
+    // Pointer moved to the right of center -> rotates clockwise from 0deg.
+    fireEvent.pointerMove(handle, { clientX: 130, clientY: 50, pointerId: 1 });
+    expect(onRotate).toHaveBeenCalled();
+    const [id, deg] = onRotate.mock.calls[onRotate.mock.calls.length - 1] as [string, number];
+    expect(id).toBe('sh1');
+    expect(deg).not.toBe(0);
   });
 });
