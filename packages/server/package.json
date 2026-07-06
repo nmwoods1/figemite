@@ -9,6 +9,13 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@easel/shared": "*"
+    "@easel/shared": "*",
+    "bonjour-service": "^1.4.2",
+    "ws": "^8.21.0",
+    "y-websocket": "^2.1.0",
+    "yjs": "^13.6.31"
+  },
+  "devDependencies": {
+    "@types/ws": "^8.18.1"
   }
 }

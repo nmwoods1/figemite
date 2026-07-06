@@ -10,3 +10,5 @@ export * from './services/session-key.js';
 export * from './services/ai-session.js';
 export * from './services/sse-hub.js';
 export * from './services/file-watcher.js';
+export * from './services/yjs-ws.js';
+export * from './services/mdns.js';
