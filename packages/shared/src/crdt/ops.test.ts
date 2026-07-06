@@ -10,7 +10,7 @@ import {
   makeDrawingNode,
   makeEdge,
 } from '../board-io.js';
-import { NODE_DATA, NODE_TEXTS } from './schema.js';
+import { EDGE_DATA, NODE_DATA, NODE_TEXTS } from './schema.js';
 import {
   LOCAL_ORIGIN,
   addNode,
@@ -120,6 +120,30 @@ describe('updateNode', () => {
     updateNode(doc, 'sh', {});
     expect(doc.getMap(NODE_DATA).get('sh')).toBe(before);
   });
+
+  it('throws on a cross-variant patch and does NOT write it', () => {
+    const doc = new Y.Doc();
+    addNode(doc, makeShapeNode('sh', { x: 0, y: 0 }, 0, 'rect'));
+    const before = doc.getMap(NODE_DATA).get('sh');
+
+    // `name` + `points` belong to icon/drawing, not shape — a malformed merge.
+    expect(() =>
+      updateNode(doc, 'sh', { name: 'star', points: [{ x: 0, y: 0 }] } as never),
+    ).toThrow(/invalid/i);
+
+    // The doc is unchanged — the failed transaction wrote nothing.
+    expect(doc.getMap(NODE_DATA).get('sh')).toBe(before);
+    expect(findNode(doc, 'sh')).toMatchObject({ type: 'shape', shape: 'rect' });
+  });
+
+  it('accepts a valid same-variant patch and merges granularly', () => {
+    const doc = new Y.Doc();
+    addNode(doc, makeShapeNode('sh', { x: 0, y: 0 }, 0, 'rect'));
+    updateNode(doc, 'sh', { color: '#dbeafe', rotation: 90 });
+
+    const node = findNode(doc, 'sh');
+    expect(node).toMatchObject({ color: '#dbeafe', rotation: 90, shape: 'rect' });
+  });
 });
 
 describe('moveNode', () => {
@@ -147,6 +171,22 @@ describe('deleteNode', () => {
     expect(findNode(doc, 's')).toBeUndefined();
     expect(doc.getMap(NODE_TEXTS).get('s')).toBeUndefined();
   });
+
+  it('prunes every edge touching the deleted node, in the same transaction', () => {
+    const doc = new Y.Doc();
+    addNode(doc, makeShapeNode('a', { x: 0, y: 0 }, 0, 'rect'));
+    addNode(doc, makeShapeNode('b', { x: 100, y: 0 }, 1, 'rect'));
+    addNode(doc, makeShapeNode('c', { x: 200, y: 0 }, 2, 'rect'));
+    addEdge(doc, makeEdge('e-ab', 'a', 'b')); // touches a (source)
+    addEdge(doc, makeEdge('e-ca', 'c', 'a')); // touches a (target)
+    addEdge(doc, makeEdge('e-bc', 'b', 'c')); // does not touch a
+
+    deleteNode(doc, 'a');
+
+    // The raw edgeData map — not getSnapshot — proves orphans are physically gone.
+    const remainingIds = Array.from(doc.getMap(EDGE_DATA).keys()).sort();
+    expect(remainingIds).toEqual(['e-bc']);
+  });
 });
 
 describe('setNodeText', () => {
@@ -167,9 +207,17 @@ describe('setNodeText', () => {
   });
 });
 
+// Endpoints for edge tests — getSnapshot now prunes edges whose source/target
+// isn't a live node, so edges need real nodes to survive the snapshot.
+function seedEndpoints(doc: Y.Doc): void {
+  addNode(doc, makeShapeNode('a', { x: 0, y: 0 }, 0, 'rect'));
+  addNode(doc, makeShapeNode('b', { x: 100, y: 0 }, 1, 'rect'));
+}
+
 describe('edge ops', () => {
   it('addEdge stores an edge and updateEdge merges a patch', () => {
     const doc = new Y.Doc();
+    seedEndpoints(doc);
     addEdge(doc, makeEdge('e', 'a', 'b'));
 
     expect(findEdge(doc, 'e')).toMatchObject({
@@ -189,6 +237,7 @@ describe('edge ops', () => {
 
   it('deleteEdge removes it from the snapshot', () => {
     const doc = new Y.Doc();
+    seedEndpoints(doc);
     addEdge(doc, makeEdge('e', 'a', 'b'));
     deleteEdge(doc, 'e');
     expect(getSnapshot(doc).edges).toHaveLength(0);
@@ -198,6 +247,25 @@ describe('edge ops', () => {
     const doc = new Y.Doc();
     expect(() => updateEdge(doc, 'missing', { label: 'x' })).not.toThrow();
     expect(getSnapshot(doc).edges).toHaveLength(0);
+  });
+});
+
+describe('getSnapshot self-consistency', () => {
+  it('drops a dangling edge whose endpoint is not a live node', () => {
+    const doc = new Y.Doc();
+    addNode(doc, makeShapeNode('a', { x: 0, y: 0 }, 0, 'rect'));
+    // Edge to a non-existent 'ghost' — e.g. its target node was concurrently
+    // deleted by another peer but the edge write hasn't been pruned yet.
+    addEdge(doc, makeEdge('e', 'a', 'ghost'));
+    // A well-formed edge between two live nodes survives.
+    addNode(doc, makeShapeNode('b', { x: 100, y: 0 }, 1, 'rect'));
+    addEdge(doc, makeEdge('e-ok', 'a', 'b'));
+
+    const snap = getSnapshot(doc);
+    expect(snap.edges.map((e) => e.id)).toEqual(['e-ok']);
+    // Raw edgeData still holds the dangling edge — getSnapshot only filters the
+    // read; it doesn't mutate the doc.
+    expect(doc.getMap(EDGE_DATA).has('e')).toBe(true);
   });
 });
 

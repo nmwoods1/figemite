@@ -1,9 +1,14 @@
 import { describe, it, expect } from 'vitest';
 import type { BoardNode } from '../model/board.js';
+import { BoardNodeSchema } from '../model/schema.js';
+import { NODE_DATA } from './schema.js';
+import * as Y from 'yjs';
+import { addNode, getSnapshot } from './ops.js';
 import { nodeToSyncShape, nodeText, reconstructNode, syncShapeEqual } from './accessors.js';
 
 // One literal of each of the 7 node types. These are the fixtures the
-// round-trip invariant is proved over.
+// round-trip invariant is proved over. This one also carries a `description` so
+// the round-trip proves that optional field survives.
 const sticky: BoardNode = {
   id: 'n-sticky',
   type: 'sticky',
@@ -12,6 +17,19 @@ const sticky: BoardNode = {
   size: { width: 200, height: 160 },
   text: 'Hello',
   color: '#fef3c7',
+  description: 'a described sticky',
+};
+
+// An empty-text sticky — the exact case the emoji/seeding reconciliation
+// changed (nodeText now returns '' rather than being special-cased away).
+const emptySticky: BoardNode = {
+  id: 'n-sticky-empty',
+  type: 'sticky',
+  pos: { x: 0, y: 0 },
+  order: 8,
+  size: { width: 200, height: 160 },
+  text: '',
+  color: '#dbeafe',
 };
 
 const text: BoardNode = {
@@ -89,7 +107,17 @@ const drawing: BoardNode = {
   strokeWidth: 3,
 };
 
-const ALL: BoardNode[] = [sticky, text, shape, shapeNoText, frame, emoji, icon, drawing];
+const ALL: BoardNode[] = [
+  sticky,
+  emptySticky,
+  text,
+  shape,
+  shapeNoText,
+  frame,
+  emoji,
+  icon,
+  drawing,
+];
 
 describe('nodeText', () => {
   it('returns title for a frame', () => {
@@ -101,6 +129,10 @@ describe('nodeText', () => {
     expect(nodeText(text)).toBe('Label');
     expect(nodeText(emoji)).toBe('🎉');
     expect(nodeText(shape)).toBe('in shape');
+  });
+
+  it("returns '' (not undefined) for an empty-text sticky", () => {
+    expect(nodeText(emptySticky)).toBe('');
   });
 
   it('returns undefined for a shape with no text', () => {
@@ -136,7 +168,7 @@ describe('nodeToSyncShape', () => {
 });
 
 describe('round-trip invariant', () => {
-  it.each(ALL.map((n) => [n.type + (n === shapeNoText ? '-notext' : ''), n] as const))(
+  it.each(ALL.map((n) => [n.id, n] as const))(
     'reconstructNode(nodeToSyncShape(n), nodeText(n)) deep-equals n for %s',
     (_label, n) => {
       const rebuilt = reconstructNode(nodeToSyncShape(n), nodeText(n));
@@ -150,6 +182,41 @@ describe('round-trip invariant', () => {
       expect(rebuilt.order).toBe(n.order);
     }
   });
+
+  it("preserves the sticky's description across the round-trip", () => {
+    const rebuilt = reconstructNode(nodeToSyncShape(sticky), nodeText(sticky));
+    expect((rebuilt as { description?: string }).description).toBe('a described sticky');
+  });
+});
+
+describe('reconstructNode is total for a torn read (no nodeTexts entry)', () => {
+  // Seed nodeData ONLY (no nodeTexts) — the normal transient state while the two
+  // maps replicate independently — and require the reconstruct to still validate
+  // against the canonical schema.
+  it.each([
+    ['sticky', sticky],
+    ['text', text],
+    ['frame', frame],
+    ['emoji', emoji],
+  ] as const)('yields a schema-valid %s with empty required text/title', (_label, n) => {
+    const doc = new Y.Doc();
+    // Write the SyncShape directly, deliberately skipping the nodeTexts entry.
+    doc.getMap(NODE_DATA).set(n.id, nodeToSyncShape(n));
+
+    const snap = getSnapshot(doc);
+    const rebuilt = snap.nodes.find((x) => x.id === n.id)!;
+    expect(BoardNodeSchema.safeParse(rebuilt).success).toBe(true);
+    if (rebuilt.type === 'frame') expect(rebuilt.title).toBe('');
+    else if ('text' in rebuilt) expect((rebuilt as { text: string }).text).toBe('');
+  });
+
+  it('leaves a text-less shape with text still undefined (optional field)', () => {
+    const doc = new Y.Doc();
+    addNode(doc, shapeNoText);
+    const rebuilt = getSnapshot(doc).nodes.find((x) => x.id === shapeNoText.id)!;
+    expect(BoardNodeSchema.safeParse(rebuilt).success).toBe(true);
+    expect((rebuilt as { text?: string }).text).toBeUndefined();
+  });
 });
 
 describe('syncShapeEqual', () => {
@@ -160,5 +227,21 @@ describe('syncShapeEqual', () => {
   it('is false when a field differs', () => {
     const moved = nodeToSyncShape({ ...sticky, pos: { x: 999, y: 999 } });
     expect(syncShapeEqual(nodeToSyncShape(sticky), moved)).toBe(false);
+  });
+
+  it('is order-insensitive — reordered keys still compare equal (no spurious write)', () => {
+    const base = { id: 'x', type: 'sticky', order: 1, color: '#fff', pos: { x: 1, y: 2 } };
+    // Same content, keys built in a different order (as a `{ ...existing, ...patch }`
+    // spread that moved `color` to the end would produce).
+    const reordered = { pos: { x: 1, y: 2 }, type: 'sticky', id: 'x', order: 1, color: '#fff' };
+    expect(syncShapeEqual(base, reordered)).toBe(true);
+    // JSON.stringify would have said these differ — prove the equality is real.
+    expect(JSON.stringify(base)).not.toBe(JSON.stringify(reordered));
+  });
+
+  it('compares nested objects and arrays structurally', () => {
+    expect(syncShapeEqual({ points: [{ x: 1, y: 2 }] }, { points: [{ x: 1, y: 2 }] })).toBe(true);
+    expect(syncShapeEqual({ points: [{ x: 1, y: 2 }] }, { points: [{ x: 1, y: 3 }] })).toBe(false);
+    expect(syncShapeEqual({ a: 1 }, { a: 1, b: 2 })).toBe(false);
   });
 });

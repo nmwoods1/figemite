@@ -7,11 +7,16 @@
 //
 // Two invariants carried over from the sources:
 //
-//   1. Granular writes. Each op writes the minimum number of Y.Map entries so
-//      concurrent human+AI edits merge instead of clobbering. In particular a
-//      text edit and a position drag touch different maps (nodeTexts vs
-//      nodeData) and never collide; `updateNode` writes nodeData only when a
-//      non-text field actually changes.
+//   1. Merge granularity is per-Y.Map and per-node-id — NOT per-field.
+//      Each op writes the minimum number of Y.Map entries, so:
+//        - a text edit and a position drag never collide: they land in
+//          different maps (nodeTexts vs nodeData);
+//        - edits to two different nodes never collide: different map keys.
+//      But within ONE node's `nodeData`, the stored value is an opaque object
+//      keyed by id, so two concurrent writes to the SAME node's nodeData (a drag
+//      vs a recolor) are last-writer-wins over the whole value — Yjs does not
+//      merge inside it. This matches the legacy design and is intentional; the
+//      value is deliberately a plain object, not a nested Y.Map, so we keep it.
 //
 //   2. Tagged transactions. Every mutation runs inside `doc.transact(fn, origin)`
 //      with a default of {@link LOCAL_ORIGIN}. A later phase scopes a
@@ -21,6 +26,8 @@
 
 import * as Y from 'yjs';
 import type { BoardEdge, BoardNode, DrawingNode, XY } from '../model/board.js';
+import { BoardNodeSchema } from '../model/schema.js';
+import { pruneEdgesForDeletedNodes } from '../board-io.js';
 import { EDGE_DATA, NODE_DATA, NODE_TEXTS, type SyncShape } from './schema.js';
 import { nodeText, nodeToSyncShape, reconstructNode } from './accessors.js';
 
@@ -55,6 +62,12 @@ function edgeDataMap(doc: Y.Doc): Y.Map<BoardEdge> {
  * whatever order the map yields — canonical ordering is `serialise`'s job. This
  * intentionally does NOT synthesise persistence metadata
  * (formatVersion/boardLabel/viewport); that lives elsewhere.
+ *
+ * Self-consistency guarantee: dangling edges (whose source/target isn't a live
+ * node) are dropped, so the returned `edges` always reference returned `nodes`.
+ * Under concurrency `edgeData` can transiently hold an edge for a node that
+ * another peer just deleted; this makes the snapshot coherent for T6's
+ * convergence checks.
  */
 export function getSnapshot(doc: Y.Doc): { nodes: BoardNode[]; edges: BoardEdge[] } {
   const ndm = nodeDataMap(doc);
@@ -71,7 +84,7 @@ export function getSnapshot(doc: Y.Doc): { nodes: BoardNode[]; edges: BoardEdge[
   const edges: BoardEdge[] = [];
   edm.forEach((edge) => edges.push({ ...edge }));
 
-  return { nodes, edges };
+  return { nodes, edges: pruneEdgesForDeletedNodes(edges, new Set(nodes.map((n) => n.id))) };
 }
 
 // ── Node ops ──────────────────────────────────────────────────────────────────
@@ -94,6 +107,20 @@ export function addNode(doc: Y.Doc, node: BoardNode, origin: Origin = LOCAL_ORIG
  * nodeData only when the patch is non-empty, so an empty patch never produces a
  * spurious CRDT update. Text/title are NOT handled here — use
  * {@link setNodeText}. No-op if the node doesn't exist yet.
+ *
+ * `Partial<SyncShape>` distributes over the union, so a cross-variant patch
+ * (e.g. mixing `shape`, `name`, and `points`) would typecheck; the `as SyncShape`
+ * cast can't catch it. So before writing we reconstruct the merged candidate and
+ * validate it with the T3 {@link BoardNodeSchema}, throwing a clear error if it
+ * would produce a malformed node. This makes it impossible for `updateNode` to
+ * land an invalid shape in the doc.
+ *
+ * The zod variant schemas STRIP unknown keys rather than rejecting them, so a
+ * schema pass alone wouldn't catch a foreign field (e.g. `points` on a shape) —
+ * it would just be silently dropped by validation while the junk key still
+ * lands in `nodeData`. We therefore also reject any key the parse stripped: a
+ * dropped key means the patch introduced a field that doesn't belong to this
+ * node's variant.
  */
 export function updateNode(
   doc: Y.Doc,
@@ -103,10 +130,37 @@ export function updateNode(
 ): void {
   if (Object.keys(patch).length === 0) return;
   const ndm = nodeDataMap(doc);
-  const existing = ndm.get(id);
-  if (!existing) return;
   doc.transact(() => {
-    ndm.set(id, { ...existing, ...patch } as SyncShape);
+    const existing = ndm.get(id);
+    if (!existing) return;
+    const merged = { ...existing, ...patch } as SyncShape;
+    const type = (existing as { type?: unknown }).type ?? '?';
+
+    // Validate against the canonical node schema (via a full reconstruct, so
+    // required text/title are present) before committing the write.
+    const candidate = reconstructNode(merged, nodeTextsMap(doc).get(id));
+    const result = BoardNodeSchema.safeParse(candidate);
+    if (!result.success) {
+      throw new Error(
+        `updateNode(${JSON.stringify(id)}): patch [${Object.keys(patch).join(', ')}] would ` +
+          `produce an invalid ${type} node: ${result.error.issues
+            .map((iss) => `${iss.path.join('.')}: ${iss.message}`)
+            .join('; ')}`,
+      );
+    }
+
+    // Reject foreign keys the schema silently stripped (cross-variant patch).
+    const stripped = Object.keys(candidate).filter(
+      (k) => !Object.prototype.hasOwnProperty.call(result.data, k),
+    );
+    if (stripped.length > 0) {
+      throw new Error(
+        `updateNode(${JSON.stringify(id)}): patch introduced field(s) [${stripped.join(', ')}] ` +
+          `that are invalid for a ${type} node`,
+      );
+    }
+
+    ndm.set(id, merged);
   }, origin);
 }
 
@@ -116,15 +170,23 @@ export function moveNode(doc: Y.Doc, id: string, pos: XY, origin: Origin = LOCAL
   doc.transact(() => {
     const existing = ndm.get(id);
     if (!existing) return;
-    ndm.set(id, { ...existing, pos } as SyncShape);
+    ndm.set(id, { ...existing, pos });
   }, origin);
 }
 
-/** Delete a node and its text entry. */
+/**
+ * Delete a node, its text entry, and every edge touching it — all in one
+ * transaction, so `edgeData` never accumulates orphaned edges (getSnapshot's
+ * filter is the read-side guarantee; this is the write-side one).
+ */
 export function deleteNode(doc: Y.Doc, id: string, origin: Origin = LOCAL_ORIGIN): void {
   doc.transact(() => {
     nodeDataMap(doc).delete(id);
     nodeTextsMap(doc).delete(id);
+    const edm = edgeDataMap(doc);
+    for (const [edgeId, edge] of edm.entries()) {
+      if (edge.source === id || edge.target === id) edm.delete(edgeId);
+    }
   }, origin);
 }
 

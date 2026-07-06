@@ -29,7 +29,12 @@ export const NODE_TEXTS = 'nodeTexts';
 /** Y.Map name: id → BoardEdge. */
 export const EDGE_DATA = 'edgeData';
 
-/** Y.Array name: ephemeral annotation strokes shared during a discussion. */
+/**
+ * Y.Array name: ephemeral annotation strokes shared during a discussion. Its
+ * typed accessor + ops land with the annotation-overlay client phase — the
+ * constant is defined now so the doc layout is complete in one place
+ * (intentional deferral).
+ */
 export const ANNOTATIONS = 'annotations';
 
 // ── SyncShape ────────────────────────────────────────────────────────────────
