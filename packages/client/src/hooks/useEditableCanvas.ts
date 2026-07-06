@@ -69,16 +69,30 @@ import type { SelectionParams } from './useSelection.js';
  * making `reconcile.ts`'s shallow `data` diff see a "change" on every tick
  * (see this module's and rf-adapters.ts's docs on the callback-stability
  * requirement).
+ *
+ * `onOpenDescription` (P4-T25): the editable canvas (BoardCanvas.tsx's
+ * `EditableCanvas`) owns "which node's description is open" state and passes
+ * its opener down as `options.onOpenDescription`. That caller-supplied
+ * function is read through a ref (updated in its own effect, never during
+ * render) so THIS bag's own `onOpenDescription` member keeps a stable
+ * identity across re-renders even though the caller's closure isn't
+ * necessarily stable itself — same technique `useAutosave.ts` uses for its
+ * scheduleSave/performSave refs.
  */
-function useNodeCallbacks(store: BoardStore): NodeCallbacks {
+function useNodeCallbacks(
+  store: BoardStore,
+  onOpenDescription?: (id: string) => void,
+): NodeCallbacks {
+  const onOpenDescriptionRef = useRef(onOpenDescription);
+  useEffect(() => {
+    onOpenDescriptionRef.current = onOpenDescription;
+  }, [onOpenDescription]);
+
   return useMemo<NodeCallbacks>(
     () => ({
       onTextChange: (id: string, text: string) => store.setNodeText(id, text),
       onTitleChange: (id: string, title: string) => store.setNodeText(id, title),
-      // Seam only (P4-T25 supplies the real modal); wiring it here — rather
-      // than leaving it undefined — is what makes the DescriptionBadge seam
-      // in every describable node component clickable per this task's scope.
-      onOpenDescription: () => {},
+      onOpenDescription: (id: string) => onOpenDescriptionRef.current?.(id),
       onResizeEnd: (id: string, size: { width: number; height: number }) =>
         store.resizeNode(id, size),
       onResizeEndSquare: (id: string, size: number) => store.resizeNode(id, size),
@@ -122,10 +136,21 @@ export interface EditableCanvasProps {
   selectedEdgeIds: Set<string>;
 }
 
-export function useEditableCanvas(store: BoardStore): EditableCanvasProps {
+export interface UseEditableCanvasOptions {
+  /** Called with a node's id when its DescriptionBadge is clicked (P4-T25).
+   * The caller (BoardCanvas.tsx's `EditableCanvas`) owns "which node's
+   * description is open" state and renders the DescriptionModal; omitting
+   * this leaves the seam a harmless no-op, matching P4-T24's stub. */
+  onOpenDescription?: (id: string) => void;
+}
+
+export function useEditableCanvas(
+  store: BoardStore,
+  options: UseEditableCanvasOptions = {},
+): EditableCanvasProps {
   const snapshot = useBoardStore(store);
   const selection = useSelection();
-  const nodeCallbacks = useNodeCallbacks(store);
+  const nodeCallbacks = useNodeCallbacks(store, options.onOpenDescription);
   const edgeCallbacks = useEdgeCallbacks(store);
 
   // Doc-derived RF shape (rebuilt only when the doc snapshot OR the (stable)

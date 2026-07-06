@@ -23,6 +23,7 @@
 import * as Y from 'yjs';
 import {
   addEdge as addEdgeOp,
+  addNode as addNodeOp,
   deleteEdge as deleteEdgeOp,
   deleteNode as deleteNodeOp,
   getSnapshot as getDocSnapshot,
@@ -78,6 +79,10 @@ export interface BoardStore {
   // (BoardCanvas's interaction handlers) commit through named methods rather
   // than importing raw ops. Every mutation is a NO-OP on a read-only store.
 
+  /** Add a fully-built node to the doc (Toolbar's node-creation buttons — the
+   * caller builds it via a shared `@easel/shared` factory with a fresh id and
+   * `order`). No-op if read-only. */
+  addNode(node: BoardNode): void;
   /** Commit a node's final position to the doc. No-op if read-only. */
   moveNode(id: string, pos: XY): void;
   /** Delete nodes (and their dependent edges) from the doc. No-op if read-only. */
@@ -87,6 +92,10 @@ export interface BoardStore {
   /** Delete edges from the doc. No-op if read-only. */
   deleteEdges(ids: string[]): void;
 
+  /** Merge an arbitrary patch of non-text fields into an existing node (e.g.
+   * the Toolbar's color picker setting `{ color }`). No-op if read-only, and
+   * a no-op if the node doesn't exist (see `@easel/shared`'s `updateNode`). */
+  updateNode(id: string, patch: Partial<BoardNode>): void;
   /** Commit a node's text/title (sticky/text/shape/emoji's `text`, frame's
    * `title`) to the doc via `nodeTexts`. No-op if read-only. */
   setNodeText(id: string, text: string): void;
@@ -180,6 +189,11 @@ export function createBoardStore(initialBoard: BoardFile, opts: BoardStoreOption
     // The ops themselves are no-ops when the target id is absent, so callers
     // don't have to pre-check existence.
 
+    addNode(node: BoardNode) {
+      if (opts.readonly) return;
+      addNodeOp(doc, node);
+    },
+
     moveNode(id: string, pos: XY) {
       if (opts.readonly) return;
       moveNodeOp(doc, id, pos);
@@ -198,6 +212,11 @@ export function createBoardStore(initialBoard: BoardFile, opts: BoardStoreOption
     deleteEdges(ids: string[]) {
       if (opts.readonly) return;
       for (const id of ids) deleteEdgeOp(doc, id);
+    },
+
+    updateNode(id: string, patch: Partial<BoardNode>) {
+      if (opts.readonly) return;
+      updateNodeOp(doc, id, patch);
     },
 
     setNodeText(id: string, text: string) {

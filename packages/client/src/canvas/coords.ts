@@ -84,6 +84,37 @@ export function nodeRect(node: BoardNode): Rect {
   return { x, y, width: 0, height: 0 };
 }
 
+// ── New-node placement (Toolbar / P4-T25) ────────────────────────────────────
+//
+// Ported from the legacy prototype's inline `snapToGrid`/`getViewCenter`
+// (figmalade's BoardCanvas.tsx). New nodes snap to a 20px grid so
+// toolbar-created nodes land on the same grid a dragged node would settle on.
+
+/** The grid size (px, flow space) new nodes snap to. */
+export const GRID_SIZE = 20;
+
+/** Round a flow-space point to the nearest {@link GRID_SIZE} grid cell. */
+export function snapToGrid(p: XY): XY {
+  return {
+    x: Math.round(p.x / GRID_SIZE) * GRID_SIZE,
+    y: Math.round(p.y / GRID_SIZE) * GRID_SIZE,
+  };
+}
+
+/**
+ * The flow-space point a fixed `offset` (screen px) down-and-right of the
+ * current viewport's origin, snapped to the grid — i.e. "roughly the visible
+ * center, nudged so a newly-created node doesn't land exactly at the
+ * top-left corner of the viewport." Mirrors the legacy's
+ * `snapToGrid(-vp.x / vp.zoom + offset, -vp.y / vp.zoom + offset)`.
+ */
+export function viewCenter(vp: Viewport, offset = 200): XY {
+  return snapToGrid({
+    x: -vp.x / vp.zoom + offset,
+    y: -vp.y / vp.zoom + offset,
+  });
+}
+
 /** The union rect of a set of nodes' {@link nodeRect}s. Empty input -> a zero rect. */
 export function boundingBox(nodes: BoardNode[]): Rect {
   if (nodes.length === 0) return { x: 0, y: 0, width: 0, height: 0 };

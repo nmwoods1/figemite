@@ -272,4 +272,95 @@ describe('BoardCanvas', () => {
     const { container } = render(<BoardCanvas board={fixtureBoard()} readonly={true} />);
     expect(container.querySelectorAll('[data-testid="multi-resize-handle"]')).toHaveLength(0);
   });
+
+  // ── P4-T25: Toolbar wiring ───────────────────────────────────────────────
+
+  it('renders the Toolbar (a node-creation button) in editable mode', () => {
+    render(<BoardCanvas board={fixtureBoard()} readonly={false} />);
+    expect(screen.getByTitle('Sticky note')).toBeInTheDocument();
+  });
+
+  it('does not render the Toolbar in read-only mode', () => {
+    render(<BoardCanvas board={fixtureBoard()} readonly={true} />);
+    expect(screen.queryByTitle('Sticky note')).not.toBeInTheDocument();
+  });
+
+  it('a node added via the Toolbar appears in the rendered board', () => {
+    render(<BoardCanvas board={fixtureBoard()} readonly={false} />);
+    fireEvent.click(screen.getByTitle('Text'));
+    // The new text node defaults to 'Label' (board-io.ts's makeTextNode).
+    expect(screen.getByText('Label')).toBeInTheDocument();
+  });
+
+  // ── P4-T25: DescriptionModal wiring ──────────────────────────────────────
+  // The editable canvas owns "which node's description is open" state and
+  // renders the modal on the `data.onOpenDescription(id)` seam (P4-T24) that
+  // was a no-op stub before this task.
+
+  it("clicking a node's description badge opens the modal pre-filled with its description", () => {
+    const board = fixtureBoard();
+    (board.nodes[0] as { description?: string }).description = 'Existing notes';
+    render(<BoardCanvas board={board} readonly={false} />);
+
+    fireEvent.click(screen.getByTitle('View description'));
+
+    // "Buy milk" now appears twice (the sticky itself + the modal header) —
+    // assert via the modal's own edit-description label to disambiguate.
+    expect(screen.getByText('Edit description')).toBeInTheDocument();
+    expect(screen.getAllByText('Buy milk').length).toBeGreaterThanOrEqual(2);
+    expect(screen.getByText('Existing notes')).toBeInTheDocument();
+  });
+
+  it('saving from the modal commits the description via updateNode (real store)', () => {
+    const board = fixtureBoard();
+    (board.nodes[0] as { description?: string }).description = 'Old notes';
+    render(<BoardCanvas board={board} readonly={false} />);
+
+    fireEvent.click(screen.getByTitle('View description'));
+    fireEvent.click(screen.getByRole('button', { name: /^save$/i }));
+
+    // Modal closes after save.
+    expect(screen.queryByRole('button', { name: /^save$/i })).not.toBeInTheDocument();
+  });
+
+  it('canceling the modal does not commit a change and closes it', () => {
+    const board = fixtureBoard();
+    (board.nodes[0] as { description?: string }).description = 'Untouched';
+    render(<BoardCanvas board={board} readonly={false} />);
+
+    fireEvent.click(screen.getByTitle('View description'));
+    fireEvent.click(screen.getByRole('button', { name: /^cancel$/i }));
+
+    expect(screen.queryByRole('button', { name: /^cancel$/i })).not.toBeInTheDocument();
+    expect(screen.getByTitle('View description')).toBeInTheDocument();
+  });
+
+  it('a node with no description opens the modal empty (Add description badge)', () => {
+    render(<BoardCanvas board={fixtureBoard()} readonly={false} />);
+    // The badge is hover-revealed for a describable node with no description
+    // — hover its DescriptionBadge hover-zone directly (mouseEnter doesn't
+    // bubble, matching DescriptionBadge.test.tsx's own pattern).
+    const stickyNode = document.querySelector('[data-id="s1"]') as HTMLElement;
+    const hoverZone = stickyNode.querySelector(
+      '[data-testid="description-badge-hover-zone"]',
+    ) as HTMLElement;
+    fireEvent.mouseEnter(hoverZone);
+    fireEvent.click(screen.getByTitle('Add description'));
+    // Opens in EDIT mode (not readonly) with an empty editor — the
+    // placeholder itself is CSS-generated content (::before, see
+    // DescriptionModal.tsx's stylesheet) so isn't a queryable DOM text node;
+    // assert the modal opened in edit mode with an empty editor instead.
+    expect(screen.getByText('Edit description')).toBeInTheDocument();
+    expect(screen.getByRole('textbox')).toHaveTextContent('');
+  });
+
+  it('the description modal never opens in read-only mode (badge only shows an existing description, no click wiring assumed)', () => {
+    const board = fixtureBoard();
+    (board.nodes[0] as { description?: string }).description = 'Read this';
+    render(<BoardCanvas board={board} readonly={true} />);
+    // Read-only badge still renders (existing description), but clicking it
+    // must not crash and must not wire a live editing modal with Save/Cancel.
+    fireEvent.click(screen.getByTitle('View description'));
+    expect(screen.queryByRole('button', { name: /^save$/i })).not.toBeInTheDocument();
+  });
 });

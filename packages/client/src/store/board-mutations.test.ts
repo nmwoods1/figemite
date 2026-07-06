@@ -39,6 +39,67 @@ function fixtureBoard(): BoardFile {
 }
 
 describe('board mutation API', () => {
+  // ── Node creation + generic patch (P4-T25 Toolbar) ──────────────────────────
+
+  describe('addNode', () => {
+    it('adds a fully-built node to the doc', () => {
+      const store = createBoardStore(fixtureBoard(), { readonly: false });
+      store.addNode({
+        id: 'new1',
+        type: 'text',
+        pos: { x: 42, y: 43 },
+        order: 5,
+        text: 'Label',
+      });
+      const node = store.getSnapshot().nodes.find((n) => n.id === 'new1');
+      expect(node).toMatchObject({ type: 'text', pos: { x: 42, y: 43 }, order: 5, text: 'Label' });
+      store.destroy();
+    });
+
+    it('notifies subscribers', () => {
+      const store = createBoardStore(fixtureBoard(), { readonly: false });
+      const listener = vi.fn();
+      store.subscribe(listener);
+      store.addNode({ id: 'new1', type: 'text', pos: { x: 0, y: 0 }, order: 5, text: 'Label' });
+      expect(listener).toHaveBeenCalled();
+      store.destroy();
+    });
+
+    it('is a no-op on a read-only store', () => {
+      const store = createBoardStore(fixtureBoard(), { readonly: true });
+      store.addNode({ id: 'new1', type: 'text', pos: { x: 0, y: 0 }, order: 5, text: 'Label' });
+      expect(store.getSnapshot().nodes.some((n) => n.id === 'new1')).toBe(false);
+      store.destroy();
+    });
+  });
+
+  describe('updateNode', () => {
+    it("merges a patch into an existing node (e.g. a sticky's color)", () => {
+      const store = createBoardStore(fixtureBoard(), { readonly: false });
+      store.updateNode('s1', { color: '#dbeafe' });
+      const node = store.getSnapshot().nodes.find((n) => n.id === 's1');
+      expect(node).toMatchObject({ color: '#dbeafe' });
+      store.destroy();
+    });
+
+    it('notifies subscribers', () => {
+      const store = createBoardStore(fixtureBoard(), { readonly: false });
+      const listener = vi.fn();
+      store.subscribe(listener);
+      store.updateNode('s1', { color: '#dbeafe' });
+      expect(listener).toHaveBeenCalled();
+      store.destroy();
+    });
+
+    it('is a no-op on a read-only store', () => {
+      const store = createBoardStore(fixtureBoard(), { readonly: true });
+      store.updateNode('s1', { color: '#dbeafe' });
+      const node = store.getSnapshot().nodes.find((n) => n.id === 's1');
+      expect(node).toMatchObject({ color: '#fef3c7' });
+      store.destroy();
+    });
+  });
+
   describe('moveNode', () => {
     it('updates the doc so getSnapshot reflects the new position', () => {
       const store = createBoardStore(fixtureBoard(), { readonly: false });

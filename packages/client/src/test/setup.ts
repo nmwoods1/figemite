@@ -32,3 +32,35 @@ if (typeof Element.prototype.releasePointerCapture !== 'function') {
 if (typeof Element.prototype.hasPointerCapture !== 'function') {
   Element.prototype.hasPointerCapture = () => false;
 }
+
+// ── Range.getClientRects/getBoundingClientRect polyfill ─────────────────────
+//
+// jsdom implements no layout engine, so `Range` doesn't have
+// `getClientRects`/`getBoundingClientRect` at all (P4-T25's DescriptionModal,
+// backed by TipTap/ProseMirror: `EditorView.dispatch`'s focus/selection
+// handling calls `view.coordsAtPos`, which calls these on a Range, to decide
+// whether to scroll the caret into view). Zero-rect stubs are enough for
+// tests: we assert the editor's resulting document content/markdown, not
+// real caret geometry.
+if (typeof Range.prototype.getClientRects !== 'function') {
+  Range.prototype.getClientRects = () =>
+    ({
+      length: 0,
+      item: () => null,
+      [Symbol.iterator]: function* () {},
+    }) as unknown as DOMRectList;
+}
+if (typeof Range.prototype.getBoundingClientRect !== 'function') {
+  Range.prototype.getBoundingClientRect = () =>
+    ({
+      x: 0,
+      y: 0,
+      width: 0,
+      height: 0,
+      top: 0,
+      left: 0,
+      right: 0,
+      bottom: 0,
+      toJSON() {},
+    }) as DOMRect;
+}

@@ -1,5 +1,13 @@
 import { describe, it, expect } from 'vitest';
-import { flowToScreen, screenToFlow, getFlowPointer, nodeRect, boundingBox } from './coords.js';
+import {
+  flowToScreen,
+  screenToFlow,
+  getFlowPointer,
+  nodeRect,
+  boundingBox,
+  snapToGrid,
+  viewCenter,
+} from './coords.js';
 import type { BoardNode } from '@easel/shared';
 
 describe('flowToScreen / screenToFlow', () => {
@@ -152,5 +160,44 @@ describe('boundingBox', () => {
       size: 40,
     } as BoardNode;
     expect(boundingBox([node])).toEqual({ x: 10, y: 20, width: 40, height: 40 });
+  });
+});
+
+describe('snapToGrid', () => {
+  it('rounds a point to the nearest 20px grid cell', () => {
+    expect(snapToGrid({ x: 13, y: 27 })).toEqual({ x: 20, y: 20 });
+  });
+
+  it('rounds down when closer to the lower grid line', () => {
+    expect(snapToGrid({ x: 9, y: 111 })).toEqual({ x: 0, y: 120 });
+  });
+
+  it('leaves an already-aligned point unchanged', () => {
+    expect(snapToGrid({ x: 100, y: -40 })).toEqual({ x: 100, y: -40 });
+  });
+});
+
+describe('viewCenter', () => {
+  it('computes the flow-space point at a fixed offset from the viewport origin, snapped to grid', () => {
+    // Legacy formula: snapToGrid(-vp.x / vp.zoom + offset, -vp.y / vp.zoom + offset).
+    const vp = { x: 0, y: 0, zoom: 1 };
+    expect(viewCenter(vp, 200)).toEqual({ x: 200, y: 200 });
+  });
+
+  it('accounts for pan', () => {
+    const vp = { x: -100, y: 40, zoom: 1 };
+    // -(-100)/1 + 200 = 300; -(40)/1 + 200 = 160
+    expect(viewCenter(vp, 200)).toEqual({ x: 300, y: 160 });
+  });
+
+  it('accounts for zoom', () => {
+    // -(-100)/2 + 200 = 250, snapped to the nearest 20px grid cell -> 260.
+    const vpPanned = { x: -100, y: -100, zoom: 2 };
+    expect(viewCenter(vpPanned, 200)).toEqual({ x: 260, y: 260 });
+  });
+
+  it('defaults the offset to 200 (the legacy default)', () => {
+    const vp = { x: 0, y: 0, zoom: 1 };
+    expect(viewCenter(vp)).toEqual({ x: 200, y: 200 });
   });
 });

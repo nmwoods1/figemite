@@ -10,7 +10,7 @@
 // pointer-drag geometry is a browser concern (P4-T26 E2E); here we assert that
 // e.g. `onNodeDragStop` commits the final position, `onConnect` adds an edge.
 
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { renderHook, act } from '@testing-library/react';
 import type { Connection } from '@xyflow/react';
 import type { BoardFile } from '@easel/shared';
@@ -232,13 +232,24 @@ describe('useEditableCanvas', () => {
       store.destroy();
     });
 
-    it('wires onOpenDescription as a callable no-op seam', () => {
+    it('wires onOpenDescription as a callable no-op seam when no callback is given', () => {
       const store = createBoardStore(fixtureBoard(), { readonly: false });
       const { result } = renderHook(() => useEditableCanvas(store));
       const s1 = result.current.nodes.find((n) => n.id === 's1');
       const onOpenDescription = s1?.data.onOpenDescription as (id: string) => void;
       expect(onOpenDescription).toBeTypeOf('function');
       expect(() => onOpenDescription('s1')).not.toThrow();
+      store.destroy();
+    });
+
+    it('wires a caller-supplied onOpenDescription through to node data (P4-T25 DescriptionModal seam)', () => {
+      const store = createBoardStore(fixtureBoard(), { readonly: false });
+      const onOpenDescription = vi.fn();
+      const { result } = renderHook(() => useEditableCanvas(store, { onOpenDescription }));
+      const s1 = result.current.nodes.find((n) => n.id === 's1');
+      const handler = s1?.data.onOpenDescription as (id: string) => void;
+      handler('s1');
+      expect(onOpenDescription).toHaveBeenCalledWith('s1');
       store.destroy();
     });
 

@@ -21,7 +21,7 @@
 // viewport (all-zero, the BoardFile default for a freshly created board) gets
 // `fitView` instead, so an empty/fresh board doesn't render pinned at (0,0)
 // zoom 1 regardless of where its content actually is.
-import { useEffect, useMemo, useRef } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Background, ConnectionMode, Controls, ReactFlow, ReactFlowProvider } from '@xyflow/react';
 // RF's base stylesheet — without this, ReactFlow renders unstyled (its own
 // `#013` "The React Flow parent container needs a width and a height..."-
@@ -40,11 +40,22 @@ import { boardToRf } from './rf-adapters.js';
 import { MultiSelectResizer } from './MultiSelectResizer.js';
 import { nodeTypes } from '../nodes/index.js';
 import { edgeTypes } from '../edges/index.js';
+import { Toolbar } from '../components/Toolbar.js';
+import { DescriptionModal } from '../components/DescriptionModal.js';
+import { nodeLabel } from './node-label.js';
+import type { SaveStatus } from '../hooks/useAutosave.js';
 
 export interface BoardCanvasProps {
   board: BoardFile;
   readonly: boolean;
   onNavigate?: (nodeId: string) => void;
+  /** Reflected by the Toolbar's save-status indicator. The autosave hook
+   * itself is owned by the caller (e.g. the board route) — BoardCanvas only
+   * renders whatever status it's given. Defaults to 'idle' for callers that
+   * don't wire autosave (e.g. every current test). */
+  saveStatus?: SaveStatus;
+  /** Retry a failed save — passed straight through to the Toolbar. */
+  onRetrySave?: () => void;
 }
 
 /** True when a viewport is just the BoardFile zero-value default — i.e. not
@@ -100,11 +111,31 @@ function ReadOnlyCanvas({ store, fitView, viewport }: PaneProps) {
  * commits its scale events to the doc. Individual nodes' own `NodeResizer`s
  * self-suppress via `useIsMultiSelected` (nodes/use-is-multi-selected.ts)
  * reading RF's own selection store directly, so no extra wiring is needed
- * here to hide them. */
-function EditableCanvas({ store, fitView, viewport }: PaneProps) {
-  const editable = useEditableCanvas(store);
+ * here to hide them.
+ *
+ * P4-T25 adds the DescriptionModal: this component OWNS "which node's
+ * description is open" state (`descNodeId`, mirroring the legacy
+ * BoardCanvas.tsx's own `descNodeId` state) and passes the opener into
+ * `useEditableCanvas`'s `onOpenDescription` option, which wires it through to
+ * every describable node's `data.onOpenDescription` seam (P4-T24). Saving
+ * commits via `store.updateNode(id, { description })`. */
+function EditableCanvas({ store, fitView, viewport, saveStatus, onRetrySave }: EditablePaneProps) {
+  const [descNodeId, setDescNodeId] = useState<string | null>(null);
+  const openDescription = useCallback((id: string) => setDescNodeId(id), []);
+  const editable = useEditableCanvas(store, { onOpenDescription: openDescription });
   const multiSelect = useMultiSelectResize(store, editable.selectedNodeIds);
   const containerRef = useRef<HTMLDivElement>(null);
+  const { nodes } = useBoardStore(store);
+
+  const descNode = descNodeId ? nodes.find((n) => n.id === descNodeId) : undefined;
+
+  const handleSaveDescription = useCallback(
+    (md: string) => {
+      if (!descNodeId) return;
+      store.updateNode(descNodeId, { description: md || undefined });
+    },
+    [descNodeId, store],
+  );
 
   return (
     <div ref={containerRef} style={{ width: '100%', height: '100%', position: 'relative' }}>
@@ -134,6 +165,22 @@ function EditableCanvas({ store, fitView, viewport }: PaneProps) {
         onStart={multiSelect.onScaleStart}
         onScale={multiSelect.onScale}
       />
+      <Toolbar
+        store={store}
+        selectedNodeIds={editable.selectedNodeIds}
+        selectedEdgeIds={editable.selectedEdgeIds}
+        saveStatus={saveStatus ?? 'idle'}
+        readonly={false}
+        onRetrySave={onRetrySave}
+      />
+      {descNode && (
+        <DescriptionModal
+          nodeLabel={nodeLabel(descNode)}
+          initialText={descNode.description ?? ''}
+          onSave={handleSaveDescription}
+          onClose={() => setDescNodeId(null)}
+        />
+      )}
     </div>
   );
 }
@@ -144,7 +191,12 @@ interface PaneProps {
   viewport: BoardFile['viewport'];
 }
 
-export function BoardCanvas({ board, readonly }: BoardCanvasProps) {
+interface EditablePaneProps extends PaneProps {
+  saveStatus?: SaveStatus;
+  onRetrySave?: () => void;
+}
+
+export function BoardCanvas({ board, readonly, saveStatus, onRetrySave }: BoardCanvasProps) {
   const store = useMemo(() => createBoardStore(board, { readonly }), [board, readonly]);
 
   useEffect(() => {
@@ -159,7 +211,13 @@ export function BoardCanvas({ board, readonly }: BoardCanvasProps) {
         {readonly ? (
           <ReadOnlyCanvas store={store} fitView={fitView} viewport={board.viewport} />
         ) : (
-          <EditableCanvas store={store} fitView={fitView} viewport={board.viewport} />
+          <EditableCanvas
+            store={store}
+            fitView={fitView}
+            viewport={board.viewport}
+            saveStatus={saveStatus}
+            onRetrySave={onRetrySave}
+          />
         )}
       </ReactFlowProvider>
     </div>
