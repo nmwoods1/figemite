@@ -212,17 +212,17 @@
     {
       "id": "edge-arrow-end",
       "source": "sticky2",
-      "target": "text1",
+      "target": "emoji1",
       "style": "solid",
       "kind": "arrow",
       "arrow": "end",
       "label": "leads to",
-      "sourceHandle": "right",
-      "targetHandle": "left"
+      "sourceHandle": "r",
+      "targetHandle": "l"
     },
     {
       "id": "edge-arrow-both",
-      "source": "text1",
+      "source": "emoji1",
       "target": "sticky1",
       "style": "dashed",
       "kind": "arrow",
@@ -262,8 +262,8 @@
       "kind": "cardinality",
       "cardinality": "N:N",
       "label": "many to many",
-      "sourceHandle": "bottom",
-      "targetHandle": "top"
+      "sourceHandle": "b",
+      "targetHandle": "t"
     }
   ]
 }

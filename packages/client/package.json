@@ -9,7 +9,9 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "test": "vitest run"
+    "test": "vitest run",
+    "test:e2e": "playwright test --project=chromium",
+    "test:e2e:visual": "playwright test --project=chromium-visual"
   },
   "dependencies": {
     "@easel/shared": "*",
@@ -21,6 +23,7 @@
   },
   "devDependencies": {
     "@easel/server": "*",
+    "@playwright/test": "^1.61.1",
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/react": "^16.3.2",
     "@types/react": "^19.2.17",

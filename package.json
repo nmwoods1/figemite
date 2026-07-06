@@ -17,6 +17,8 @@
     "typecheck": "tsc -b",
     "test": "vitest run",
     "test:watch": "vitest",
+    "test:e2e": "npm -w @easel/client run test:e2e",
+    "test:e2e:visual": "npm -w @easel/client run test:e2e:visual",
     "build:static": "node packages/client/scripts/build-static.mjs",
     "license:audit": "node scripts/license-audit.mjs",
     "oracle": "node scripts/oracle.mjs"

@@ -12,3 +12,7 @@ public/
 # session tooling — never versioned
 .claude/
 .playwright-mcp/
+# Playwright e2e output (P3-T21) — reports/traces/screenshots from local or CI runs
+/packages/client/test-results/
+/packages/client/playwright-report/
+/packages/client/blob-report/

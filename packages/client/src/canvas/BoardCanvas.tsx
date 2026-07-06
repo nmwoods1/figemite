@@ -25,6 +25,13 @@
 // pinned at (0,0) zoom 1 regardless of where its content actually is.
 import { useEffect, useMemo } from 'react';
 import { Background, ConnectionMode, Controls, ReactFlow, ReactFlowProvider } from '@xyflow/react';
+// RF's base stylesheet — without this, ReactFlow renders unstyled (its own
+// `#013` "The React Flow parent container needs a width and a height..."-
+// adjacent "styles not loaded" warning) and node/edge layout fidelity suffers
+// (e.g. `.react-flow__handle` has no default position/size, panes have no
+// dimensions). Flagged in P3-T20 (warning #013); fixed here so the P3-T21
+// structural-parity gate measures a correctly-styled canvas.
+import '@xyflow/react/dist/style.css';
 import type { BoardFile } from '@easel/shared';
 import { createBoardStore } from '../store/board-store.js';
 import { useBoardStore } from '../store/use-board-store.js';

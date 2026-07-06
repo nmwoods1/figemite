@@ -10,11 +10,14 @@ export default tseslint.config(
   js.configs.recommended,
   ...tseslint.configs.recommended,
   {
-    // Node tooling scripts (build/audit helpers) run in Node, not the browser.
+    // Node tooling scripts (build/audit helpers, e2e support scripts) run in
+    // Node, not the browser.
     files: [
       'scripts/**/*.{js,mjs,cjs}',
       'packages/*/scripts/**/*.{js,mjs,cjs}',
+      'packages/*/e2e/support/**/*.{js,mjs,cjs}',
       '*.config.{js,mjs,cjs,ts}',
+      'packages/*/*.config.{js,mjs,cjs,ts}',
     ],
     languageOptions: {
       globals: {
