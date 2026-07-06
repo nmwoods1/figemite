@@ -13,8 +13,10 @@
   },
   "dependencies": {
     "@easel/shared": "*",
+    "@xyflow/react": "^12.11.1",
     "react": "^19.2.7",
-    "react-dom": "^19.2.7"
+    "react-dom": "^19.2.7",
+    "yjs": "^13.6.31"
   },
   "devDependencies": {
     "@easel/server": "*",

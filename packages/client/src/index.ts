@@ -6,3 +6,9 @@ export * from './app/router.js';
 
 // ── Data-access layer: dev vs READONLY (P2-T15) ──────────────────────────────
 export * from './lib/boards-api.js';
+
+// ── Canvas state foundation: coords, RF adapters, doc-first store (P3-T18) ───
+export * from './canvas/coords.js';
+export * from './canvas/rf-adapters.js';
+export * from './store/board-store.js';
+export * from './store/use-board-store.js';
