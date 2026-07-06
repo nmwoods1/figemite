@@ -9,6 +9,7 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "yjs": "^13.6.31",
     "zod": "^4.4.3"
   }
 }
