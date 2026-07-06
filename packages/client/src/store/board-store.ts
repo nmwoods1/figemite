@@ -21,8 +21,15 @@
 // rule.
 
 import * as Y from 'yjs';
-import { getSnapshot as getDocSnapshot, loadBoardIntoDoc } from '@easel/shared';
-import type { BoardEdge, BoardFile, BoardNode } from '@easel/shared';
+import {
+  addEdge as addEdgeOp,
+  deleteEdge as deleteEdgeOp,
+  deleteNode as deleteNodeOp,
+  getSnapshot as getDocSnapshot,
+  loadBoardIntoDoc,
+  moveNode as moveNodeOp,
+} from '@easel/shared';
+import type { BoardEdge, BoardFile, BoardNode, XY } from '@easel/shared';
 import type { Viewport } from '../canvas/coords.js';
 
 export type { Viewport };
@@ -51,6 +58,22 @@ export interface BoardStore {
   getViewport(): Viewport;
   /** Replace the viewport and notify viewport subscribers. */
   setViewport(vp: Viewport): void;
+
+  // ── Mutation API (the doc-first write surface — see module doc) ─────────────
+  //
+  // Thin, typed wrappers over the shared `@easel/shared` CRDT ops, so callers
+  // (BoardCanvas's interaction handlers) commit through named methods rather
+  // than importing raw ops. Every mutation is a NO-OP on a read-only store.
+
+  /** Commit a node's final position to the doc. No-op if read-only. */
+  moveNode(id: string, pos: XY): void;
+  /** Delete nodes (and their dependent edges) from the doc. No-op if read-only. */
+  deleteNodes(ids: string[]): void;
+  /** Add an edge to the doc. No-op if read-only. */
+  addEdge(edge: BoardEdge): void;
+  /** Delete edges from the doc. No-op if read-only. */
+  deleteEdges(ids: string[]): void;
+
   /** Detach all observers and destroy the underlying Y.Doc. */
   destroy(): void;
 }
@@ -100,6 +123,33 @@ export function createBoardStore(initialBoard: BoardFile, opts: BoardStoreOption
     setViewport(vp: Viewport) {
       viewport = { ...vp };
       for (const listener of viewportListeners) listener();
+    },
+
+    // ── Mutation API ──────────────────────────────────────────────────────────
+    // Each guards on `readonly` up front, then delegates to the shared op. The
+    // op runs `doc.transact(..., LOCAL_ORIGIN)`, which fires the doc `update`
+    // observer above — refreshing the cached snapshot and notifying subscribers.
+    // The ops themselves are no-ops when the target id is absent, so callers
+    // don't have to pre-check existence.
+
+    moveNode(id: string, pos: XY) {
+      if (opts.readonly) return;
+      moveNodeOp(doc, id, pos);
+    },
+
+    deleteNodes(ids: string[]) {
+      if (opts.readonly) return;
+      for (const id of ids) deleteNodeOp(doc, id);
+    },
+
+    addEdge(edge: BoardEdge) {
+      if (opts.readonly) return;
+      addEdgeOp(doc, edge);
+    },
+
+    deleteEdges(ids: string[]) {
+      if (opts.readonly) return;
+      for (const id of ids) deleteEdgeOp(doc, id);
     },
 
     destroy() {

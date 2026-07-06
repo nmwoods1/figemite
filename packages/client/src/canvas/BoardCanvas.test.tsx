@@ -13,13 +13,38 @@
 //     rather than asserting deep edge visuals — that's P3-T21's
 //     browser-mode gate.
 
-import { afterEach, describe, expect, it } from 'vitest';
-import { cleanup, render, screen } from '@testing-library/react';
+import { createElement } from 'react';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { act, cleanup, render, screen } from '@testing-library/react';
+import type { ComponentProps } from 'react';
+import { ReactFlow } from '@xyflow/react';
+import type { Connection } from '@xyflow/react';
 import type { BoardFile } from '@easel/shared';
 import { BoardCanvas } from './BoardCanvas.js';
 
+// Record the props the real <ReactFlow> receives so we can assert BoardCanvas
+// wired the interaction handlers (and, by invoking a captured handler, that the
+// commit path reaches the store and the change flows back out as rendered
+// nodes/edges). The wrapper records props then delegates to the real component,
+// so the actual pane still renders (node content assertions above stay valid).
+const reactFlowCalls: ComponentProps<typeof ReactFlow>[] = [];
+vi.mock('@xyflow/react', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@xyflow/react')>();
+  const Wrapped = (props: ComponentProps<typeof actual.ReactFlow>) => {
+    reactFlowCalls.push(props);
+    return createElement(actual.ReactFlow, props);
+  };
+  return { ...actual, ReactFlow: Wrapped };
+});
+
+/** The props the most recent <ReactFlow> render received. */
+function lastReactFlowProps(): ComponentProps<typeof ReactFlow> {
+  return reactFlowCalls[reactFlowCalls.length - 1];
+}
+
 afterEach(() => {
   cleanup();
+  reactFlowCalls.length = 0;
 });
 
 function fixtureBoard(): BoardFile {
@@ -118,5 +143,62 @@ describe('BoardCanvas', () => {
     const { container } = render(<BoardCanvas board={fixtureBoard()} readonly={false} />);
     expect(container.querySelector('.react-flow__background')).toBeTruthy();
     expect(container.querySelector('.react-flow__controls')).toBeTruthy();
+  });
+
+  // ── Editable path (P4-T22) ──────────────────────────────────────────────────
+  // jsdom can't do a real pointer drag/connect (no layout engine — see module
+  // doc), so the deep interaction→doc commit behaviour is unit-tested in
+  // useEditableCanvas.test.ts and exercised for real in the P4-T26 E2E gate.
+  // Here we just assert the editable canvas mounts and actually turns
+  // interaction ON (the read-only path leaves it off).
+
+  it('mounts in editable mode without throwing', () => {
+    expect(() => render(<BoardCanvas board={fixtureBoard()} readonly={false} />)).not.toThrow();
+  });
+
+  it('renders nodes as draggable and selectable in editable mode', () => {
+    const { container } = render(<BoardCanvas board={fixtureBoard()} readonly={false} />);
+    const stickyNode = container.querySelector('[data-id="s1"]');
+    expect(stickyNode?.className).toMatch(/\bdraggable\b/);
+    expect(stickyNode?.className).toMatch(/\bselectable\b/);
+  });
+
+  it('wires the editable interaction handlers to ReactFlow when not readonly', () => {
+    render(<BoardCanvas board={fixtureBoard()} readonly={false} />);
+    const props = lastReactFlowProps();
+    expect(props.onConnect).toBeTypeOf('function');
+    expect(props.onNodeDragStop).toBeTypeOf('function');
+    expect(props.onNodesDelete).toBeTypeOf('function');
+    expect(props.onEdgesDelete).toBeTypeOf('function');
+    expect(props.onNodesChange).toBeTypeOf('function');
+    expect(props.onSelectionChange).toBeTypeOf('function');
+  });
+
+  it('does NOT wire interaction handlers in read-only mode', () => {
+    render(<BoardCanvas board={fixtureBoard()} readonly={true} />);
+    const props = lastReactFlowProps();
+    expect(props.onConnect).toBeUndefined();
+    expect(props.onNodeDragStop).toBeUndefined();
+    expect(props.onNodesDelete).toBeUndefined();
+  });
+
+  it('an onConnect committed through BoardCanvas makes a new edge appear in the rendered board', () => {
+    // Drive the wired onConnect directly (jsdom can't do a real handle drag),
+    // then assert the doc→RF path flowed the new edge back into ReactFlow's
+    // controlled edges — i.e. BoardCanvas's store + reconcile wiring is live.
+    render(<BoardCanvas board={fixtureBoard()} readonly={false} />);
+    const before = lastReactFlowProps().edges ?? [];
+    const connection: Connection = {
+      source: 'sh1',
+      target: 's1',
+      sourceHandle: null,
+      targetHandle: null,
+    };
+    act(() => {
+      lastReactFlowProps().onConnect?.(connection);
+    });
+    const after = lastReactFlowProps().edges ?? [];
+    expect(after.length).toBe(before.length + 1);
+    expect(after.some((e) => e.source === 'sh1' && e.target === 's1')).toBe(true);
   });
 });
