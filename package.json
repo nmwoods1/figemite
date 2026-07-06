@@ -17,6 +17,7 @@
     "typecheck": "tsc -b",
     "test": "vitest run",
     "test:watch": "vitest",
+    "build:static": "node packages/client/scripts/build-static.mjs",
     "license:audit": "node scripts/license-audit.mjs",
     "oracle": "node scripts/oracle.mjs"
   },

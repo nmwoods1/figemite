@@ -31,5 +31,8 @@ jobs:
       - name: Test
         run: npm test
 
+      - name: Build static (read-only) bundle
+        run: npm run build:static
+
       - name: License audit
         run: npm run license:audit
