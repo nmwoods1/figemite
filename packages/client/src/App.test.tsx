@@ -78,25 +78,49 @@ describe('App view switch', () => {
     expect(screen.getByRole('heading', { name: 'Untagged' })).toBeInTheDocument();
   });
 
-  it('renders the breadcrumb and a canvas placeholder for a board route, without crashing', async () => {
+  it('renders the breadcrumb and the BoardCanvas for a board route, without crashing', async () => {
     setHash('#/spend');
     render(<App />);
     await waitFor(() => expect(screen.getByText('Spend Tracker')).toBeInTheDocument());
-    expect(screen.getByText(/coming in phase 3/i)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /boards/i })).toBeInTheDocument();
+    expect(document.querySelector('.react-flow')).toBeInTheDocument();
+    expect(screen.queryByText(/coming in phase 3/i)).not.toBeInTheDocument();
+  });
+
+  it('renders a fixture board node inside the canvas via BoardCanvas', async () => {
+    boardsApiMock.getBoard.mockResolvedValue({
+      formatVersion: 1,
+      boardLabel: 'Spend Tracker',
+      nodes: [
+        {
+          id: 's1',
+          type: 'sticky',
+          pos: { x: 0, y: 0 },
+          order: 0,
+          size: { width: 200, height: 160 },
+          text: 'Groceries',
+          color: '#fef3c7',
+        },
+      ],
+      edges: [],
+      viewport: { x: 0, y: 0, zoom: 1 },
+    });
+    setHash('#/spend');
+    render(<App />);
+    await waitFor(() => expect(screen.getByText('Groceries')).toBeInTheDocument());
   });
 
   it('renders sub-board path segments in the breadcrumb for a nested board route', async () => {
     setHash('#/spend/nodeA');
     render(<App />);
     await waitFor(() => expect(boardsApiMock.getBoard).toHaveBeenCalledWith('spend', ['nodeA']));
-    expect(screen.getByText(/coming in phase 3/i)).toBeInTheDocument();
+    await waitFor(() => expect(document.querySelector('.react-flow')).toBeInTheDocument());
   });
 
   it('shows a delete-sub-board affordance on a nested board route in dev mode', async () => {
     setHash('#/spend/nodeA');
     render(<App />);
-    await waitFor(() => expect(screen.getByText(/coming in phase 3/i)).toBeInTheDocument());
+    await waitFor(() => expect(document.querySelector('.react-flow')).toBeInTheDocument());
     expect(screen.getByRole('button', { name: /delete sub-board/i })).toBeInTheDocument();
   });
 
@@ -108,7 +132,7 @@ describe('App view switch', () => {
     it('hides the delete-sub-board affordance on a nested board route', async () => {
       setHash('#/spend/nodeA');
       render(<App />);
-      await waitFor(() => expect(screen.getByText(/coming in phase 3/i)).toBeInTheDocument());
+      await waitFor(() => expect(document.querySelector('.react-flow')).toBeInTheDocument());
       expect(screen.queryByRole('button', { name: /delete sub-board/i })).not.toBeInTheDocument();
     });
 

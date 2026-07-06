@@ -49,6 +49,21 @@ function nodeData(node: BoardNode): RfNodeData {
   delete rest.pos;
   delete rest.order;
   delete rest.type;
+
+  // WH-sized nodes (sticky/shape/frame/drawing) store `size: {width,height}`
+  // on the board model, but every node component (nodes/StickyNode.tsx etc.)
+  // reads flat `data.width`/`data.height` — matching how RF itself already
+  // wants a top-level width/height (see boardNodeToRf below). Numeric `size`
+  // nodes (emoji/icon) already match what their components expect (a flat
+  // `data.size` number), so they pass through `rest.size` untouched.
+  const size = rest.size;
+  if (size && typeof size === 'object' && 'width' in size && 'height' in size) {
+    const wh = size as { width: number; height: number };
+    delete rest.size;
+    rest.width = wh.width;
+    rest.height = wh.height;
+  }
+
   return rest as RfNodeData;
 }
 

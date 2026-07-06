@@ -27,6 +27,14 @@ describe('boardNodeToRf', () => {
     expect(rf.data).toMatchObject({ text: 'hello', color: '#fef3c7' });
   });
 
+  it("flattens a WH-sized node's size into data.width/data.height (what the node components read) and drops the nested data.size", () => {
+    const node = sticky();
+    const rf = boardNodeToRf(node, false);
+    expect(rf.data.width).toBe(200);
+    expect(rf.data.height).toBe(160);
+    expect(rf.data.size).toBeUndefined();
+  });
+
   it('maps a text node (no size)', () => {
     const node: BoardNode = {
       id: 't1',
