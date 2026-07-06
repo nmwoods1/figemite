@@ -16,7 +16,8 @@
     "typecheck": "tsc -b",
     "test": "vitest run",
     "test:watch": "vitest",
-    "license:audit": "node scripts/license-audit.mjs"
+    "license:audit": "node scripts/license-audit.mjs",
+    "oracle": "node scripts/oracle.mjs"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.4",

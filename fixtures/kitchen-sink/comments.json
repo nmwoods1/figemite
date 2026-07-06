@@ -1,0 +1,34 @@
+{
+  "comments": [
+    {
+      "id": "comment1",
+      "target": { "type": "node", "nodeId": "sticky1", "offset": { "x": 10, "y": -10 } },
+      "author": "Alex",
+      "createdAt": "2026-01-05T09:30:00.000Z",
+      "text": "Should this step happen before or after Node B?",
+      "resolved": true,
+      "replies": [
+        {
+          "id": "reply1",
+          "author": "Sam",
+          "createdAt": "2026-01-05T10:15:00.000Z",
+          "text": "After — updated the arrow to reflect that."
+        },
+        {
+          "id": "reply2",
+          "author": "Alex",
+          "createdAt": "2026-01-05T10:20:00.000Z",
+          "text": "Great, thanks!"
+        }
+      ]
+    },
+    {
+      "id": "comment2",
+      "target": { "type": "canvas", "pos": { "x": 500, "y": 500 } },
+      "author": "Sam",
+      "createdAt": "2026-01-06T14:00:00.000Z",
+      "text": "General note: leave room here for a future legend.",
+      "replies": []
+    }
+  ]
+}

@@ -33,6 +33,15 @@ imports correctly. Skipping the reference entry appears to work only because of
 stale `dist/` output and bundler-style module resolution, and will break as
 soon as the referenced package changes.
 
+## Legacy oracle (local only)
+
+`npm run oracle` runs `scripts/oracle.mjs` against a local legacy boards
+directory (default `/Users/nickwoods/Projects/figmalade/boards`, overridable
+via an argument or `ORACLE_BOARDS_DIR`) to prove the current model can ingest
+real boards without silent data loss. It requires private local data that CI
+does not have, so it is **not** run in CI — run it manually on a dev machine
+after `npm run typecheck`.
+
 ## Commit messages
 
 Use [Conventional Commits](https://www.conventionalcommits.org/) — e.g.

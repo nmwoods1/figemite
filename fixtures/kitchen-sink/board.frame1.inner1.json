@@ -1,0 +1,24 @@
+{
+  "formatVersion": 1,
+  "boardLabel": "Sub-step detail (nested)",
+  "viewport": { "x": 0, "y": 0, "zoom": 1 },
+  "nodes": [
+    {
+      "id": "nested1",
+      "type": "sticky",
+      "pos": { "x": 20, "y": 20 },
+      "order": 0,
+      "size": { "width": 200, "height": 160 },
+      "text": "Nested-node: deepest level detail",
+      "color": "#fce7f3"
+    },
+    {
+      "id": "nested2",
+      "type": "text",
+      "pos": { "x": 260, "y": 20 },
+      "order": 1,
+      "text": "Nested annotation"
+    }
+  ],
+  "edges": []
+}

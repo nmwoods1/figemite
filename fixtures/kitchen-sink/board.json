@@ -1,0 +1,269 @@
+{
+  "formatVersion": 1,
+  "boardLabel": "Kitchen Sink",
+  "viewport": { "x": 0, "y": 0, "zoom": 1 },
+  "nodes": [
+    {
+      "id": "frame1",
+      "type": "frame",
+      "pos": { "x": 0, "y": 0 },
+      "order": 0,
+      "size": { "width": 480, "height": 320 },
+      "title": "Process Overview",
+      "color": "#fef3c7",
+      "description": "A frame grouping the process steps."
+    },
+    {
+      "id": "sticky1",
+      "type": "sticky",
+      "pos": { "x": 40, "y": 40 },
+      "order": 1,
+      "size": { "width": 200, "height": 160 },
+      "text": "Node A: lorem ipsum dolor sit amet",
+      "color": "#fef3c7",
+      "description": "A sticky note describing step one."
+    },
+    {
+      "id": "sticky2",
+      "type": "sticky",
+      "pos": { "x": 280, "y": 40 },
+      "order": 2,
+      "size": { "width": 200, "height": 160 },
+      "text": "Node B: consectetur adipiscing elit",
+      "color": "#dbeafe"
+    },
+    {
+      "id": "text1",
+      "type": "text",
+      "pos": { "x": 40, "y": 260 },
+      "order": 3,
+      "text": "Team notes: process step"
+    },
+    {
+      "id": "shape-rect",
+      "type": "shape",
+      "pos": { "x": 600, "y": 0 },
+      "order": 4,
+      "size": { "width": 160, "height": 100 },
+      "shape": "rect",
+      "text": "Rect",
+      "color": "#e2e8f0",
+      "description": "Plain rectangle shape."
+    },
+    {
+      "id": "shape-roundRect",
+      "type": "shape",
+      "pos": { "x": 780, "y": 0 },
+      "order": 5,
+      "size": { "width": 160, "height": 100 },
+      "shape": "roundRect",
+      "text": "Round Rect",
+      "color": "#dbeafe"
+    },
+    {
+      "id": "shape-ellipse",
+      "type": "shape",
+      "pos": { "x": 960, "y": 0 },
+      "order": 6,
+      "size": { "width": 160, "height": 100 },
+      "shape": "ellipse",
+      "text": "Ellipse",
+      "color": "#dcfce7"
+    },
+    {
+      "id": "shape-diamond",
+      "type": "shape",
+      "pos": { "x": 600, "y": 120 },
+      "order": 7,
+      "size": { "width": 160, "height": 100 },
+      "shape": "diamond",
+      "text": "Decision?",
+      "color": "#fce7f3"
+    },
+    {
+      "id": "shape-triangle",
+      "type": "shape",
+      "pos": { "x": 780, "y": 120 },
+      "order": 8,
+      "size": { "width": 160, "height": 100 },
+      "shape": "triangle",
+      "text": "Triangle",
+      "color": "#ede9fe",
+      "rotation": 15
+    },
+    {
+      "id": "shape-parallelogram",
+      "type": "shape",
+      "pos": { "x": 960, "y": 120 },
+      "order": 9,
+      "size": { "width": 160, "height": 100 },
+      "shape": "parallelogram",
+      "text": "Input/Output",
+      "color": "#e2e8f0"
+    },
+    {
+      "id": "shape-hexagon",
+      "type": "shape",
+      "pos": { "x": 600, "y": 240 },
+      "order": 10,
+      "size": { "width": 160, "height": 100 },
+      "shape": "hexagon",
+      "text": "Hexagon",
+      "color": "#fef3c7"
+    },
+    {
+      "id": "shape-pentagon",
+      "type": "shape",
+      "pos": { "x": 780, "y": 240 },
+      "order": 11,
+      "size": { "width": 160, "height": 100 },
+      "shape": "pentagon",
+      "text": "Pentagon",
+      "color": "#dbeafe"
+    },
+    {
+      "id": "shape-star",
+      "type": "shape",
+      "pos": { "x": 960, "y": 240 },
+      "order": 12,
+      "size": { "width": 160, "height": 100 },
+      "shape": "star",
+      "text": "Star",
+      "color": "#dcfce7"
+    },
+    {
+      "id": "shape-cylinder",
+      "type": "shape",
+      "pos": { "x": 600, "y": 360 },
+      "order": 13,
+      "size": { "width": 160, "height": 100 },
+      "shape": "cylinder",
+      "text": "Data store",
+      "color": "#fce7f3"
+    },
+    {
+      "id": "shape-cloud",
+      "type": "shape",
+      "pos": { "x": 780, "y": 360 },
+      "order": 14,
+      "size": { "width": 160, "height": 100 },
+      "shape": "cloud",
+      "text": "Cloud service",
+      "color": "#ede9fe"
+    },
+    {
+      "id": "shape-arrow",
+      "type": "shape",
+      "pos": { "x": 960, "y": 360 },
+      "order": 15,
+      "size": { "width": 160, "height": 100 },
+      "shape": "arrow",
+      "color": "#e2e8f0",
+      "rotation": 90
+    },
+    {
+      "id": "emoji1",
+      "type": "emoji",
+      "pos": { "x": 40, "y": 460 },
+      "order": 16,
+      "text": "🎉",
+      "size": 64,
+      "rotation": 20,
+      "description": "Celebration emoji marking milestone."
+    },
+    {
+      "id": "icon1",
+      "type": "icon",
+      "pos": { "x": 140, "y": 460 },
+      "order": 17,
+      "name": "star",
+      "size": 48,
+      "color": "#1e293b",
+      "rotation": 45
+    },
+    {
+      "id": "drawing1",
+      "type": "drawing",
+      "pos": { "x": 240, "y": 460 },
+      "order": 18,
+      "size": { "width": 120, "height": 80 },
+      "points": [
+        { "x": 3, "y": 3 },
+        { "x": 20, "y": 10 },
+        { "x": 40, "y": 40 },
+        { "x": 60, "y": 20 },
+        { "x": 90, "y": 60 },
+        { "x": 117, "y": 77 }
+      ],
+      "color": "#1e293b",
+      "strokeWidth": 3,
+      "description": "Freehand annotation."
+    }
+  ],
+  "edges": [
+    {
+      "id": "edge-arrow-none",
+      "source": "sticky1",
+      "target": "sticky2",
+      "style": "solid",
+      "kind": "arrow",
+      "arrow": "none"
+    },
+    {
+      "id": "edge-arrow-end",
+      "source": "sticky2",
+      "target": "text1",
+      "style": "solid",
+      "kind": "arrow",
+      "arrow": "end",
+      "label": "leads to",
+      "sourceHandle": "right",
+      "targetHandle": "left"
+    },
+    {
+      "id": "edge-arrow-both",
+      "source": "text1",
+      "target": "sticky1",
+      "style": "dashed",
+      "kind": "arrow",
+      "arrow": "both",
+      "label": "syncs with"
+    },
+    {
+      "id": "edge-card-1-1",
+      "source": "shape-rect",
+      "target": "shape-roundRect",
+      "style": "solid",
+      "kind": "cardinality",
+      "cardinality": "1:1"
+    },
+    {
+      "id": "edge-card-1-n",
+      "source": "shape-ellipse",
+      "target": "shape-diamond",
+      "style": "solid",
+      "kind": "cardinality",
+      "cardinality": "1:N",
+      "label": "has many"
+    },
+    {
+      "id": "edge-card-n-1",
+      "source": "shape-triangle",
+      "target": "shape-parallelogram",
+      "style": "dashed",
+      "kind": "cardinality",
+      "cardinality": "N:1"
+    },
+    {
+      "id": "edge-card-n-n",
+      "source": "shape-hexagon",
+      "target": "shape-pentagon",
+      "style": "dashed",
+      "kind": "cardinality",
+      "cardinality": "N:N",
+      "label": "many to many",
+      "sourceHandle": "bottom",
+      "targetHandle": "top"
+    }
+  ]
+}

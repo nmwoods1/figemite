@@ -1,0 +1,37 @@
+{
+  "boardLabel": "Legacy Board",
+  "viewport": { "x": 0, "y": 0, "zoom": 1 },
+  "nodes": [
+    {
+      "id": "sticky1",
+      "type": "sticky",
+      "pos": { "x": 0, "y": 0 },
+      "size": { "width": 200, "height": 160 },
+      "text": "Node A",
+      "color": "#fef3c7"
+    },
+    {
+      "id": "sticky2",
+      "type": "sticky",
+      "pos": { "x": 240, "y": 0 },
+      "size": { "width": 200, "height": 160 },
+      "text": "Node B",
+      "color": "#dbeafe"
+    },
+    {
+      "id": "text1",
+      "type": "text",
+      "pos": { "x": 120, "y": 200 },
+      "text": "Team notes"
+    }
+  ],
+  "edges": [
+    {
+      "id": "edge1",
+      "source": "sticky1",
+      "target": "sticky2",
+      "style": "solid",
+      "arrow": "end"
+    }
+  ]
+}

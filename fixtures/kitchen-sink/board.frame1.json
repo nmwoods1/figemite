@@ -1,0 +1,42 @@
+{
+  "formatVersion": 1,
+  "boardLabel": "Process Overview (detail)",
+  "viewport": { "x": 0, "y": 0, "zoom": 1 },
+  "nodes": [
+    {
+      "id": "inner1",
+      "type": "frame",
+      "pos": { "x": 0, "y": 0 },
+      "order": 0,
+      "size": { "width": 320, "height": 240 },
+      "title": "Sub-step detail",
+      "color": "#dbeafe"
+    },
+    {
+      "id": "subSticky1",
+      "type": "sticky",
+      "pos": { "x": 40, "y": 40 },
+      "order": 1,
+      "size": { "width": 200, "height": 160 },
+      "text": "Sub-node: process step detail",
+      "color": "#dcfce7"
+    },
+    {
+      "id": "subText1",
+      "type": "text",
+      "pos": { "x": 40, "y": 220 },
+      "order": 2,
+      "text": "Sub-board note"
+    }
+  ],
+  "edges": [
+    {
+      "id": "subEdge1",
+      "source": "subSticky1",
+      "target": "subText1",
+      "style": "solid",
+      "kind": "arrow",
+      "arrow": "end"
+    }
+  ]
+}
