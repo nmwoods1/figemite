@@ -53,16 +53,24 @@ export function handleReadHistoryVersion(
   if (!id) {
     throw new ValidationError('Missing id parameter');
   }
-  // `history.read` validates the id shape (anchored regex) and throws a
-  // "not found" error if the file is missing — the router maps that to 404.
+  // `history.read` throws exactly two message-typed errors we can classify as
+  // client errors: "Snapshot not found: ..." (ENOENT -> 404) and "Invalid
+  // snapshot id ..." (bad id shape -> 400). ANY other error (e.g. an EACCES /
+  // EIO fs fault whose message can contain an absolute path) is re-thrown RAW
+  // so the router's classifyError sanitizes it to a 500 "Internal server error"
+  // — we never echo an arbitrary fs error message back to the client.
   let raw: string;
   try {
     raw = ctx.history.read(slug, subPath, id);
   } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
-    if (/not found/i.test(message)) throw new NotFoundError('Snapshot not found');
-    // An invalid id shape is client error, not server error.
-    throw new ValidationError(message);
+    const message = err instanceof Error ? err.message : '';
+    if (/^Snapshot not found/.test(message)) {
+      throw new NotFoundError('Snapshot not found');
+    }
+    if (/^Invalid snapshot id/.test(message)) {
+      throw new ValidationError('Invalid snapshot id');
+    }
+    throw err; // unknown fault -> sanitized 500 (no message leak)
   }
   // The snapshot content is already canonical board JSON on disk — pass it
   // through verbatim rather than re-parsing/re-serialising.

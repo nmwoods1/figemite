@@ -61,15 +61,24 @@ export class BoardRepository {
   /**
    * Deletes a sub-board file and all of its descendant sub-boards (files
    * whose dotted path extends this one). Deleting the root (`subPath = []`)
-   * removes the entire board directory.
+   * removes the entire board directory. Returns the relative names removed:
+   * `['board.<path>.json', ...]` for a sub-board delete, `[<slug>]` for a root
+   * delete. Deleting something that doesn't exist returns `[]`.
+   *
+   * NOTE: the root-clear capability is an intentional repository primitive.
+   * The HTTP API deliberately does NOT expose it (the DELETE /api/board
+   * handler rejects an empty path with 400) — deleting a whole board over the
+   * LAN API would be irreversible data loss. Callers that genuinely need to
+   * remove a board (an admin/tooling path) use this directly.
    */
-  delete(slug: string, subPath: string[]): void {
+  delete(slug: string, subPath: string[]): string[] {
     validateSlugAndPath(slug, subPath);
 
     if (subPath.length === 0) {
       const dir = boardDirPath(this.boardsRoot, slug);
+      if (!fs.existsSync(dir)) return [];
       fs.rmSync(dir, { recursive: true, force: true });
-      return;
+      return [slug];
     }
 
     const dir = boardDirPath(this.boardsRoot, slug);
@@ -77,16 +86,19 @@ export class BoardRepository {
     try {
       entries = fs.readdirSync(dir);
     } catch {
-      return;
+      return [];
     }
 
     const exact = `board.${subPath.join('.')}.json`;
     const prefix = `board.${subPath.join('.')}.`;
+    const deleted: string[] = [];
     for (const entry of entries) {
       if (entry === exact || entry.startsWith(prefix)) {
         fs.rmSync(path.join(dir, entry), { force: true });
+        deleted.push(entry);
       }
     }
+    return deleted;
   }
 
   /** True if the given board (or sub-board) file exists. */

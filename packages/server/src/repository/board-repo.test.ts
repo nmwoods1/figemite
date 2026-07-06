@@ -98,6 +98,18 @@ describe('sub-boards', () => {
     expect(repo.exists('my-board', [])).toBe(true);
   });
 
+  it('delete returns the relative filenames it removed', () => {
+    const deleted = repo.delete('my-board', ['frame1']);
+    expect(deleted).toEqual(
+      expect.arrayContaining(['board.frame1.json', 'board.frame1.inner1.json']),
+    );
+    expect(deleted).toHaveLength(2);
+  });
+
+  it('delete of a missing sub-board returns an empty array', () => {
+    expect(repo.delete('my-board', ['nope'])).toEqual([]);
+  });
+
   it('does not delete a sibling sub-board with a similar but distinct name', () => {
     repo.write('my-board', ['frame1x'], emptyBoard('Frame1x'));
     repo.delete('my-board', ['frame1']);
@@ -105,9 +117,11 @@ describe('sub-boards', () => {
   });
 
   it('deleting the root board clears the whole board directory', () => {
-    repo.delete('my-board', []);
+    const deleted = repo.delete('my-board', []);
     const boardDir = path.join(tmpRoot, 'my-board');
     expect(fsSync.existsSync(boardDir)).toBe(false);
+    // Root delete reports the whole directory as removed.
+    expect(deleted).toEqual(['my-board']);
   });
 });
 

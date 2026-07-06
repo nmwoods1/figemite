@@ -101,11 +101,21 @@ describe('board lifecycle', () => {
     expect(version.status).toBe(200);
     expect(version.body).toEqual(board);
 
-    // DELETE /api/board (root)
-    const deleted = await postJson('/api/board?board=my-board', undefined, 'DELETE');
-    expect(deleted.status).toBe(200);
-    const gone = await getJson('/api/board?board=my-board');
-    expect(gone.status).toBe(404);
+    // DELETE /api/board with NO path (root) is refused (data-loss guard) and
+    // the board remains intact.
+    const rootDelete = await postJson('/api/board?board=my-board', undefined, 'DELETE');
+    expect(rootDelete.status).toBe(400);
+    const stillThere = await getJson('/api/board?board=my-board');
+    expect(stillThere.status).toBe(200);
+    expect(stillThere.body).toEqual(board);
+  });
+
+  it('records an initial `save` snapshot on board creation (funnel, not seedBoard)', async () => {
+    await postJson('/api/boards', { slug: 'my-board', label: 'My Board' });
+    const history = await getJson('/api/history?board=my-board');
+    const versions = (history.body as { versions: Array<{ trigger: string }> }).versions;
+    // Creation went through persistBoard -> a `save` snapshot exists immediately.
+    expect(versions.some((v) => v.trigger === 'save')).toBe(true);
   });
 });
 
@@ -146,9 +156,15 @@ describe('sub-boards', () => {
     ).boards.find((b) => b.slug === 'my-board')!;
     expect(info.subBoardPaths).toEqual(expect.arrayContaining([['Node1'], ['Node1', 'Node2']]));
 
-    // DELETE the parent sub-board -> descendants go too
+    // DELETE the parent sub-board -> descendants go too, and the response
+    // reports the removed filenames (legacy `deleted` field).
     const del = await postJson('/api/board?board=my-board&path=Node1', undefined, 'DELETE');
     expect(del.status).toBe(200);
+    const delBody = del.body as { ok: boolean; deleted: string[] };
+    expect(delBody.ok).toBe(true);
+    expect(delBody.deleted).toEqual(
+      expect.arrayContaining(['board.Node1.json', 'board.Node1.Node2.json']),
+    );
     expect((await getJson('/api/board?board=my-board&path=Node1')).status).toBe(404);
     expect((await getJson('/api/board?board=my-board&path=Node1.Node2')).status).toBe(404);
     // Root board is untouched
@@ -348,5 +364,73 @@ describe('fs failure modes', () => {
     await postJson('/api/boards', { slug: 'my-board' });
     const dup = await postJson('/api/boards', { slug: 'my-board' });
     expect(dup.status).toBe(409);
+  });
+});
+
+// ── Error paths (explicit) ───────────────────────────────────────────────────
+
+describe('error paths', () => {
+  it('DELETE /api/board with no path -> 400 and the board is untouched', async () => {
+    await postJson('/api/boards', { slug: 'my-board', label: 'My Board' });
+    const res = await postJson('/api/board?board=my-board', undefined, 'DELETE');
+    expect(res.status).toBe(400);
+    const still = await getJson('/api/board?board=my-board');
+    expect(still.status).toBe(200);
+    expect(still.body).toEqual(emptyBoard('My Board'));
+  });
+
+  it('POST /api/create with an empty path -> 400', async () => {
+    await postJson('/api/boards', { slug: 'my-board' });
+    const res = await postJson('/api/create', { board: 'my-board', path: [] });
+    expect(res.status).toBe(400);
+  });
+
+  it('POST /api/ai/end for a never-created board -> 404', async () => {
+    const res = await postJson('/api/ai/end', { board: 'ghost-board' });
+    expect(res.status).toBe(404);
+  });
+
+  it('GET /api/ai/status with an invalid slug -> 400', async () => {
+    const res = await getJson('/api/ai/status?board=' + encodeURIComponent('../evil'));
+    expect(res.status).toBe(400);
+  });
+
+  it('GET /api/history/version with no id -> 400', async () => {
+    await postJson('/api/boards', { slug: 'my-board' });
+    const res = await getJson('/api/history/version?board=my-board');
+    expect(res.status).toBe(400);
+  });
+
+  it('GET /api/history/version with a bogus id -> 404', async () => {
+    await postJson('/api/boards', { slug: 'my-board' });
+    // A well-formed-but-nonexistent snapshot id (valid shape, no such file).
+    const bogus = '2020-01-01T00-00-00-000Z__save';
+    const res = await getJson(
+      `/api/history/version?board=my-board&id=${encodeURIComponent(bogus)}`,
+    );
+    expect(res.status).toBe(404);
+  });
+
+  it('GET /api/history/version with a malformed id -> 400 (invalid shape)', async () => {
+    await postJson('/api/boards', { slug: 'my-board' });
+    const res = await getJson('/api/history/version?board=my-board&id=not-a-valid-id');
+    expect(res.status).toBe(400);
+  });
+
+  it('GET /api/history/version with a non-ENOENT fs fault -> sanitized 500 (no path leak)', async () => {
+    await postJson('/api/boards', { slug: 'my-board' });
+    // Force a non-ENOENT, non-invalid-id fs error: make the snapshot path a
+    // DIRECTORY, so history.read's readFileSync throws EISDIR — whose raw
+    // message contains the absolute path. The handler must NOT echo it.
+    const validId = '2020-01-01T00-00-00-000Z__save';
+    const histDir = path.join(h.boardsRoot, 'my-board', '.history');
+    await fs.mkdir(path.join(histDir, `${validId}.json`), { recursive: true });
+    const res = await getJson(
+      `/api/history/version?board=my-board&id=${encodeURIComponent(validId)}`,
+    );
+    expect(res.status).toBe(500);
+    const message = (res.body as { error: string }).error;
+    expect(message).toBe('Internal server error');
+    expect(message).not.toContain(h.boardsRoot);
   });
 });

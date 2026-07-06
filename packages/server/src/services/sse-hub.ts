@@ -31,9 +31,14 @@ import { sessionKey } from './session-key.js';
 
 /** The minimal shape SseHub needs from a subscriber's response object. */
 export interface SseSubscriberResponse {
-  write(chunk: string): void;
+  /** Returns `false` under backpressure (still connected); throws on a broken pipe. */
+  write(chunk: string): boolean | void;
   /** Optional: if present, SseHub wires 'close' to auto-unsubscribe. */
   on?(event: 'close', handler: () => void): void;
+  /** Node sets this once the response has been fully sent (`res.end()` called). */
+  writableEnded?: boolean;
+  /** Node sets this once the underlying socket is destroyed (disconnect). */
+  destroyed?: boolean;
 }
 
 export interface SseHubOptions {
@@ -101,8 +106,21 @@ export class SseHub {
     }
   }
 
-  /** Writes `chunk` to `res`, evicting it from `key`'s subscriber set if the write throws. */
+  /**
+   * Writes `chunk` to `res`, evicting it from `key`'s subscriber set if the
+   * subscriber is dead. A disconnected socket does NOT reliably throw on
+   * `write` (Node may swallow a write to an already-ended/destroyed stream), so
+   * we cannot depend on a synchronous throw alone. We check `writableEnded` /
+   * `destroyed` up front and skip+evict a subscriber that's already gone, and
+   * still evict on a thrown write (broken pipe). Note: `write()` returning
+   * `false` is normal backpressure on a live connection — NOT a disconnect — so
+   * it is deliberately not treated as a reason to evict.
+   */
   private writeToSubscriber(key: string, res: SseSubscriberResponse, chunk: string): void {
+    if (res.writableEnded || res.destroyed) {
+      this.subscribers.get(key)?.delete(res);
+      return;
+    }
     try {
       res.write(chunk);
     } catch {

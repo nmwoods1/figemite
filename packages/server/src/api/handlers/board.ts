@@ -2,7 +2,12 @@
 //
 // GET    /api/board?board=&path=  — read a board/sub-board (validated+migrated).
 // POST   /api/board               — save a board through the single write funnel.
-// DELETE /api/board?board=&path=  — delete a sub-board (and descendants), or root.
+// DELETE /api/board?board=&path=  — delete a sub-board (and descendants). An
+//   empty path (root) is REJECTED with 400 — deleting an entire board over the
+//   LAN API would be irreversible data loss (board.json, every sub-board,
+//   comments, tags, and all history), so the API refuses it. Legacy refused it
+//   too. (The repo primitive `BoardRepository.delete([])` can still clear a
+//   board for admin/tooling; the API just doesn't expose that.)
 // POST   /api/create              — seed a new sub-board file if absent.
 
 import type { IncomingMessage, ServerResponse } from 'node:http';
@@ -91,7 +96,12 @@ export async function handleSaveBoard(
   sendJson(res, 200, { ok: true });
 }
 
-/** DELETE /api/board — delete a sub-board and descendants (root allowed, per legacy). */
+/**
+ * DELETE /api/board — delete a sub-board and its descendants. Rejects an empty
+ * path (root board) with 400: wiping a whole board over the API is irreversible
+ * data loss and is not exposed here (see module doc). Returns the relative
+ * filenames removed as `{ ok: true, deleted }` (legacy shape).
+ */
 export function handleDeleteBoard(
   ctx: RequestContext,
   req: IncomingMessage,
@@ -100,8 +110,11 @@ export function handleDeleteBoard(
   const query = getQuery(req);
   const slug = requireSlug(query);
   const subPath = requireSubPath(parsePathParam(query));
-  ctx.repo.delete(slug, subPath);
-  sendJson(res, 200, { ok: true });
+  if (subPath.length === 0) {
+    throw new ValidationError('Cannot delete root board');
+  }
+  const deleted = ctx.repo.delete(slug, subPath);
+  sendJson(res, 200, { ok: true, deleted });
 }
 
 /** POST /api/create — seed a new sub-board file if it doesn't already exist. */

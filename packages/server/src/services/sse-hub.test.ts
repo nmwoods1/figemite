@@ -13,10 +13,14 @@ afterEach(() => {
 function fakeRes(): SseSubscriberResponse & {
   write: ReturnType<typeof vi.fn>;
   emitClose: () => void;
+  destroyed: boolean;
+  writableEnded: boolean;
 } {
   let closeHandler: (() => void) | undefined;
   return {
     write: vi.fn(),
+    destroyed: false,
+    writableEnded: false,
     on(event: string, handler: () => void) {
       if (event === 'close') closeHandler = handler;
     },
@@ -112,6 +116,36 @@ describe('broadcast', () => {
     const callsToBadAfterEviction = resBad.write.mock.calls.length;
     hub.broadcast('my-board', [], 'locked', {});
     expect(resBad.write.mock.calls.length).toBe(callsToBadAfterEviction);
+  });
+
+  it('evicts a subscriber whose socket is already destroyed (no synchronous throw)', () => {
+    const hub = new SseHub({});
+    const res = fakeRes();
+    hub.subscribe('my-board', [], res, { locked: false, epoch: 0 });
+    res.write.mockClear();
+
+    // Simulate a socket that disconnected without the write throwing: a stale
+    // res whose `destroyed` flag is set. The hub must not write to it and must
+    // evict it.
+    res.destroyed = true;
+    hub.broadcast('my-board', [], 'locked', {});
+    expect(res.write).not.toHaveBeenCalled();
+
+    // A subsequent broadcast confirms eviction (still never written to).
+    res.destroyed = false; // even if it "came back", it's already gone
+    hub.broadcast('my-board', [], 'locked', {});
+    expect(res.write).not.toHaveBeenCalled();
+  });
+
+  it('evicts a subscriber whose writableEnded flag is set', () => {
+    const hub = new SseHub({});
+    const res = fakeRes();
+    hub.subscribe('my-board', [], res, { locked: false, epoch: 0 });
+    res.write.mockClear();
+
+    res.writableEnded = true;
+    hub.broadcast('my-board', [], 'locked', {});
+    expect(res.write).not.toHaveBeenCalled();
   });
 });
 

@@ -83,6 +83,50 @@ describe('content dedupe', () => {
 
     expect(service.list('my-board', [])).toHaveLength(2);
   });
+
+  // AI-boundary snapshots (preai/ai) are semantic session markers, not just
+  // content — they must be recorded even when disk content is unchanged (AI
+  // edits are out-of-band/deferred, so disk is often byte-identical across the
+  // begin/end boundary). Exempting them from content-dedupe mirrors the
+  // existing "AI-boundary snapshots are never thinned" policy.
+  it('two ai snapshots on unchanged content BOTH write (dedupe exemption)', () => {
+    repo.seedBoard('my-board', 'My Board');
+    service.snapshot('my-board', [], 'ai');
+    service.snapshot('my-board', [], 'ai');
+
+    const snaps = service.list('my-board', []);
+    expect(snaps).toHaveLength(2);
+    expect(snaps.every((s) => s.trigger === 'ai')).toBe(true);
+  });
+
+  it('two preai snapshots on unchanged content BOTH write (dedupe exemption)', () => {
+    repo.seedBoard('my-board', 'My Board');
+    service.snapshot('my-board', [], 'preai');
+    service.snapshot('my-board', [], 'preai');
+
+    expect(service.list('my-board', [])).toHaveLength(2);
+  });
+
+  it('a preai/ai boundary is recorded even when a preceding save has identical content', () => {
+    repo.seedBoard('my-board', 'My Board');
+    service.snapshot('my-board', [], 'save');
+    // Unchanged content, but the AI boundary must still be recorded.
+    service.snapshot('my-board', [], 'preai');
+    service.snapshot('my-board', [], 'ai');
+
+    const snaps = service.list('my-board', []);
+    expect(snaps.some((s) => s.trigger === 'preai')).toBe(true);
+    expect(snaps.some((s) => s.trigger === 'ai')).toBe(true);
+  });
+
+  it('a save still dedupes even when the newest snapshot is an ai boundary', () => {
+    repo.seedBoard('my-board', 'My Board');
+    service.snapshot('my-board', [], 'ai');
+    const before = service.list('my-board', []).length;
+    // A save on unchanged content should NOT add a file.
+    service.snapshot('my-board', [], 'save');
+    expect(service.list('my-board', [])).toHaveLength(before);
+  });
 });
 
 // ── sub-board snapshots ──────────────────────────────────────────────────────

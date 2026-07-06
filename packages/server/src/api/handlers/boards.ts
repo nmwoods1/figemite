@@ -5,10 +5,11 @@
 
 import fs from 'node:fs';
 import type { IncomingMessage, ServerResponse } from 'node:http';
-import { SlugSchema } from '@easel/shared';
+import { SlugSchema, emptyBoard } from '@easel/shared';
 import { boardFilePath } from '../../repository/paths.js';
 import { readTags } from '../../repository/tags-repo.js';
 import { readJsonBody, sendError, sendJson } from '../../http/body.js';
+import { persistBoard } from '../persist.js';
 import { ValidationError } from '../errors.js';
 import type { RequestContext } from '../router.js';
 
@@ -86,6 +87,9 @@ export async function handleCreateBoard(
   }
   const rawLabel = typeof body.label === 'string' ? body.label.trim() : '';
   const label = rawLabel || titleCaseSlug(slug);
-  ctx.repo.seedBoard(slug, label);
+  // Route the seed through the single write funnel so creation suppresses the
+  // watcher and records an initial `save` snapshot, exactly like every other
+  // board-data write (rather than `repo.seedBoard`, which would bypass both).
+  persistBoard(ctx, slug, [], emptyBoard(label), 'save');
   sendJson(res, 200, { ok: true, slug });
 }
