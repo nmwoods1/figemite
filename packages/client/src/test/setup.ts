@@ -33,6 +33,35 @@ if (typeof Element.prototype.hasPointerCapture !== 'function') {
   Element.prototype.hasPointerCapture = () => false;
 }
 
+// ── EventSource polyfill ─────────────────────────────────────────────────────
+//
+// jsdom doesn't implement `EventSource`, but hooks/useAiLock.ts (P5-T31)
+// constructs one unconditionally whenever an editable BoardCanvas mounts with
+// a `slug` (e.g. App.test.tsx's board-route tests, which mock `lib/realtime.js`
+// but not `hooks/useAiLock.js`) — without this stub, that constructor throws
+// `ReferenceError: EventSource is not defined` as an uncaught exception outside
+// any single test's own try/catch (React commits the effect asynchronously).
+// A minimal no-op-transport stub (never calls its own listeners; nothing ever
+// arrives) is enough for tests that don't specifically exercise the AI lock
+// (those install their own richer fake — see hooks/useAiLock.test.ts /
+// canvas/BoardCanvas.test.tsx's `useAiLock` mock) — we only need `new
+// EventSource(url)` to not throw and to expose `close()`.
+if (typeof globalThis.EventSource === 'undefined') {
+  class EventSourceStub {
+    url: string;
+    onerror: ((ev: Event) => void) | null = null;
+    onopen: ((ev: Event) => void) | null = null;
+    onmessage: ((ev: MessageEvent) => void) | null = null;
+    constructor(url: string) {
+      this.url = url;
+    }
+    addEventListener() {}
+    removeEventListener() {}
+    close() {}
+  }
+  globalThis.EventSource = EventSourceStub as unknown as typeof EventSource;
+}
+
 // ── Range.getClientRects/getBoundingClientRect polyfill ─────────────────────
 //
 // jsdom implements no layout engine, so `Range` doesn't have

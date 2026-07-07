@@ -49,6 +49,18 @@ vi.mock('../lib/boards-api.js', async (importOriginal) => {
   };
 });
 
+// ── P5-T31: AI-session lock wiring (mock hooks/useAiLock) ───────────────────
+// useAiLock's OWN SSE/reconnect/epoch-reconciliation behaviour is unit-tested
+// in hooks/useAiLock.test.ts; here we only assert BoardCanvas's EditableCanvas
+// wires its `aiLocked` output into useBoardInteractions + the ReactFlow
+// interaction props + the banner, and calls `onExternalChange` through to
+// undo's `clear()`.
+const useAiLockMock = vi.fn();
+useAiLockMock.mockReturnValue({ aiLocked: false });
+vi.mock('../hooks/useAiLock.js', () => ({
+  useAiLock: (...args: unknown[]) => useAiLockMock(...args),
+}));
+
 /** A fake `BoardRoom` (see lib/realtime.ts) whose provider is already synced
  * by default — most tests want BoardCanvas to render immediately rather than
  * sitting on the "Connecting…" placeholder. Content arrives by writing
@@ -126,6 +138,8 @@ beforeEach(() => {
   vi.useFakeTimers();
   joinBoardRoomMock.mockReset();
   saveBoardSpy.mockReset();
+  useAiLockMock.mockReset();
+  useAiLockMock.mockReturnValue({ aiLocked: false });
 });
 
 afterEach(() => {
@@ -712,5 +726,91 @@ describe('BoardCanvas', () => {
     });
 
     expect(screen.getByRole('button', { name: /^stop$/i })).toBeInTheDocument();
+  });
+
+  // ── P5-T31: AI-session lock (SSE + reconnect + status reconcile) ───────────
+  // useAiLock itself is mocked (see the module doc above); these tests only
+  // assert EditableCanvas's WIRING of its `aiLocked` output: interaction
+  // gating, the ReactFlow interaction props, the banner, and onExternalChange
+  // clearing undo.
+
+  it('passes aiLocked through to useBoardInteractions', () => {
+    useAiLockMock.mockReturnValue({ aiLocked: true });
+    render(<BoardCanvas board={fixtureBoard()} readonly={false} slug="my-board" path={[]} />);
+    expect(useAiLockMock).toHaveBeenCalled();
+    // Cmd+X (cut) is gated on `aiLocked` in useBoardInteractions.ts — select a
+    // node then assert the shortcut is a no-op while locked, proving the flag
+    // actually reached the hook (rather than asserting an implementation
+    // detail of useBoardInteractions itself, already covered by its own
+    // dedicated test suite).
+    fireEvent.click(screen.getByTitle('Text'));
+    const node = document.querySelector('.react-flow__node') as HTMLElement;
+    fireEvent.click(node);
+    act(() => {
+      fireEvent.keyDown(window, { key: 'x', metaKey: true });
+    });
+    expect(screen.getByText('Label')).toBeInTheDocument();
+  });
+
+  it('turns off draggable/connectable/selectable ReactFlow props while aiLocked', () => {
+    useAiLockMock.mockReturnValue({ aiLocked: true });
+    render(<BoardCanvas board={fixtureBoard()} readonly={false} slug="my-board" path={[]} />);
+    const props = lastReactFlowProps();
+    expect(props.nodesDraggable).toBe(false);
+    expect(props.nodesConnectable).toBe(false);
+    expect(props.elementsSelectable).toBe(false);
+  });
+
+  it('keeps ReactFlow interaction props on when not aiLocked', () => {
+    useAiLockMock.mockReturnValue({ aiLocked: false });
+    render(<BoardCanvas board={fixtureBoard()} readonly={false} slug="my-board" path={[]} />);
+    const props = lastReactFlowProps();
+    expect(props.nodesDraggable).toBe(true);
+    expect(props.nodesConnectable).toBe(true);
+    expect(props.elementsSelectable).toBe(true);
+  });
+
+  it('shows an "AI editing" banner while aiLocked', () => {
+    useAiLockMock.mockReturnValue({ aiLocked: true });
+    render(<BoardCanvas board={fixtureBoard()} readonly={false} slug="my-board" path={[]} />);
+    expect(screen.getByText(/AI is editing/i)).toBeInTheDocument();
+  });
+
+  it('does not show the "AI editing" banner when not aiLocked', () => {
+    useAiLockMock.mockReturnValue({ aiLocked: false });
+    render(<BoardCanvas board={fixtureBoard()} readonly={false} slug="my-board" path={[]} />);
+    expect(screen.queryByText(/AI is editing/i)).not.toBeInTheDocument();
+  });
+
+  it('clears the undo stack when useAiLock reports an external-change (via onExternalChange)', () => {
+    let capturedOnExternalChange: (() => void) | undefined;
+    useAiLockMock.mockImplementation((...args: unknown[]) => {
+      const opts = args[2] as { onExternalChange?: () => void };
+      capturedOnExternalChange = opts.onExternalChange;
+      return { aiLocked: false };
+    });
+    render(<BoardCanvas board={fixtureBoard()} readonly={false} slug="my-board" path={[]} />);
+    fireEvent.click(screen.getByTitle('Text'));
+    expect(screen.getByText('Label')).toBeInTheDocument();
+
+    act(() => capturedOnExternalChange?.());
+
+    // Undo should now be a no-op (stack cleared) — the toolbar-added node
+    // must NOT disappear on a subsequent Cmd+Z.
+    act(() => {
+      fireEvent.keyDown(window, { key: 'z', metaKey: true });
+    });
+    expect(screen.getByText('Label')).toBeInTheDocument();
+  });
+
+  it('never calls useAiLock in read-only mode (disabled path, no SSE — read-only never mounts EditableCanvas)', () => {
+    render(<BoardCanvas board={fixtureBoard()} readonly={true} slug="my-board" path={[]} />);
+    expect(useAiLockMock).not.toHaveBeenCalled();
+  });
+
+  it('does not render the AI-editing banner in read-only mode', () => {
+    useAiLockMock.mockReturnValue({ aiLocked: true });
+    render(<BoardCanvas board={fixtureBoard()} readonly={true} slug="my-board" path={[]} />);
+    expect(screen.queryByText(/AI is editing/i)).not.toBeInTheDocument();
   });
 });

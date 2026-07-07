@@ -62,6 +62,7 @@ import { useMultiSelectResize } from '../hooks/useMultiSelectResize.js';
 import { useUndoRedo } from '../hooks/useUndoRedo.js';
 import { useSyncStatus } from '../hooks/useSyncStatus.js';
 import { useBoardInteractions } from '../hooks/useBoardInteractions.js';
+import { useAiLock } from '../hooks/useAiLock.js';
 import { usePresence } from '../hooks/usePresence.js';
 import type { PresenceAwareness } from '../hooks/usePresence.js';
 import { useFollowMode } from '../hooks/useFollowMode.js';
@@ -160,6 +161,41 @@ function ConnectingPlaceholder() {
   );
 }
 
+/** The "AI is editing" affordance (P5-T31), shown while `aiLocked`. Mirrors
+ * the legacy prototype's banner (src/components/BoardCanvas.tsx ~L1924-1938):
+ * a small pill centered near the top of the canvas, non-interactive
+ * (`pointerEvents: 'none'`) so it never blocks a click meant for the (now
+ * gated-off) canvas beneath it. */
+function AiLockBanner() {
+  return (
+    <div
+      style={{
+        position: 'absolute',
+        top: 60,
+        left: '50%',
+        transform: 'translateX(-50%)',
+        zIndex: 30,
+        background: '#fef3c7',
+        border: '2px solid #f59e0b',
+        color: '#92400e',
+        padding: '8px 18px',
+        borderRadius: 8,
+        fontSize: 13,
+        fontWeight: 600,
+        display: 'flex',
+        alignItems: 'center',
+        gap: 8,
+        boxShadow: '0 2px 10px rgba(0,0,0,0.12)',
+        pointerEvents: 'none',
+        userSelect: 'none',
+      }}
+    >
+      <span style={{ fontSize: 16 }}>🤖</span>
+      AI is editing this board — your edits are paused
+    </div>
+  );
+}
+
 /** Editable pane (P4-T22): interaction handlers commit to the doc via the store.
  * P4-T24 adds the multi-select group-resize overlay: `MultiSelectResizer`
  * renders (as a sibling of `<ReactFlow>`, inside the same measured
@@ -208,7 +244,7 @@ function ConnectingPlaceholder() {
  * imperative viewport setter (`useReactFlow()`), and `onMoveStart` reports
  * every viewport change (including follow's own) to `useFollowMode`, which
  * tells its own programmatic moves apart from a real manual pan/zoom. */
-function EditableCanvas({ store, fitView, viewport }: EditablePaneProps) {
+function EditableCanvas({ store, fitView, viewport, slug, path }: EditablePaneProps) {
   const [descNodeId, setDescNodeId] = useState<string | null>(null);
   const openDescription = useCallback((id: string) => setDescNodeId(id), []);
   const editable = useEditableCanvas(store, { onOpenDescription: openDescription });
@@ -218,6 +254,17 @@ function EditableCanvas({ store, fitView, viewport }: EditablePaneProps) {
 
   const undoRedo = useUndoRedo(store);
   const syncStatus = useSyncStatus(store.room?.provider ?? null);
+
+  // ── P5-T31: AI-session lock (SSE + reconnect + status reconcile) ───────────
+  // A UX-only affordance now that server-side doc persistence (P5-T28) + MCP
+  // edits via the room (P5-T32) mean an AI session's writes CRDT-merge into
+  // the room and sync live — there is nothing to re-fetch on unlock. See
+  // hooks/useAiLock.ts's module doc for the reconnect-reconciliation fix and
+  // the documented external-change-during-a-live-room limitation.
+  const { aiLocked } = useAiLock(slug, path ?? [], {
+    onExternalChange: () => undoRedo.clear(),
+  });
+
   // Cmd/Ctrl+S stays bound (useBoardInteractions calls it unconditionally on
   // the shortcut) but is now a harmless no-op — the server persists content
   // on its own debounce, so there's nothing left for the client to flush.
@@ -227,6 +274,7 @@ function EditableCanvas({ store, fitView, viewport }: EditablePaneProps) {
     selectedNodeIds: editable.selectedNodeIds,
     selectedEdgeIds: editable.selectedEdgeIds,
     readonly: false,
+    aiLocked,
     undo: undoRedo.undo,
     redo: undoRedo.redo,
     flushNow,
@@ -319,9 +367,9 @@ function EditableCanvas({ store, fitView, viewport }: EditablePaneProps) {
         onMoveStart={followMode.notifyManualViewportChange}
         defaultViewport={fitView ? undefined : viewport}
         fitView={fitView}
-        nodesDraggable
-        nodesConnectable
-        elementsSelectable
+        nodesDraggable={!aiLocked}
+        nodesConnectable={!aiLocked}
+        elementsSelectable={!aiLocked}
       >
         <Background />
         <Controls />
@@ -339,6 +387,7 @@ function EditableCanvas({ store, fitView, viewport }: EditablePaneProps) {
         syncStatus={syncStatus}
         readonly={false}
       />
+      {aiLocked && <AiLockBanner />}
       {descNode && (
         <DescriptionModal
           nodeLabel={nodeLabel(descNode)}
@@ -370,7 +419,13 @@ interface PaneProps {
   viewport: BoardFile['viewport'];
 }
 
-type EditablePaneProps = PaneProps;
+interface EditablePaneProps extends PaneProps {
+  /** The board's slug (P5-T31: `useAiLock`'s SSE subscription target — see
+   * BoardCanvasProps.slug's doc). `undefined` for the no-slug unit-test
+   * convenience path, which never opens an AI-lock SSE connection either. */
+  slug?: string;
+  path?: string[];
+}
 
 /**
  * `store`'s construction is INTENTIONALLY NOT a `useMemo` (a past version of
@@ -472,7 +527,13 @@ export function BoardCanvas({ board, readonly, slug, path }: BoardCanvasProps) {
         {readonly ? (
           <ReadOnlyCanvas store={store} fitView={fitView} viewport={board.viewport} />
         ) : (
-          <EditableCanvas store={store} fitView={fitView} viewport={board.viewport} />
+          <EditableCanvas
+            store={store}
+            fitView={fitView}
+            viewport={board.viewport}
+            slug={slug}
+            path={path}
+          />
         )}
       </ReactFlowProvider>
     </div>
