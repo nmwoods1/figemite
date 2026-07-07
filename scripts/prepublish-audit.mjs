@@ -26,8 +26,13 @@ import { fileURLToPath } from 'node:url';
 
 const rootDir = join(dirname(fileURLToPath(import.meta.url)), '..');
 
-/** Files excluded from ALL checks below (see module doc for why). */
-const EXCLUDED_FILES = new Set(['package-lock.json']);
+/**
+ * Files excluded from ALL checks below (see module doc for why).
+ * This script itself is excluded because it necessarily contains every
+ * forbidden substring literally, in its own `FORBIDDEN` list and the
+ * comments explaining it — that's not a leak, it's the detector.
+ */
+const EXCLUDED_FILES = new Set(['package-lock.json', 'scripts/prepublish-audit.mjs']);
 
 /**
  * Forbidden substrings, matched case-insensitively against file content.

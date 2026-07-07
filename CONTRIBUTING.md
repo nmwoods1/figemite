@@ -31,6 +31,26 @@ imports correctly. Skipping the reference entry appears to work only because of
 stale `dist/` output and bundler-style module resolution, and will break as
 soon as the referenced package changes.
 
+## Forge
+
+This repository is developed on GitHub — GitHub is canonical: issues, pull
+requests, and CI (`.github/workflows/ci.yml`) all live there. `npm run
+build:static` (see below) produces a `public/` bundle that happens to also
+work unmodified on GitLab Pages; that's kept as a documented alternative
+for anyone mirroring the repo there, not a second source of truth.
+
+## Static builds
+
+`npm run build:static` builds the client in read-only mode
+(`VITE_READONLY=1`) and exports every board under `boards/` as static JSON,
+replacing the repo-root `public/` with the result. This is the artifact CI
+publishes to GitHub Pages. Two env vars control it:
+
+- `FIGEMITE_BASE` — the Vite `base` path. Defaults to `/`; set to
+  `/<reponame>/` for a project-subpath GitHub (or GitLab) Pages deploy.
+- `FIGEMITE_BOARDS_DIR` — path to the boards root to export. Defaults to
+  `<repoRoot>/boards`.
+
 ## Legacy oracle (local only)
 
 `npm run oracle` runs `scripts/oracle.mjs` against a local legacy boards
