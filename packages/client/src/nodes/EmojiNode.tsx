@@ -113,6 +113,7 @@ export function EmojiNode({ id, data, selected }: NodeProps<Node<EmojiNodeData, 
           {editing ? (
             <input
               className="nodrag"
+              autoFocus
               value={draft}
               onChange={(e) => onChange(e.target.value)}
               onBlur={commit}

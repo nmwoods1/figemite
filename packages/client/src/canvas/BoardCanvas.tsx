@@ -37,7 +37,15 @@
 // `fitView` instead, so an empty/fresh board doesn't render pinned at (0,0)
 // zoom 1 regardless of where its content actually is.
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Background, ConnectionMode, Controls, ReactFlow, ReactFlowProvider } from '@xyflow/react';
+import {
+  Background,
+  ConnectionMode,
+  Controls,
+  ReactFlow,
+  ReactFlowProvider,
+  useReactFlow,
+  useViewport,
+} from '@xyflow/react';
 // RF's base stylesheet — without this, ReactFlow renders unstyled (its own
 // `#013` "The React Flow parent container needs a width and a height..."-
 // adjacent "styles not loaded" warning) and node/edge layout fidelity suffers
@@ -54,13 +62,21 @@ import { useMultiSelectResize } from '../hooks/useMultiSelectResize.js';
 import { useUndoRedo } from '../hooks/useUndoRedo.js';
 import { useSyncStatus } from '../hooks/useSyncStatus.js';
 import { useBoardInteractions } from '../hooks/useBoardInteractions.js';
+import { usePresence } from '../hooks/usePresence.js';
+import type { PresenceAwareness } from '../hooks/usePresence.js';
+import { useFollowMode } from '../hooks/useFollowMode.js';
+import { useEditingNodeTracker } from '../hooks/useEditingNodeTracker.js';
 import { boardToRf } from './rf-adapters.js';
 import { MultiSelectResizer } from './MultiSelectResizer.js';
 import { nodeTypes } from '../nodes/index.js';
 import { edgeTypes } from '../edges/index.js';
 import { Toolbar } from '../components/Toolbar.js';
 import { DescriptionModal } from '../components/DescriptionModal.js';
+import { PresenceLayer } from '../components/PresenceLayer.js';
+import { ActiveUsersPanel } from '../components/ActiveUsersPanel.js';
 import { nodeLabel } from './node-label.js';
+import { getFlowPointer } from './coords.js';
+import { getLocalUser } from '../lib/identity.js';
 
 export interface BoardCanvasProps {
   board: BoardFile;
@@ -175,7 +191,23 @@ function ConnectingPlaceholder() {
  * client save to report on anymore). `useBoardInteractions`'s `flushNow` is
  * kept bound to Cmd/Ctrl+S (so the shortcut stays harmless rather than
  * dead/removed) but is now a no-op: the server already persists on its own
- * debounce, so there is nothing left to flush from the client. */
+ * debounce, so there is nothing left to flush from the client.
+ *
+ * P5-T30 adds live presence (remote cursors, editing outlines, an
+ * active-users panel) + follow-mode, gated entirely on `store.room` — a
+ * room-joined store has a real awareness to publish/subscribe through; a
+ * store with no room (read-only-equivalent local-seed convenience path, most
+ * unit tests) has none, so `awareness` is `null` and every presence hook is a
+ * safe no-op / renders nothing (see usePresence.ts/useFollowMode.ts's own
+ * null-awareness handling). Cursor publishing is wired to the measured
+ * container's `pointermove` (throttled inside `usePresence`, not here);
+ * `editingNodeId` is wired via `useEditingNodeTracker`'s DOM focus tracking —
+ * the existing edit seam every text-bearing node type already provides for
+ * free via RF's own `.react-flow__node[data-id]` wrapper, requiring no
+ * changes to any node component. Follow-mode's `setViewport` targets RF's own
+ * imperative viewport setter (`useReactFlow()`), and `onMoveStart` reports
+ * every viewport change (including follow's own) to `useFollowMode`, which
+ * tells its own programmatic moves apart from a real manual pan/zoom. */
 function EditableCanvas({ store, fitView, viewport }: EditablePaneProps) {
   const [descNodeId, setDescNodeId] = useState<string | null>(null);
   const openDescription = useCallback((id: string) => setDescNodeId(id), []);
@@ -211,6 +243,57 @@ function EditableCanvas({ store, fitView, viewport }: EditablePaneProps) {
     [descNodeId, store],
   );
 
+  // ── P5-T30: live presence + follow-mode (realtime-mode only) ──────────────
+  const awareness = (store.room?.awareness as PresenceAwareness | undefined) ?? null;
+  const localUser = useMemo(() => getLocalUser(), []);
+  const presence = usePresence(awareness, localUser);
+  const { setViewport } = useReactFlow();
+  const followMode = useFollowMode(awareness, setViewport);
+  const liveViewport = useViewport();
+
+  // Track which node the LOCAL user is editing (DOM focus tracking — see
+  // this component's module doc) and publish it.
+  useEditingNodeTracker(containerRef, presence.setEditingNodeId);
+
+  // Publish the local viewport continuously (RF re-renders `useViewport()` on
+  // every pan/zoom tick during a gesture) so remote followers track it live.
+  useEffect(() => {
+    presence.publishViewport(liveViewport);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- `presence.publishViewport` is stable per `awareness` identity (usePresence.ts); depending on the individual x/y/zoom fields (not the whole `liveViewport` object, a fresh reference every tick) avoids re-running this effect's body more than the viewport itself actually changed.
+  }, [liveViewport.x, liveViewport.y, liveViewport.zoom]);
+
+  // `liveViewport` read through a ref so the pointer-listener effect below
+  // can mount its DOM listeners ONCE (not re-bind them on every viewport
+  // tick, which `useViewport()` produces a fresh object reference for even
+  // when x/y/zoom are numerically unchanged) while still reading the CURRENT
+  // viewport at move time.
+  const liveViewportRef = useRef(liveViewport);
+  useEffect(() => {
+    liveViewportRef.current = liveViewport;
+  }, [liveViewport]);
+
+  // Publish the local cursor (flow-space) on pointer move over the measured
+  // container; clear it when the pointer leaves. Throttled inside
+  // usePresence's publishCursor, not here.
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container) return;
+
+    const handleMove = (e: PointerEvent) => {
+      const rect = container.getBoundingClientRect();
+      presence.publishCursor(getFlowPointer(e, rect, liveViewportRef.current));
+    };
+    const handleLeave = () => presence.publishCursor(null);
+
+    container.addEventListener('pointermove', handleMove);
+    container.addEventListener('pointerleave', handleLeave);
+    return () => {
+      container.removeEventListener('pointermove', handleMove);
+      container.removeEventListener('pointerleave', handleLeave);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- `presence.publishCursor` is stable per `awareness` identity; the live viewport is read via `liveViewportRef` (see above) precisely so this effect mounts its DOM listeners once rather than re-binding on every viewport tick.
+  }, []);
+
   // A room-joined store (P5-T29) starts with an EMPTY doc until the
   // provider's first sync completes — show a placeholder rather than an
   // empty canvas flash. A store with no room (read-only-equivalent local
@@ -233,6 +316,7 @@ function EditableCanvas({ store, fitView, viewport }: EditablePaneProps) {
         onConnect={editable.onConnect}
         onEdgesDelete={editable.onEdgesDelete}
         onSelectionChange={editable.onSelectionChange}
+        onMoveStart={followMode.notifyManualViewportChange}
         defaultViewport={fitView ? undefined : viewport}
         fitView={fitView}
         nodesDraggable
@@ -262,6 +346,19 @@ function EditableCanvas({ store, fitView, viewport }: EditablePaneProps) {
           onSave={handleSaveDescription}
           onClose={() => setDescNodeId(null)}
         />
+      )}
+      {store.room && (
+        <>
+          <PresenceLayer remotes={presence.remotes} nodes={nodes} />
+          <ActiveUsersPanel
+            localUser={localUser}
+            remotes={presence.remotes}
+            followClientId={followMode.followClientId}
+            onFollow={(clientId) =>
+              clientId === null ? followMode.stopFollowing() : followMode.follow(clientId)
+            }
+          />
+        </>
       )}
     </div>
   );

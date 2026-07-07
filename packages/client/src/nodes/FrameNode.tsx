@@ -112,6 +112,7 @@ export function FrameNode({ id, data, selected }: NodeProps<Node<FrameNodeData, 
         {editing ? (
           <input
             className="nodrag"
+            autoFocus
             value={draft}
             onChange={(e) => onChange(e.target.value)}
             onBlur={commit}

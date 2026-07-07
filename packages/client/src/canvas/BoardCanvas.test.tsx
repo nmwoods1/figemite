@@ -22,6 +22,7 @@ import type { Connection } from '@xyflow/react';
 import * as Y from 'yjs';
 import type { BoardFile } from '@easel/shared';
 import { BoardCanvas } from './BoardCanvas.js';
+import { FakeAwareness } from '../test/fake-awareness.js';
 
 // ── P5-T29: realtime room wiring (mock lib/realtime's joinBoardRoom) ────────
 // The room/provider plumbing itself is unit-tested in lib/realtime.test.ts
@@ -69,7 +70,11 @@ function fakeRoom(doc: Y.Doc, opts: { synced?: boolean } = {}) {
       }),
       off: vi.fn(),
     },
-    awareness: {},
+    // P5-T30: a real (structural) awareness double rather than `{}`, so the
+    // presence wiring (usePresence/useFollowMode, both keyed off
+    // `store.room.awareness`) has something real to call `getStates`/`on`/
+    // `off`/`setLocalStateField` against instead of crashing on an empty object.
+    awareness: new FakeAwareness(1),
     get synced() {
       return synced;
     },
@@ -546,5 +551,166 @@ describe('BoardCanvas', () => {
     // Now synced: the Toolbar's save-status dot reflects 'synced', not a
     // hardcoded 'idle'/default value.
     expect(screen.getByTestId('save-status-dot')).toHaveAttribute('title', 'All changes saved');
+  });
+
+  // ── P5-T30: live presence (cursors, editing outlines, active-users panel) ──
+  // Presence is realtime-mode only: a room-joined store has a real awareness
+  // to publish/subscribe through; a store with no room (read-only, or the
+  // editable-without-slug unit-test convenience path) has none, so
+  // PresenceLayer/ActiveUsersPanel render nothing rather than crashing.
+
+  it('does not render the active-users panel when no room is joined (no slug)', () => {
+    render(<BoardCanvas board={fixtureBoard()} readonly={false} />);
+    expect(screen.queryByTestId('active-users-panel')).not.toBeInTheDocument();
+  });
+
+  it('does not render the active-users panel in read-only mode', () => {
+    render(<BoardCanvas board={fixtureBoard()} readonly={true} />);
+    expect(screen.queryByTestId('active-users-panel')).not.toBeInTheDocument();
+  });
+
+  it('renders the active-users panel (with self) once a room is joined and synced', () => {
+    useFakeRoom();
+    render(<BoardCanvas board={fixtureBoard()} readonly={false} slug="my-board" path={[]} />);
+    expect(screen.getByTestId('active-users-panel')).toBeInTheDocument();
+  });
+
+  it('lists a remote peer in the active-users panel once they publish presence', () => {
+    const getRoom = useFakeRoom();
+    render(<BoardCanvas board={fixtureBoard()} readonly={false} slug="my-board" path={[]} />);
+
+    act(() => {
+      (getRoom().awareness as FakeAwareness).setRemoteState(2, {
+        user: { name: 'Grace', color: '#22c55e' },
+      });
+    });
+
+    expect(screen.getByText(/^Grace/)).toBeInTheDocument();
+  });
+
+  it('renders a remote cursor at the correct screen position via PresenceLayer', () => {
+    const getRoom = useFakeRoom();
+    const { container } = render(
+      <BoardCanvas board={fixtureBoard()} readonly={false} slug="my-board" path={[]} />,
+    );
+
+    act(() => {
+      (getRoom().awareness as FakeAwareness).setRemoteState(2, {
+        user: { name: 'Grace', color: '#22c55e' },
+        cursor: { x: 30, y: 40 },
+      });
+    });
+
+    const cursor = container.querySelector('[data-testid="presence-cursor"]') as HTMLElement;
+    expect(cursor).toBeTruthy();
+    // Default viewport for fixtureBoard() is {x:0,y:0,zoom:1} -> identity.
+    expect(cursor.style.left).toBe('30px');
+    expect(cursor.style.top).toBe('40px');
+  });
+
+  it('publishes the local cursor position on pointer move over the canvas', () => {
+    const getRoom = useFakeRoom();
+    const { container } = render(
+      <BoardCanvas board={fixtureBoard()} readonly={false} slug="my-board" path={[]} />,
+    );
+    const pane = container.querySelector('.react-flow') as HTMLElement;
+    vi.spyOn(pane, 'getBoundingClientRect').mockReturnValue({
+      left: 0,
+      top: 0,
+      right: 800,
+      bottom: 600,
+      width: 800,
+      height: 600,
+      x: 0,
+      y: 0,
+      toJSON() {},
+    });
+
+    act(() => {
+      fireEvent.pointerMove(pane, { clientX: 50, clientY: 60 });
+    });
+
+    const awareness = getRoom().awareness as FakeAwareness;
+    expect(awareness.getLocalState()?.cursor).toEqual({ x: 50, y: 60 });
+  });
+
+  it('publishes editingNodeId when a node enters text-edit', () => {
+    // A room-joined store starts with an EMPTY doc (see board-store.ts's
+    // module doc) — add a node via the Toolbar first (same pattern the
+    // Cmd+Z/Cmd+S realtime-mode tests above use), then double-click IT.
+    const getRoom = useFakeRoom();
+    render(<BoardCanvas board={fixtureBoard()} readonly={false} slug="my-board" path={[]} />);
+    fireEvent.click(screen.getByTitle('Text'));
+    const textNode = document.querySelector('.react-flow__node') as HTMLElement;
+    const nodeId = textNode.getAttribute('data-id');
+
+    // Two SEPARATE `act()` calls, not one: `fireEvent.doubleClick` needs to
+    // fully commit (so the newly-`autoFocus`ed textarea actually dispatches
+    // its `focusin`, which is what schedules useEditingNodeTracker's deferred
+    // `setTimeout(update, 0)` read) BEFORE `vi.runAllTimers()` runs — merging
+    // them into one `act()` can run the fake-timer flush before that
+    // `focusin`-triggered timeout has even been scheduled.
+    act(() => {
+      fireEvent.doubleClick(screen.getByText('Label'));
+    });
+    act(() => {
+      vi.runAllTimers();
+    });
+
+    const awareness = getRoom().awareness as FakeAwareness;
+    expect(awareness.getLocalState()?.editingNodeId).toBe(nodeId);
+  });
+
+  it('clears editingNodeId when the edit ends (blur/commit)', () => {
+    // A just-added node hasn't gone through RF's resize-observer "measured"
+    // pass in jsdom yet (see BoardCanvas.test.tsx's module doc — no real
+    // layout engine), so RF renders it `visibility: hidden` for a tick,
+    // which excludes it from the accessibility tree `getByRole` queries —
+    // query the raw DOM for the textarea instead of via role.
+    const getRoom = useFakeRoom();
+    const { container } = render(
+      <BoardCanvas board={fixtureBoard()} readonly={false} slug="my-board" path={[]} />,
+    );
+    const awareness = getRoom().awareness as FakeAwareness;
+    fireEvent.click(screen.getByTitle('Text'));
+
+    act(() => {
+      fireEvent.doubleClick(screen.getByText('Label'));
+    });
+    act(() => {
+      vi.runAllTimers();
+    });
+    expect(awareness.getLocalState()?.editingNodeId).not.toBeNull();
+
+    act(() => {
+      // `.blur()` (the real DOM method) actually moves `document.activeElement`
+      // away in jsdom, which is what useEditingNodeTracker's `focusout`
+      // listener reads — `fireEvent.blur` alone only dispatches the event
+      // without moving focus, so it wouldn't exercise the real code path.
+      (container.querySelector('textarea') as HTMLTextAreaElement).blur();
+    });
+    act(() => {
+      vi.runAllTimers();
+    });
+    expect(awareness.getLocalState()?.editingNodeId).toBeNull();
+  });
+
+  it('clicking Follow on a remote in the active-users panel starts following (viewport applied)', () => {
+    const getRoom = useFakeRoom();
+    render(<BoardCanvas board={fixtureBoard()} readonly={false} slug="my-board" path={[]} />);
+    const awareness = getRoom().awareness as FakeAwareness;
+
+    act(() => {
+      awareness.setRemoteState(2, {
+        user: { name: 'Grace', color: '#22c55e' },
+        viewport: { x: 12, y: 34, zoom: 1.2 },
+      });
+    });
+
+    act(() => {
+      fireEvent.click(screen.getByRole('button', { name: /follow grace/i }));
+    });
+
+    expect(screen.getByRole('button', { name: /^stop$/i })).toBeInTheDocument();
   });
 });

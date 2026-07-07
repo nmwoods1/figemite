@@ -94,6 +94,7 @@ export function StickyNode({ id, data, selected }: NodeProps<Node<StickyNodeData
           {editing ? (
             <textarea
               className="nodrag"
+              autoFocus
               value={draft}
               onChange={(e) => onChange(e.target.value)}
               onBlur={commit}

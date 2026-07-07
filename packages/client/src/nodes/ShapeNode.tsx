@@ -384,6 +384,7 @@ export function ShapeNode({ id, data, selected }: NodeProps<Node<ShapeNodeData, 
             {editing ? (
               <textarea
                 className="nodrag"
+                autoFocus
                 value={draft}
                 onChange={(e) => onChange(e.target.value)}
                 onBlur={commit}

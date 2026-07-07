@@ -26,41 +26,70 @@ import type { BoardFile } from '@easel/shared';
 import TagList from './components/TagList.js';
 import Dashboard from './components/Dashboard.js';
 import Breadcrumb from './components/Breadcrumb.js';
+import IdentityPrompt from './components/IdentityPrompt.js';
 import { BoardCanvas } from './canvas/BoardCanvas.js';
 import { useAppView } from './app/router.js';
 import { READONLY } from './app/mode.js';
 import { getBoard, deleteSubBoard } from './lib/boards-api.js';
+import { hasStoredUser } from './lib/identity.js';
 
 export default function App() {
   const [view, navigate] = useAppView();
 
+  // P5-T30: a first-time user (no stored display name) is asked to set one
+  // before presence has anything meaningful to publish — `hasStoredUser()`
+  // gates a RETURNING user out entirely, matching IdentityPrompt's own
+  // contract (it only captures/persists a name; callers decide whether to
+  // mount it at all). Mounted once at the App level (not per board route)
+  // so navigating between boards never re-prompts within a session, and
+  // skipped entirely in READONLY mode (static boards have no presence, and
+  // no write affordance should be offered at all in that mode).
+  const [identityDismissed, setIdentityDismissed] = useState(false);
+  const showIdentityPrompt = !READONLY && !identityDismissed && !hasStoredUser();
+
+  const identityPrompt = showIdentityPrompt ? (
+    <IdentityPrompt
+      onConfirm={() => setIdentityDismissed(true)}
+      onCancel={() => setIdentityDismissed(true)}
+    />
+  ) : null;
+
   if (view.view === 'tagList') {
     return (
-      <TagList
-        onPickTag={(tag) => navigate({ view: 'tagDetail', tag })}
-        onPickUntagged={() => navigate({ view: 'untagged' })}
-        onPickBoard={(slug) => navigate({ view: 'board', slug, path: [] })}
-      />
+      <>
+        {identityPrompt}
+        <TagList
+          onPickTag={(tag) => navigate({ view: 'tagDetail', tag })}
+          onPickUntagged={() => navigate({ view: 'untagged' })}
+          onPickBoard={(slug) => navigate({ view: 'board', slug, path: [] })}
+        />
+      </>
     );
   }
 
   if (view.view === 'tagDetail') {
     return (
-      <Dashboard
-        filter={{ kind: 'tag', name: view.tag }}
-        onPick={(slug) => navigate({ view: 'board', slug, path: [] })}
-        onGoHome={() => navigate({ view: 'tagList' })}
-      />
+      <>
+        {identityPrompt}
+        <Dashboard
+          filter={{ kind: 'tag', name: view.tag }}
+          onPick={(slug) => navigate({ view: 'board', slug, path: [] })}
+          onGoHome={() => navigate({ view: 'tagList' })}
+        />
+      </>
     );
   }
 
   if (view.view === 'untagged') {
     return (
-      <Dashboard
-        filter={{ kind: 'untagged' }}
-        onPick={(slug) => navigate({ view: 'board', slug, path: [] })}
-        onGoHome={() => navigate({ view: 'tagList' })}
-      />
+      <>
+        {identityPrompt}
+        <Dashboard
+          filter={{ kind: 'untagged' }}
+          onPick={(slug) => navigate({ view: 'board', slug, path: [] })}
+          onGoHome={() => navigate({ view: 'tagList' })}
+        />
+      </>
     );
   }
 
@@ -70,13 +99,16 @@ export default function App() {
   // the route (a fresh `loading` state) instead of needing to reset state
   // imperatively inside an effect.
   return (
-    <BoardRoute
-      key={[view.slug, ...view.path].join('/')}
-      slug={view.slug}
-      path={view.path}
-      onGoHome={() => navigate({ view: 'tagList' })}
-      onNavigate={(nextPath) => navigate({ view: 'board', slug: view.slug, path: nextPath })}
-    />
+    <>
+      {identityPrompt}
+      <BoardRoute
+        key={[view.slug, ...view.path].join('/')}
+        slug={view.slug}
+        path={view.path}
+        onGoHome={() => navigate({ view: 'tagList' })}
+        onNavigate={(nextPath) => navigate({ view: 'board', slug: view.slug, path: nextPath })}
+      />
+    </>
   );
 }
 

@@ -50,6 +50,7 @@ export function TextNode({ id, data, selected }: NodeProps<Node<TextNodeData, 't
       {editing ? (
         <textarea
           className="nodrag"
+          autoFocus
           value={draft}
           rows={Math.max(1, draft.split('\n').length)}
           onChange={(e) => onChange(e.target.value)}

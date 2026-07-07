@@ -1,6 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import App from './App.js';
+import { FakeAwareness } from './test/fake-awareness.js';
+import { hasStoredUser, setLocalUser } from './lib/identity.js';
 
 const boardsApiMock = vi.hoisted(() => ({
   listBoards: vi.fn(),
@@ -35,7 +37,11 @@ function fakeRoom(roomName = 'spend') {
   return {
     roomName,
     provider: fakeSyncedProvider(),
-    awareness: {},
+    // P5-T30: a real (structural) awareness double rather than `{}` — the
+    // editable canvas's presence wiring (usePresence/useFollowMode) now
+    // calls real methods (getStates/on/off/setLocalStateField) on
+    // `store.room.awareness`.
+    awareness: new FakeAwareness(1),
     synced: true,
     onSyncedChange: vi.fn(() => vi.fn()),
     destroy: vi.fn(),
@@ -62,11 +68,20 @@ describe('App view switch', () => {
     boardsApiMock.deleteSubBoard.mockReset().mockResolvedValue(undefined);
     joinBoardRoomMock.mockReset().mockImplementation((_doc, slug: string) => fakeRoom(slug));
     setHash('');
+    localStorage.clear();
+    // P5-T30: IdentityPrompt (gated on `!hasStoredUser()`) is wired into App
+    // now — default every test in this describe block to a "returning user"
+    // (a name already stored) so the prompt doesn't intrude on assertions
+    // that predate presence and aren't about identity. The dedicated
+    // "IdentityPrompt wiring" describe block below clears storage again to
+    // test the first-time-user path specifically.
+    setLocalUser('Returning User');
   });
 
   afterEach(() => {
     cleanup();
     setHash('');
+    localStorage.clear();
   });
 
   it('renders TagList at the root hash (tagList view)', async () => {
@@ -196,6 +211,70 @@ describe('App view switch', () => {
       render(<App />);
       await waitFor(() => expect(boardsApiMock.listBoards).toHaveBeenCalled());
       expect(screen.queryByRole('button', { name: /new board/i })).not.toBeInTheDocument();
+    });
+  });
+
+  // ── P5-T30: IdentityPrompt wiring ────────────────────────────────────────
+  // A first-time user (no stored name — `lib/identity.ts`'s `hasStoredUser()`
+  // is false) is prompted to set a display name before presence can publish
+  // anything meaningful; a returning user (a name already stored) is never
+  // prompted. Presence itself needs SOME name to publish, so the prompt must
+  // appear before/alongside the board canvas, not block it structurally.
+  describe('IdentityPrompt wiring', () => {
+    beforeEach(() => {
+      // Override this file's default "returning user" seed (see the outer
+      // beforeEach) — these tests specifically exercise the first-time-user
+      // gate, so they need a genuinely empty identity store.
+      localStorage.clear();
+    });
+
+    it('prompts a first-time user (no stored name) for a display name', async () => {
+      setHash('#/');
+      render(<App />);
+      await waitFor(() => expect(boardsApiMock.listBoards).toHaveBeenCalled());
+      expect(screen.getByText(/who are you/i)).toBeInTheDocument();
+    });
+
+    it('does not prompt a returning user (a name already stored)', async () => {
+      setLocalUser('Ada Lovelace');
+      setHash('#/');
+      render(<App />);
+      await waitFor(() => expect(boardsApiMock.listBoards).toHaveBeenCalled());
+      expect(screen.queryByText(/who are you/i)).not.toBeInTheDocument();
+    });
+
+    it('submitting a name in the prompt persists it and dismisses the prompt', async () => {
+      setHash('#/');
+      render(<App />);
+      await waitFor(() => expect(boardsApiMock.listBoards).toHaveBeenCalled());
+      expect(screen.getByText(/who are you/i)).toBeInTheDocument();
+
+      fireEvent.change(screen.getByPlaceholderText(/your name/i), {
+        target: { value: 'Grace Hopper' },
+      });
+      fireEvent.click(screen.getByRole('button', { name: /continue/i }));
+
+      expect(screen.queryByText(/who are you/i)).not.toBeInTheDocument();
+      expect(hasStoredUser()).toBe(true);
+    });
+
+    it('canceling the prompt dismisses it without persisting a name', async () => {
+      setHash('#/');
+      render(<App />);
+      await waitFor(() => expect(boardsApiMock.listBoards).toHaveBeenCalled());
+
+      fireEvent.click(screen.getByRole('button', { name: /cancel/i }));
+
+      expect(screen.queryByText(/who are you/i)).not.toBeInTheDocument();
+      expect(hasStoredUser()).toBe(false);
+    });
+
+    it('never prompts in READONLY mode', async () => {
+      modeMock.READONLY = true;
+      setHash('#/spend');
+      render(<App />);
+      await waitFor(() => expect(document.querySelector('.react-flow')).toBeInTheDocument());
+      expect(screen.queryByText(/who are you/i)).not.toBeInTheDocument();
     });
   });
 });
