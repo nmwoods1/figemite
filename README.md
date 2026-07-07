@@ -104,3 +104,4 @@ This is an npm-workspaces monorepo with four packages:
 
 - [CONTRIBUTING.md](CONTRIBUTING.md) — development setup and conventions
 - [SECURITY.md](SECURITY.md) — the trust model, especially before enabling LAN sharing
+- [RELEASING.md](RELEASING.md) — release checklist and definition-of-done
