@@ -15,7 +15,7 @@
 // view-only).
 //
 // Ported behavior (hit-testing a click against node rects, offsetting from
-// node center) from the legacy figmalade prototype's
+// node center) from the original prototype's
 // `src/components/CommentLayer.tsx`, rewired onto `canvas/coords.ts`'s shared
 // `flowToScreen`/`screenToFlow`/`nodeRect` (this rewrite's one source of that
 // math) and this rewrite's `useComments`-shaped mutation callbacks instead of
@@ -25,7 +25,7 @@ import { createRef } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { ReactFlow } from '@xyflow/react';
-import type { BoardComment, BoardNode } from '@easel/shared';
+import type { BoardComment, BoardNode } from '@figemite/shared';
 import { CommentLayer } from './CommentLayer.js';
 
 const identityMock = vi.hoisted(() => ({

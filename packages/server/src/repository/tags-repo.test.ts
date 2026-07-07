@@ -3,13 +3,13 @@ import fsSync from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import type { TagsFile } from '@easel/shared';
+import type { TagsFile } from '@figemite/shared';
 import { readTags, writeTags } from './tags-repo.js';
 
 let tmpRoot: string;
 
 beforeEach(async () => {
-  tmpRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'easel-tags-repo-'));
+  tmpRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'figemite-tags-repo-'));
   fsSync.mkdirSync(path.join(tmpRoot, 'my-board'), { recursive: true });
 });
 

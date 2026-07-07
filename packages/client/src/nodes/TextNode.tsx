@@ -1,6 +1,6 @@
 // ── TextNode ──────────────────────────────────────────────────────────────────
 //
-// Ported from figmalade's TextNode.tsx: a free-floating label, no connection
+// Ported from the prototype's TextNode.tsx: a free-floating label, no connection
 // handles (legacy TextNode never had any — it's a label, not something edges
 // connect to) and no rotation. Uses `useEditableText`/`BaseNode` for the
 // shared edit/description-badge chrome.

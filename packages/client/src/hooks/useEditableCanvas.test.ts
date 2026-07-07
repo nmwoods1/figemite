@@ -13,7 +13,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { renderHook, act } from '@testing-library/react';
 import type { Connection } from '@xyflow/react';
-import type { BoardFile } from '@easel/shared';
+import type { BoardFile } from '@figemite/shared';
 import type { BoardRfEdge, BoardRfNode } from '../canvas/rf-adapters.js';
 import { createBoardStore } from '../store/board-store.js';
 import { useEditableCanvas } from './useEditableCanvas.js';

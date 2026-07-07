@@ -1,6 +1,6 @@
 // ── HistoryPanel: version-history list (time-travel, P6-T36) ────────────────
 //
-// Ported (visual design + affordances) from the legacy figmalade prototype's
+// Ported (visual design + affordances) from the original prototype's
 // `src/components/HistoryPanel.tsx`, adapted to take plain data
 // (`versions`/`loading`) and callbacks (`onSelect`/`onClose`) rather than
 // fetching `/api/history` itself — matching this codebase's existing split

@@ -12,7 +12,7 @@ import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import { emptyBoard, serialise } from '@easel/shared';
+import { emptyBoard, serialise } from '@figemite/shared';
 import { createServer, type ServerHandle } from './create-server.js';
 
 interface Harness {
@@ -26,7 +26,7 @@ interface Harness {
 async function startHarness(
   overrides: Partial<Parameters<typeof createServer>[0]> = {},
 ): Promise<Harness> {
-  const boardsRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'easel-create-server-'));
+  const boardsRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'figemite-create-server-'));
   const handle = createServer({ boardsRoot, ...overrides });
   const server = http.createServer(handle.requestHandler);
   handle.attachUpgrade(server);

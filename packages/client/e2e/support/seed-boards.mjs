@@ -5,7 +5,7 @@
 // `import.meta.url` guard at the bottom) — copies `fixtures/kitchen-sink`,
 // `fixtures/minimal`, `fixtures/interaction`, `fixtures/multiplayer`, and
 // `fixtures/overlays-history` into `<repoRoot>/boards/` (the dev-server's
-// default `EASEL_BOARDS_DIR`, see `src/dev/easel-server-plugin.ts`'s
+// default `FIGEMITE_BOARDS_DIR`, see `src/dev/figemite-server-plugin.ts`'s
 // `resolveDevBoardsRoot`) so the e2e gate has real board JSON to fetch via
 // `#/kitchen-sink`, `#/minimal`, `#/interaction`, `#/multiplayer`,
 // `#/overlays-history`.
@@ -20,7 +20,7 @@
 // Deliberately copies (not symlinks) each fixture directory verbatim: the
 // fixtures dir's file layout (`board.json`, dotted sub-board files,
 // `comments.json`, `tags.json`) already matches the `boards/<slug>/…`
-// convention `@easel/server`'s `BoardRepository` expects (see
+// convention `@figemite/server`'s `BoardRepository` expects (see
 // `boards/kitchen-sink/` for confirmation this is how the dev boards root is
 // really laid out) — no transformation needed.
 //
@@ -37,8 +37,8 @@ const CLIENT_ROOT = path.resolve(__dirname, '../..');
 const REPO_ROOT = path.resolve(CLIENT_ROOT, '../..');
 
 export const FIXTURES_ROOT = path.join(REPO_ROOT, 'fixtures');
-export const BOARDS_ROOT = process.env.EASEL_BOARDS_DIR
-  ? path.resolve(process.env.EASEL_BOARDS_DIR)
+export const BOARDS_ROOT = process.env.FIGEMITE_BOARDS_DIR
+  ? path.resolve(process.env.FIGEMITE_BOARDS_DIR)
   : path.join(REPO_ROOT, 'boards');
 
 export const SLUGS = ['kitchen-sink', 'minimal', 'interaction', 'multiplayer', 'overlays-history'];

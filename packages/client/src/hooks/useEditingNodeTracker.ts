@@ -1,6 +1,6 @@
 // ── useEditingNodeTracker: "which node is the local user editing?" ──────────
 //
-// P5-T30. Ported from the legacy figmalade prototype's BoardCanvas.tsx focus-
+// P5-T30. Ported from the original prototype's BoardCanvas.tsx focus-
 // tracking effect. Watches DOM focus bubbling through `document` and, on
 // every change, reports the id of the ReactFlow node that currently contains
 // `document.activeElement` (via `.closest('.react-flow__node')` +

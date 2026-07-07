@@ -2,12 +2,12 @@
 //
 // A small pin/badge rendered at a screen position by CommentLayer — shows the
 // reply count and dims when the comment is resolved. Ported (visual design)
-// from the legacy figmalade prototype's `src/components/CommentPin.tsx`,
-// rewired to this codebase's `@easel/shared` `BoardComment` type.
+// from the original prototype's `src/components/CommentPin.tsx`,
+// rewired to this codebase's `@figemite/shared` `BoardComment` type.
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
-import type { BoardComment } from '@easel/shared';
+import type { BoardComment } from '@figemite/shared';
 import { CommentPin } from './CommentPin.js';
 
 function fixtureComment(overrides: Partial<BoardComment> = {}): BoardComment {

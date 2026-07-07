@@ -1,7 +1,7 @@
 import { afterEach, describe, it, expect, vi } from 'vitest';
 import * as Y from 'yjs';
-import { addNode } from '@easel/shared';
-import type { BoardFile, BoardNode } from '@easel/shared';
+import { addNode } from '@figemite/shared';
+import type { BoardFile, BoardNode } from '@figemite/shared';
 
 // ── Realtime room mock (P5-T29) ──────────────────────────────────────────────
 // `createBoardStore`'s editable-with-room path delegates to `lib/realtime.js`'s

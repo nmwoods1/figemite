@@ -8,7 +8,7 @@
 // into board history — matching legacy.
 
 import type { IncomingMessage, ServerResponse } from 'node:http';
-import { SlugSchema, parseCommentsFile } from '@easel/shared';
+import { SlugSchema, parseCommentsFile } from '@figemite/shared';
 import { getQuery, readJsonBody, sendJson } from '../../http/body.js';
 import { readComments, writeComments } from '../../repository/comments-repo.js';
 import { ValidationError } from '../errors.js';

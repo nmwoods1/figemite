@@ -1,6 +1,6 @@
 // ── Top-level view switch ────────────────────────────────────────────────────
 //
-// Ported from the figmalade prototype's `src/App.tsx`. Deviations:
+// Ported from the original prototype's `src/App.tsx`. Deviations:
 //   - Driven by the new `app/router.ts`'s `useAppView()` (view union field is
 //     `slug` for the board view, not `board` as upstream — see that module's
 //     doc comment).
@@ -22,7 +22,7 @@
 //     READONLY mode and `path.length > 0`, matching the "every write
 //     affordance hidden in READONLY" requirement.
 import { useEffect, useState } from 'react';
-import type { BoardFile } from '@easel/shared';
+import type { BoardFile } from '@figemite/shared';
 import TagList from './components/TagList.js';
 import Dashboard from './components/Dashboard.js';
 import Breadcrumb from './components/Breadcrumb.js';

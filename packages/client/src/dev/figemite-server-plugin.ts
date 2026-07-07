@@ -1,11 +1,11 @@
 // ── Dev-server integration (P2-T14) ──────────────────────────────────────────
 //
-// Mounts the in-process `@easel/server` backend as Vite middleware so
+// Mounts the in-process `@figemite/server` backend as Vite middleware so
 // `npm run dev` starts a SINGLE process/port that serves the React app AND
 // handles `/api/*` + `/yjs/*` — no separate backend process, no CORS, same
-// origin. Ports the pattern from the figmalade prototype's
+// origin. Ports the pattern from the original prototype's
 // `boardApiPlugin`/`yjsPlugin` (vite.config.ts), but delegates all request
-// handling to the composed `@easel/server` (`createServer`) instead of
+// handling to the composed `@figemite/server` (`createServer`) instead of
 // reimplementing the API inline.
 //
 // Middleware ordering: this plugin's `configureServer` hook runs before
@@ -19,12 +19,12 @@ import fs from 'node:fs';
 import path from 'node:path';
 import type http from 'node:http';
 import type { Plugin } from 'vite';
-import { createServer, type ServerHandle } from '@easel/server';
+import { createServer, type ServerHandle } from '@figemite/server';
 
-/** Resolves the dev boards directory: `EASEL_BOARDS_DIR` env override, else `<repoRoot>/boards`. Creates it if missing (it's gitignored — never versioned). */
+/** Resolves the dev boards directory: `FIGEMITE_BOARDS_DIR` env override, else `<repoRoot>/boards`. Creates it if missing (it's gitignored — never versioned). */
 export function resolveDevBoardsRoot(repoRoot: string): string {
-  const boardsRoot = process.env.EASEL_BOARDS_DIR
-    ? path.resolve(process.env.EASEL_BOARDS_DIR)
+  const boardsRoot = process.env.FIGEMITE_BOARDS_DIR
+    ? path.resolve(process.env.FIGEMITE_BOARDS_DIR)
     : path.resolve(repoRoot, 'boards');
   fs.mkdirSync(boardsRoot, { recursive: true });
   return boardsRoot;
@@ -35,16 +35,16 @@ function isApiRequest(url: string | undefined): boolean {
 }
 
 /**
- * Vite plugin: composes `@easel/server` via `createServer` and mounts it on
+ * Vite plugin: composes `@figemite/server` via `createServer` and mounts it on
  * the dev server's middleware chain + HTTP upgrade event, scoped to
  * `/api/*` only. `/yjs/*` websocket upgrades are handled by
  * `attachUpgrade`, which (per `YjsWebsocketService`) ignores any upgrade
  * whose URL doesn't start with `/yjs/`, so Vite's own HMR websocket keeps
  * working on the same port.
  */
-export function easelServerPlugin(repoRoot: string): Plugin {
+export function figemiteServerPlugin(repoRoot: string): Plugin {
   return {
-    name: 'easel-server',
+    name: 'figemite-server',
     configureServer(server) {
       const boardsRoot = resolveDevBoardsRoot(repoRoot);
       const backend: ServerHandle = createServer({ boardsRoot });

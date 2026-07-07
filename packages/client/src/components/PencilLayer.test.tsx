@@ -14,7 +14,7 @@
 // AnnotationLayer (see AnnotationLayer.test.tsx).
 //
 // Ported behavior (screen->flow conversion without RF's own snap-to-grid,
-// Shift held opts into a 20px grid snap) from the legacy figmalade
+// Shift held opts into a 20px grid snap) from the original
 // prototype's `src/components/PencilLayer.tsx`, rewired onto
 // `canvas/coords.ts`'s shared `getFlowPointer`/`snapToGrid` and this
 // rewrite's doc-first `BoardStore.addNode` instead of the legacy's
@@ -24,7 +24,7 @@ import { createRef } from 'react';
 import { afterEach, describe, expect, it } from 'vitest';
 import { cleanup, fireEvent, render } from '@testing-library/react';
 import { ReactFlow } from '@xyflow/react';
-import type { BoardFile } from '@easel/shared';
+import type { BoardFile } from '@figemite/shared';
 import { createBoardStore } from '../store/board-store.js';
 import type { BoardStore } from '../store/board-store.js';
 import { PencilLayer } from './PencilLayer.js';

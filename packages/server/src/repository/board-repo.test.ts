@@ -3,14 +3,14 @@ import fsSync from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { emptyBoard, makeStickyNode, type BoardFile } from '@easel/shared';
+import { emptyBoard, makeStickyNode, type BoardFile } from '@figemite/shared';
 import { BoardRepository } from './board-repo.js';
 
 let tmpRoot: string;
 let repo: BoardRepository;
 
 beforeEach(async () => {
-  tmpRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'easel-board-repo-'));
+  tmpRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'figemite-board-repo-'));
   repo = new BoardRepository(tmpRoot);
 });
 

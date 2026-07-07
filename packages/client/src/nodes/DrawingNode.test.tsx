@@ -1,5 +1,5 @@
 // DrawingNode: a persistent freehand pencil stroke, rendered as an SVG path
-// via smoothPath(points). Ported from figmalade's DrawingNode.tsx — no
+// via smoothPath(points). Ported from the prototype's DrawingNode.tsx — no
 // editing, no connection handles, no rotation (none exist in the legacy
 // component either).
 

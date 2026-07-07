@@ -1,6 +1,6 @@
 // ── Room naming + presence types ─────────────────────────────────────────────
 //
-// Ported verbatim from figmalade's src/lib/realtime-core.ts. Pure and
+// Ported verbatim from the prototype's src/lib/realtime-core.ts. Pure and
 // environment-agnostic: no DOM, no `location`, no browser APIs — shared between
 // the browser client and the Node MCP-server peer.
 

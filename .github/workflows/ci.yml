@@ -50,3 +50,6 @@ jobs:
 
       - name: License audit
         run: npm run license:audit
+
+      - name: Prepublish reference audit
+        run: npm run audit:refs

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import type { BoardEdge, BoardNode } from '@easel/shared';
+import type { BoardEdge, BoardNode } from '@figemite/shared';
 import { boardNodeToRf, boardEdgeToRf, boardToRf } from './rf-adapters.js';
 import type { EdgeCallbacks, NodeCallbacks } from './rf-adapters.js';
 

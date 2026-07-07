@@ -1,6 +1,6 @@
 // ── createServer — service composition (P1-T13) ─────────────────────────────
 //
-// Instantiates and wires every `@easel/server` service into a single runnable
+// Instantiates and wires every `@figemite/server` service into a single runnable
 // unit: a plain `(req, res)` request handler plus an `attachUpgrade(httpServer)`
 // hook for the Yjs relay, and a `dispose()` that tears everything down cleanly
 // (no open timers/handles keep the process alive after this returns).

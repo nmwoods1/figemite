@@ -10,7 +10,7 @@
 // it is never written to `board.json`: both the client's own snapshot cache
 // (store/board-store.ts) and the server's persistence path
 // (packages/server/src/services/yjs-ws.ts) build their view of "the board"
-// via `@easel/shared`'s `getSnapshot(doc)`, which only ever reads
+// via `@figemite/shared`'s `getSnapshot(doc)`, which only ever reads
 // `nodeData`/`nodeTexts`/`edgeData` (crdt/ops.ts) — it has no knowledge of
 // `ANNOTATIONS` at all. So annotations sync live but never persist, matching
 // the legacy prototype's component-state-only strokes (this rewrite's
@@ -34,7 +34,7 @@
 // blank. Only shown once there's something to wipe.
 //
 // Ported behavior (freehand capture, pink color/stroke-width constants, Wipe)
-// from the legacy figmalade prototype's `src/components/AnnotationLayer.tsx`,
+// from the original prototype's `src/components/AnnotationLayer.tsx`,
 // rewired onto `canvas/coords.ts`'s shared coords helpers and a real
 // `Y.Array` (via the shared `ANNOTATIONS` schema const) instead of the
 // legacy's local `strokes` React state + `onAddStroke` callback.
@@ -43,8 +43,8 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import type { PointerEvent as ReactPointerEvent, RefObject } from 'react';
 import { useViewport } from '@xyflow/react';
 import * as Y from 'yjs';
-import { ANNOTATIONS } from '@easel/shared';
-import type { XY } from '@easel/shared';
+import { ANNOTATIONS } from '@figemite/shared';
+import type { XY } from '@figemite/shared';
 import { getFlowPointer, snapToGrid } from '../canvas/coords.js';
 import { smoothPath, thinPoints } from '../lib/draw-utils.js';
 

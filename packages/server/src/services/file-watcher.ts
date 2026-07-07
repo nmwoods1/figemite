@@ -3,7 +3,7 @@
 // Detects EXTERNAL writes to board files — from an MCP server, a human
 // editing JSON directly, or any process other than this server's own write
 // path — and fires `onExternalChange(slug, subPath)` so the API layer (P1-T12)
-// can broadcast an `external-change` SSE event. Ported from the figmalade
+// can broadcast an `external-change` SSE event. Ported from the original
 // prototype's `fsSync.watch(BOARDS_ROOT, { recursive: true }, ...)` handler
 // embedded in the dev-server Vite plugin (vite.config.ts ~394-444).
 //

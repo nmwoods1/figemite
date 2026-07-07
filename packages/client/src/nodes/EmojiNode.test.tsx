@@ -1,5 +1,5 @@
 // EmojiNode: a single emoji glyph rendered at a pixel size. Ported from
-// figmalade's EmojiNode.tsx — connection handles, rotation, editable glyph
+// the prototype's EmojiNode.tsx — connection handles, rotation, editable glyph
 // text, and the description badge all carry over; resize/rotate
 // interaction HANDLERS are Phase 4 (only the `data.rotation` CSS transform
 // is applied here, not a drag-to-rotate affordance).

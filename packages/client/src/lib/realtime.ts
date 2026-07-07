@@ -1,6 +1,6 @@
 // ── Real-time room abstraction ────────────────────────────────────────────────
 //
-// Ported from the legacy figmalade prototype's `src/lib/realtime.ts`, adapted
+// Ported from the original prototype's `src/lib/realtime.ts`, adapted
 // to the new server-is-the-content-writer model (P5-T28/T29):
 //
 //   - The Y.Doc is now CALLER-supplied (the doc-first `BoardStore` —
@@ -8,7 +8,7 @@
 //     constructed inside this module. `joinBoardRoom` just attaches a
 //     provider + offline persistence to it.
 //   - Content no longer needs to be POSTed by the client at all — the server
-//     (`@easel/server`'s `YjsWebsocketService`, P5-T28) seeds the room from
+//     (`@figemite/server`'s `YjsWebsocketService`, P5-T28) seeds the room from
 //     disk on first connect and persists it back on a debounce. This module's
 //     entire job is "get this doc talking to the right room."
 //
@@ -26,7 +26,7 @@
 import * as Y from 'yjs';
 import { WebsocketProvider } from 'y-websocket';
 import { IndexeddbPersistence } from 'y-indexeddb';
-import { roomNameFor } from '@easel/shared';
+import { roomNameFor } from '@figemite/shared';
 import { getLocalUser } from './identity.js';
 
 export interface BoardRoom {

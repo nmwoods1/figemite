@@ -1,10 +1,10 @@
-// Ported from the legacy figmalade prototype's inline `descNodeLabel`
+// Ported from the original prototype's inline `descNodeLabel`
 // computation (BoardCanvas.tsx): the DescriptionModal's header shows a
 // human-readable label for whichever node's description is open — its own
 // text/title where the node has one, falling back to its id.
 
 import { describe, it, expect } from 'vitest';
-import type { BoardNode } from '@easel/shared';
+import type { BoardNode } from '@figemite/shared';
 import { nodeLabel } from './node-label.js';
 
 describe('nodeLabel', () => {

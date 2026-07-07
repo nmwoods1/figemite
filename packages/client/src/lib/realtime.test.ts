@@ -1,11 +1,11 @@
 // ── lib/realtime.ts tests ────────────────────────────────────────────────────
 //
 // `joinBoardRoom` is the client-side entry point that attaches a
-// `WebsocketProvider` (content sync, relayed by @easel/server's
+// `WebsocketProvider` (content sync, relayed by @figemite/server's
 // YjsWebsocketService — P5-T28) and an `IndexeddbPersistence` (offline cache)
 // to a caller-supplied Y.Doc, bootstraps awareness to a non-null local user
 // BEFORE returning, and gives back a small `BoardRoom` handle. Ported from the
-// legacy figmalade prototype's `src/lib/realtime.ts`, adapted so the doc is
+// original prototype's `src/lib/realtime.ts`, adapted so the doc is
 // caller-supplied (this codebase's `createBoardStore` owns Y.Doc construction
 // — see store/board-store.ts) rather than constructed inside this module.
 //

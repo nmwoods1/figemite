@@ -5,7 +5,7 @@
 // discussion. Missing file reads back as an empty comments list.
 
 import fs from 'node:fs';
-import { parseCommentsFile, type CommentsFile } from '@easel/shared';
+import { parseCommentsFile, type CommentsFile } from '@figemite/shared';
 import { commentsPath } from './paths.js';
 import { atomicWriteFileSync } from './atomic-write.js';
 

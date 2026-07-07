@@ -1,6 +1,6 @@
 // ── Breadcrumb (board hierarchy nav) ─────────────────────────────────────────
 //
-// Ported from the figmalade prototype's `src/components/Breadcrumb.tsx`.
+// Ported from the original prototype's `src/components/Breadcrumb.tsx`.
 // Deviations:
 //   - Dropped `pathDescriptions`/`onViewParentDescription` (the "≡ view this
 //     node's description" affordance): that depends on canvas node state

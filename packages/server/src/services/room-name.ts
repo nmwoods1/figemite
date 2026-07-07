@@ -1,6 +1,6 @@
 // ── parseRoomName ────────────────────────────────────────────────────────────
 //
-// The inverse of `@easel/shared`'s `roomNameFor(slug, path)`: given a Yjs room
+// The inverse of `@figemite/shared`'s `roomNameFor(slug, path)`: given a Yjs room
 // name (`<slug>` or `<slug>.<seg1>.<seg2>...`), recovers the `{ slug, subPath }`
 // pair the persistence provider needs to read/write the right board file.
 //

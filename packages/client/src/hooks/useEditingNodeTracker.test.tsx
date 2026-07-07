@@ -2,7 +2,7 @@
 //
 // P5-T30. Determines "which board node's text is this LOCAL user currently
 // editing" by watching DOM focus bubble through `document` — ported from the
-// legacy figmalade prototype's BoardCanvas.tsx focus-tracking effect. This is
+// original prototype's BoardCanvas.tsx focus-tracking effect. This is
 // the "existing edit seam" the presence wiring hooks into: every text-bearing
 // node type (Sticky/Text/Shape/Frame/Emoji, via `useEditableText`) renders its
 // `<textarea>` inside RF's own `.react-flow__node[data-id="..."]` wrapper —

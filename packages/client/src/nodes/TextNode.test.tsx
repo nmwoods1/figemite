@@ -1,4 +1,4 @@
-// TextNode: a free-floating label. Ported from figmalade's TextNode.tsx —
+// TextNode: a free-floating label. Ported from the prototype's TextNode.tsx —
 // no connection handles (legacy TextNode never had any) and no rotation
 // (labels don't rotate in the legacy model either).
 

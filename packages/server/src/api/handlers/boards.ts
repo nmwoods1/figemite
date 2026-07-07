@@ -5,7 +5,7 @@
 
 import fs from 'node:fs';
 import type { IncomingMessage, ServerResponse } from 'node:http';
-import { SlugSchema, emptyBoard } from '@easel/shared';
+import { SlugSchema, emptyBoard } from '@figemite/shared';
 import { boardFilePath } from '../../repository/paths.js';
 import { readTags } from '../../repository/tags-repo.js';
 import { readJsonBody, sendError, sendJson } from '../../http/body.js';

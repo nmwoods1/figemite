@@ -1,6 +1,6 @@
 // ── AiSessionManager ─────────────────────────────────────────────────────────
 //
-// Tracks the AI-editing lock per board/sub-board. Ported from the figmalade
+// Tracks the AI-editing lock per board/sub-board. Ported from the original
 // prototype's `activeAiSessions` map + begin/end handlers embedded in the
 // dev-server Vite plugin (vite.config.ts ~369-392, ~587-638) into a
 // standalone, transport-agnostic service: it knows nothing about HTTP or SSE,

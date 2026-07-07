@@ -1,11 +1,11 @@
 // nodeTypes: the ReactFlow node-type registry BoardCanvas (P3-T20) passes to
 // <ReactFlow nodeTypes={nodeTypes} />. Every BoardNode['type'] discriminant
-// (@easel/shared) must have a matching entry here, keyed by that same string
+// (@figemite/shared) must have a matching entry here, keyed by that same string
 // (matching rf-adapters.ts's `boardNodeToRf`, which sets RF `type` to the
 // board node's own `type`).
 
 import { describe, expect, it } from 'vitest';
-import type { BoardNode } from '@easel/shared';
+import type { BoardNode } from '@figemite/shared';
 import { nodeTypes } from './index.js';
 
 describe('nodeTypes', () => {

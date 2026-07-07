@@ -1,13 +1,13 @@
 // ── Drawing helpers ──────────────────────────────────────────────────────────
 //
-// Ported from the legacy figmalade prototype's src/lib/draw-utils.ts.
+// Ported from the original prototype's src/lib/draw-utils.ts.
 // Shared utilities for the persistent pencil (DrawingNode) and (later) the
 // ephemeral annotation overlay. Keeping them here keeps stroke smoothing
 // consistent across both, and gives one place to tune curve quality / point
-// thinning. Uses `@easel/shared`'s `XY` instead of the legacy's local
+// thinning. Uses `@figemite/shared`'s `XY` instead of the legacy's local
 // `lib/types.ts` copy.
 
-import type { XY } from '@easel/shared';
+import type { XY } from '@figemite/shared';
 
 // Quadratic-Bézier smoothing: connect midpoints between consecutive points
 // using each original point as the control point. Cheap, looks good, and

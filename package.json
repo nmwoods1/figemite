@@ -1,5 +1,5 @@
 {
-  "name": "easel-monorepo",
+  "name": "figemite-monorepo",
   "private": true,
   "type": "module",
   "packageManager": "npm@10.8.2",
@@ -10,17 +10,18 @@
     "packages/*"
   ],
   "scripts": {
-    "dev": "npm -w @easel/client run dev",
+    "dev": "npm -w @figemite/client run dev",
     "lint": "eslint .",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "typecheck": "tsc -b",
     "test": "vitest run",
     "test:watch": "vitest",
-    "test:e2e": "npm -w @easel/client run test:e2e",
-    "test:e2e:visual": "npm -w @easel/client run test:e2e:visual",
+    "test:e2e": "npm -w @figemite/client run test:e2e",
+    "test:e2e:visual": "npm -w @figemite/client run test:e2e:visual",
     "build:static": "node packages/client/scripts/build-static.mjs",
     "license:audit": "node scripts/license-audit.mjs",
+    "audit:refs": "node scripts/prepublish-audit.mjs",
     "oracle": "node scripts/oracle.mjs"
   },
   "devDependencies": {

@@ -8,7 +8,7 @@ import {
   snapToGrid,
   viewCenter,
 } from './coords.js';
-import type { BoardNode } from '@easel/shared';
+import type { BoardNode } from '@figemite/shared';
 
 describe('flowToScreen / screenToFlow', () => {
   it('screenToFlow is the inverse of flowToScreen at identity viewport', () => {

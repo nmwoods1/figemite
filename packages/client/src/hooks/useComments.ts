@@ -1,17 +1,17 @@
 // ── useComments: comments.json state + mutations ─────────────────────────────
 //
 // Comments live in boards/<slug>/comments.json — a file SEPARATE from the Yjs
-// board doc (@easel/shared's model/comments.ts module doc: "the AI loop can
+// board doc (@figemite/shared's model/comments.ts module doc: "the AI loop can
 // rewrite board.json wholesale without touching human discussion"). They do
 // NOT sync via Yjs; this hook fetches the file on mount via `lib/boards-api.ts`'s
 // `fetchComments` and persists every mutation immediately via `saveComments`
 // (save-on-each-change, simplest correct option for a low-frequency, file-based
 // resource — no debouncing needed).
 //
-// Ported mutation semantics from the legacy figmalade prototype's `src/lib/
+// Ported mutation semantics from the original prototype's `src/lib/
 // comment-io.ts` (addComment/addReply/toggleResolved/deleteComment), with two
 // deviations:
-//   - ids come from `@easel/shared`'s `generateId(prefix, existingIds)` (this
+//   - ids come from `@figemite/shared`'s `generateId(prefix, existingIds)` (this
 //     codebase's one id-generation convention — see board-io.ts) rather than
 //     the legacy's bespoke `c-<timestamp>-<rand>` uid.
 //   - author identity comes from `lib/identity.ts`'s `getLocalUser()` (the
@@ -31,8 +31,8 @@
 // readonly guard.
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { generateId } from '@easel/shared';
-import type { BoardComment, CommentTarget, CommentsFile } from '@easel/shared';
+import { generateId } from '@figemite/shared';
+import type { BoardComment, CommentTarget, CommentsFile } from '@figemite/shared';
 import { fetchComments, saveComments } from '../lib/boards-api.js';
 import { getLocalUser } from '../lib/identity.js';
 

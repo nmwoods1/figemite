@@ -2,7 +2,7 @@
 // convergence against LIVE mixed writes
 //
 // This is the explicit Phase-5 gate assertion for the MCP AI-peer: a real
-// `@easel/server` (`startServer`), a real `BoardPeer` (real WebsocketProvider,
+// `@figemite/server` (`startServer`), a real `BoardPeer` (real WebsocketProvider,
 // real `ws` socket) driving every board-editing tool
 // (`add_node`/`move_node`/`set_node_text`/`add_edge`/`add_drawing`), and a
 // SECOND, independent provider on the same room proving live convergence.
@@ -20,7 +20,7 @@
 //   B. The MCP peer's awareness state carries `isAI: true` (and its
 //      `agentClient` tag), matching what a human client's PresenceLayer would
 //      read to render a distinct AI cursor/badge (hooks/usePresence.ts,
-//      components/PresenceLayer.tsx in @easel/client).
+//      components/PresenceLayer.tsx in @figemite/client).
 //   D. After a MIX of MCP-peer writes AND a second, independent (non-MCP)
 //      provider's writes on the SAME room, every peer's `getSnapshot()` is
 //      byte-identical via the canonical `serialise()` (assembled into a full
@@ -43,8 +43,8 @@ import {
   serialise,
   type BoardFile,
   type AwarenessState,
-} from '@easel/shared';
-import { BoardRepository, startServer, type StartedServer } from '@easel/server';
+} from '@figemite/shared';
+import { BoardRepository, startServer, type StartedServer } from '@figemite/server';
 import { BoardPeer } from './peer.js';
 import { addNode, moveNode, setNodeText, addEdge, addDrawing, getBoard } from './tools.js';
 
@@ -82,7 +82,7 @@ interface Harness {
 }
 
 async function startHarness(): Promise<Harness> {
-  const boardsRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'easel-ai-peer-gate-'));
+  const boardsRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'figemite-ai-peer-gate-'));
   const repo = new BoardRepository(boardsRoot);
   repo.write(SLUG, [], { ...emptyBoard('Gate Board'), nodes: [], edges: [] } as BoardFile);
 
@@ -103,7 +103,7 @@ async function stopHarness(h: Harness): Promise<void> {
 
 /** Connects a second, independent (non-MCP) provider to the same room —
  * stands in for "a browser client's realtime provider" without pulling in
- * @easel/client, mirroring yjs-persistence.test.ts's `connectProvider`. */
+ * @figemite/client, mirroring yjs-persistence.test.ts's `connectProvider`. */
 function connectObserver(h: Harness, doc: Y.Doc): WebsocketProvider {
   return new WebsocketProvider(h.wsUrl, roomNameFor(SLUG, []), doc, {
     WebSocketPolyfill: WebSocket as unknown as typeof globalThis.WebSocket,
@@ -337,7 +337,7 @@ describe('Phase 5 gate D: convergence guarantee against LIVE mixed MCP + provide
         const aiNodeId = addNode(peer, { type: 'sticky', pos: { x: 1, y: 1 }, color: '#fef3c7' });
         moveNode(peer, aiNodeId, { x: 50, y: 60 });
 
-        const { addNode: addNodeOp, makeShapeNode } = await import('@easel/shared');
+        const { addNode: addNodeOp, makeShapeNode } = await import('@figemite/shared');
         const humanNodeId = 'human-shape-1';
         addNodeOp(
           providerDoc,

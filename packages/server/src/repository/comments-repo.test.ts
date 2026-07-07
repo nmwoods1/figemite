@@ -3,13 +3,13 @@ import fsSync from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import type { CommentsFile } from '@easel/shared';
+import type { CommentsFile } from '@figemite/shared';
 import { readComments, writeComments } from './comments-repo.js';
 
 let tmpRoot: string;
 
 beforeEach(async () => {
-  tmpRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'easel-comments-repo-'));
+  tmpRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'figemite-comments-repo-'));
   fsSync.mkdirSync(path.join(tmpRoot, 'my-board'), { recursive: true });
 });
 

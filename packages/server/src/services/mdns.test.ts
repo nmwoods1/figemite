@@ -58,7 +58,7 @@ describe('MdnsService default-off behaviour', () => {
 });
 
 describe('MdnsService enabled behaviour', () => {
-  it('publishes exactly one service with type easel, the given port, and a TXT record', () => {
+  it('publishes exactly one service with type figemite, the given port, and a TXT record', () => {
     const bonjour = fakeBonjour();
     const makeBonjour = vi.fn(() => bonjour);
     const service = new MdnsService({
@@ -73,7 +73,7 @@ describe('MdnsService enabled behaviour', () => {
 
     expect(bonjour.publish).toHaveBeenCalledTimes(1);
     const config = bonjour.publish.mock.calls[0][0];
-    expect(config.type).toBe('easel');
+    expect(config.type).toBe('figemite');
     expect(config.port).toBe(5400);
     expect(config.txt).toEqual({ name: 'my-host', boards: 'spend,planning' });
   });

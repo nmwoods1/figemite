@@ -1,6 +1,6 @@
 // ── Client-side hash router ──────────────────────────────────────────────────
 //
-// Ported from the figmalade prototype's `src/lib/router.ts`. The hash router
+// Ported from the original prototype's `src/lib/router.ts`. The hash router
 // maps URL fragments to one of four views:
 //   #/                       → tagList   (default — the tag cards screen)
 //   #/untagged               → untagged  (boards with no tags)
@@ -8,7 +8,7 @@
 //   #/<slug>[/<seg>/<seg>…]  → board     (canvas for a board or sub-board)
 //
 // Deviation from the legacy shape: the `board` view's slug field is named
-// `slug` here (matching the P2-T15 spec), not `board` as in figmalade's
+// `slug` here (matching the P2-T15 spec), not `board` as in the prototype's
 // `AppView`. Everything else — routes, encoding, round-trip behaviour — is
 // ported faithfully.
 

@@ -1,15 +1,15 @@
 // ── lib/identity.ts tests ────────────────────────────────────────────────────
 //
 // getLocalUser/setLocalUser persist a display name to localStorage and derive
-// a stable color from it via @easel/shared's colorForName. Ported intent from
-// the legacy figmalade prototype's getStoredAuthor/setStoredAuthor
+// a stable color from it via @figemite/shared's colorForName. Ported intent from
+// the original prototype's getStoredAuthor/setStoredAuthor
 // (src/lib/comment-io.ts) + realtime.ts's getLocalUser, ADAPTED so a name is
 // never silently invented (no `guest-xxxxx` random fallback) — P29's
 // IdentityPrompt is what asks a first-time user for a name; getLocalUser's
 // contract here is just "read/derive from whatever is stored right now".
 
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { colorForName } from '@easel/shared';
+import { colorForName } from '@figemite/shared';
 import { getLocalUser, setLocalUser, hasStoredUser } from './identity.js';
 
 describe('identity', () => {

@@ -1,6 +1,6 @@
 // CardinalityEdge: an ER-style edge — the path plus cardinality pills
 // (1:1/1:N/N:1/N:N) near each endpoint, NO arrowheads, solid/dashed stroke,
-// optional verb label. Ported from figmalade's CardinalityEdge.tsx. P4-T24
+// optional verb label. Ported from the prototype's CardinalityEdge.tsx. P4-T24
 // wires both inline affordances the legacy had: double-click the center
 // label to edit it (same `useEditableText` pattern as ArrowEdge), and click
 // either pill to toggle that side's cardinality (1<->N) via

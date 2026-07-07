@@ -1,6 +1,6 @@
 // ── Dashboard (board list, filtered by tag or untagged) ─────────────────────
 //
-// Ported from the figmalade prototype's `src/components/Dashboard.tsx`
+// Ported from the original prototype's `src/components/Dashboard.tsx`
 // (there named `BoardList`). Deviations:
 //   - Fetches via `lib/boards-api.ts`'s `listBoards()` instead of a raw
 //     `fetch('/api/boards')` / `fetch('boards/index.json')` — the READONLY

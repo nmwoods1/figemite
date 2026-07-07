@@ -1,6 +1,6 @@
 // ── CardinalityEdge ───────────────────────────────────────────────────────────
 //
-// Ported from figmalade's CardinalityEdge.tsx: an ER-style edge — the path
+// Ported from the prototype's CardinalityEdge.tsx: an ER-style edge — the path
 // plus cardinality pills (1:1/1:N/N:1/N:N) near each endpoint, deliberately
 // with NO arrowheads (cardinality notation communicates direction/multiplicity
 // via the pills, not an arrowhead), solid/dashed stroke, and an optional verb
@@ -19,7 +19,7 @@
 
 import { EdgeLabelRenderer, getBezierPath, Position } from '@xyflow/react';
 import type { Edge, EdgeProps } from '@xyflow/react';
-import type { Cardinality, LineStyle } from '@easel/shared';
+import type { Cardinality, LineStyle } from '@figemite/shared';
 import { useEditableText } from '../nodes/useEditableText.js';
 
 export interface CardinalityEdgeData extends Record<string, unknown> {

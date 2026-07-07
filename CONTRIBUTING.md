@@ -1,6 +1,4 @@
-# Contributing to easel
-
-> "easel" is a placeholder codename and will be renamed before any public release.
+# Contributing to Figemite
 
 ## Development setup
 
@@ -18,12 +16,12 @@ npm run license:audit
 ## Monorepo conventions
 
 This repository is an npm-workspaces monorepo built with TypeScript project
-references (`tsc -b`). Packages live under `packages/*` and use the `@easel/*`
+references (`tsc -b`). Packages live under `packages/*` and use the `@figemite/*`
 scope.
 
 **Project-reference rule (required):** when you add another workspace package
 to a package's runtime dependencies, you must also add it to that package's
-TypeScript project references. Concretely, whenever you add `@easel/X` to a
+TypeScript project references. Concretely, whenever you add `@figemite/X` to a
 package's `package.json` `dependencies`, you MUST also add
 `{ "path": "../X" }` to that same package's `tsconfig.json` `references`.
 
@@ -36,11 +34,11 @@ soon as the referenced package changes.
 ## Legacy oracle (local only)
 
 `npm run oracle` runs `scripts/oracle.mjs` against a local legacy boards
-directory (default `/Users/nickwoods/Projects/figmalade/boards`, overridable
-via an argument or `ORACLE_BOARDS_DIR`) to prove the current model can ingest
-real boards without silent data loss. It requires private local data that CI
-does not have, so it is **not** run in CI — run it manually on a dev machine
-after `npm run typecheck`.
+directory to prove the current model can ingest real boards without silent
+data loss. The boards directory is required — pass it as an argument or set
+`ORACLE_BOARDS_DIR`; there is no default. It requires private local data that
+CI does not have, so it is **not** run in CI — run it manually on a dev
+machine after `npm run typecheck`.
 
 ## Commit messages
 

@@ -7,7 +7,7 @@
 // history — matching legacy.
 
 import type { IncomingMessage, ServerResponse } from 'node:http';
-import { SlugSchema, parseTagsFile } from '@easel/shared';
+import { SlugSchema, parseTagsFile } from '@figemite/shared';
 import { getQuery, readJsonBody, sendJson } from '../../http/body.js';
 import { readTags, writeTags } from '../../repository/tags-repo.js';
 import { ValidationError } from '../errors.js';

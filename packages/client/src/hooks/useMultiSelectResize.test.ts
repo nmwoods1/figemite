@@ -10,7 +10,7 @@
 
 import { describe, it, expect } from 'vitest';
 import { renderHook, act } from '@testing-library/react';
-import type { BoardFile } from '@easel/shared';
+import type { BoardFile } from '@figemite/shared';
 import { createBoardStore } from '../store/board-store.js';
 import { useMultiSelectResize } from './useMultiSelectResize.js';
 

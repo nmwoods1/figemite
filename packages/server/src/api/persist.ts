@@ -34,7 +34,7 @@
 // is being torn down). The router still maps a `LockedError` to 409 if any
 // future caller chooses to throw one, but persistBoard never throws it itself.
 
-import type { BoardFile } from '@easel/shared';
+import type { BoardFile } from '@figemite/shared';
 import type { BoardRepository } from '../repository/board-repo.js';
 import type { SnapshotHistoryService, SnapshotTrigger } from '../services/snapshot-history.js';
 

@@ -53,7 +53,7 @@ import {
 // dimensions). Flagged in P3-T20 (warning #013); fixed here so the P3-T21
 // structural-parity gate measures a correctly-styled canvas.
 import '@xyflow/react/dist/style.css';
-import type { BoardFile } from '@easel/shared';
+import type { BoardFile } from '@figemite/shared';
 import { createBoardStore } from '../store/board-store.js';
 import type { BoardStore } from '../store/board-store.js';
 import { useBoardStore } from '../store/use-board-store.js';
@@ -85,7 +85,7 @@ import { AnnotationLayer } from '../components/AnnotationLayer.js';
 import { nodeLabel } from './node-label.js';
 import { getFlowPointer } from './coords.js';
 import { getLocalUser } from '../lib/identity.js';
-import { ANNOTATIONS } from '@easel/shared';
+import { ANNOTATIONS } from '@figemite/shared';
 
 export interface BoardCanvasProps {
   board: BoardFile;

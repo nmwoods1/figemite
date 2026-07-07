@@ -1,6 +1,6 @@
 // ── buildStaticBoards — repo-driven static-board export (P1-T13) ────────────
 //
-// Ports the repo-driven half of the figmalade prototype's
+// Ports the repo-driven half of the original prototype's
 // `scripts/build-static.mjs` (steps 3-4: copy board/comments/tags files, write
 // `boards/index.json`) into a standalone, reusable function. Deliberately
 // excludes step 2 (`vite build`) and step 5 (`dist/` -> `public/` rename) —

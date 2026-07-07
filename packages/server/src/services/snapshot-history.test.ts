@@ -3,7 +3,7 @@ import fsSync from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { emptyBoard, serialise } from '@easel/shared';
+import { emptyBoard, serialise } from '@figemite/shared';
 import { BoardRepository } from '../repository/board-repo.js';
 import { historyDir } from '../repository/paths.js';
 import { SnapshotHistoryService, thinSnapshots, type SnapshotMeta } from './snapshot-history.js';
@@ -13,7 +13,7 @@ let repo: BoardRepository;
 let service: SnapshotHistoryService;
 
 beforeEach(async () => {
-  tmpRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'easel-snapshot-history-'));
+  tmpRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'figemite-snapshot-history-'));
   repo = new BoardRepository(tmpRoot);
   service = new SnapshotHistoryService(tmpRoot);
 });

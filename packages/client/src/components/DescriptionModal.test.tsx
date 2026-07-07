@@ -1,6 +1,6 @@
 // ── DescriptionModal ──────────────────────────────────────────────────────────
 //
-// Ported from the legacy figmalade prototype's DescriptionModal.tsx: a TipTap
+// Ported from the original prototype's DescriptionModal.tsx: a TipTap
 // markdown editor for a node's `description`. Same library set
 // (@tiptap/react + starter-kit + extension-list + markdown), same edit/
 // view-only split. Deviations are purely about wiring: the legacy took a

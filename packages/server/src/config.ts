@@ -15,7 +15,7 @@ export interface ServerConfig {
    * Bind host for the HTTP server. Defaults to `127.0.0.1` — the plan's
    * local-first-safe-default: the server binds to loopback only unless a
    * caller explicitly opts into a LAN-reachable host (e.g. `0.0.0.0`, as the
-   * legacy figmalade dev server did unconditionally). Not wired to an actual
+   * original prototype dev server did unconditionally). Not wired to an actual
    * `listen()` call in this phase.
    */
   host?: string;

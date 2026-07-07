@@ -1,14 +1,14 @@
 // ── CommentThread: the expanded comment + replies view ───────────────────────
 //
 // Ported (structure/behavior, visual design kept close) from the legacy
-// figmalade prototype's `src/components/CommentThread.tsx`, rewired onto this
+// original prototype's `src/components/CommentThread.tsx`, rewired onto this
 // rewrite's `useComments`-shaped callbacks (`onReply`/`onToggleResolved`/
 // `onDelete`, all keyed by the comment's own id) instead of the legacy's
 // bespoke mutate-and-persist closures, and a `readonly` prop (rather than
 // importing `app/mode.ts`'s `READONLY` directly) so this stays pure
 // presentation — CommentLayer decides whether write affordances show.
 import { useState } from 'react';
-import type { BoardComment } from '@easel/shared';
+import type { BoardComment } from '@figemite/shared';
 
 export interface CommentThreadProps {
   comment: BoardComment;

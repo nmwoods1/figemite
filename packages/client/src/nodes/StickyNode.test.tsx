@@ -1,4 +1,4 @@
-// StickyNode: a colored note with editable text. Ported from figmalade's
+// StickyNode: a colored note with editable text. Ported from the prototype's
 // StickyNode.tsx — markup/styling close to legacy, minus resize/rotate
 // handlers (Phase 4) and the drill-in sub-board badge (out of scope here;
 // only the description badge seam is built in P3-T19).

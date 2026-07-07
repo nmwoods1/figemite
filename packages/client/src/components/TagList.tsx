@@ -1,10 +1,10 @@
 // ── TagList (home view — browse by tag) ──────────────────────────────────────
 //
-// Ported from the figmalade prototype's `src/components/TagList.tsx`.
+// Ported from the original prototype's `src/components/TagList.tsx`.
 // Deviations: fetches via `lib/boards-api.ts`'s `listBoards()` instead of raw
 // `fetch`; grouping via `lib/tags.ts`'s `groupByTag`. The prototype's fixed
-// "AirJam" product-name heading is replaced with "Boards" to stay
-// product-agnostic in the new app.
+// product-name heading is replaced with "Boards" to stay product-agnostic in
+// the new app.
 import { useEffect, useState } from 'react';
 import { READONLY } from '../app/mode.js';
 import { listBoards, type BoardListItem } from '../lib/boards-api.js';

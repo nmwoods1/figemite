@@ -4,7 +4,7 @@
 // browser CONTEXTS (not just tabs — separate cookie/storage jars, exactly
 // like two different humans on two different machines) open the SAME
 // editable board against the REAL dev server (`webServer` in
-// `playwright.config.ts` — Vite + the mounted `@easel/server` backend, the
+// `playwright.config.ts` — Vite + the mounted `@figemite/server` backend, the
 // same one `interaction.spec.ts` exercises), and prove:
 //
 //   A. Multi-peer sync: an edit committed in page A (create a node, drag,
@@ -135,7 +135,7 @@ function nodeLocator(page: Page, id: string) {
  * generated string captured at runtime. */
 async function newIdentifiedContext(browser: Browser, name: string): Promise<BrowserContext> {
   const context = await browser.newContext();
-  await context.addInitScript((n) => window.localStorage.setItem('easel:author', n), name);
+  await context.addInitScript((n) => window.localStorage.setItem('figemite:author', n), name);
   return context;
 }
 

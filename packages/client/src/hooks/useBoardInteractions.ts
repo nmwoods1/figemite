@@ -1,11 +1,11 @@
 // ── useBoardInteractions: keyboard, clipboard, layers, alt-drag ──────────────
 //
-// P4-T27. Ported from the legacy figmalade prototype's `src/components/
+// P4-T27. Ported from the original prototype's `src/components/
 // BoardCanvas.tsx` (~L1063-1236 alt-drag / clipboard / layer handlers,
 // ~L1774-1811 the global keydown handler), rewired onto this codebase's
 // doc-first `BoardStore` mutation API instead of the legacy's whole-board
 // `commit()` reducer. Every mutation lands through a named store method, each
-// of which runs a shared `@easel/shared` CRDT op under `LOCAL_ORIGIN`
+// of which runs a shared `@figemite/shared` CRDT op under `LOCAL_ORIGIN`
 // (crdt/ops.ts) — which is exactly what `useUndoRedo` (Y.UndoManager scoped to
 // `LOCAL_ORIGIN`) already observes, and (P5-T28) what the SERVER'S OWN
 // `doc.on('update', ...)` persistence listener observes on its side of the
@@ -70,8 +70,8 @@
 
 import { useCallback, useEffect, useMemo, useRef } from 'react';
 import type { OnNodeDrag } from '@xyflow/react';
-import { generateId, reorderLayers } from '@easel/shared';
-import type { BoardEdge, BoardNode, LayerOp } from '@easel/shared';
+import { generateId, reorderLayers } from '@figemite/shared';
+import type { BoardEdge, BoardNode, LayerOp } from '@figemite/shared';
 import type { BoardStore } from '../store/board-store.js';
 import type { BoardRfNode } from '../canvas/rf-adapters.js';
 

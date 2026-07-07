@@ -6,15 +6,15 @@
 // editing a board in DEV mode (`READONLY` is a build-time flag that defaults
 // off — see app/mode.ts — so `npx vite` here serves the editable pane) and
 // asserting BOTH the on-screen result AND persistence to disk, by reading the
-// board's `board.json` back off the dev server's `EASEL_BOARDS_DIR`
+// board's `board.json` back off the dev server's `FIGEMITE_BOARDS_DIR`
 // (playwright.config.ts's `webServer.env`, resolved the same way
-// `easel-server-plugin.ts`'s `resolveDevBoardsRoot` resolves it for the
+// `figemite-server-plugin.ts`'s `resolveDevBoardsRoot` resolves it for the
 // running server).
 //
 // P5-T29: persistence no longer flows client -> server via POST. Every edit
 // here commits to the doc-first store, which is now backed by a
 // `WebsocketProvider` joined to the dev server's realtime room
-// (`src/dev/easel-server-plugin.ts` mounts `@easel/server`'s
+// (`src/dev/figemite-server-plugin.ts` mounts `@figemite/server`'s
 // `YjsWebsocketService`, P5-T28, on the SAME dev-server port/process this
 // spec's `webServer` starts). The SERVER seeds that room from `board.json` and
 // debounce-persists it back (`YjsWebsocketService`'s
@@ -337,7 +337,7 @@ test.describe('single-user editing parity + persistence (Phase 4 gate)', () => {
     // every navigation) skips that prompt entirely, exactly like a returning
     // user — mirrors `multiplayer.spec.ts`'s `newIdentifiedContext` helper.
     await context.addInitScript(
-      (n) => window.localStorage.setItem('easel:author', n),
+      (n) => window.localStorage.setItem('figemite:author', n),
       'Interaction Tester',
     );
   });

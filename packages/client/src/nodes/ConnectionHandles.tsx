@@ -3,7 +3,7 @@
 // Ported from the identical top/right/bottom/left `<Handle>` block that was
 // copy-pasted across StickyNode/ShapeNode/EmojiNode/IconNode in the legacy
 // prototype. `id`s ('t'/'r'/'b'/'l') match the legacy exactly since
-// `BoardEdge.sourceHandle`/`targetHandle` (see @easel/shared) persist these
+// `BoardEdge.sourceHandle`/`targetHandle` (see @figemite/shared) persist these
 // ids — changing them would break existing board files' edge endpoints.
 //
 // CRITICAL: the handle elements ALWAYS render, even on a read-only board.

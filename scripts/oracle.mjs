@@ -2,8 +2,8 @@
 // ── Legacy oracle harness (LOCAL ONLY — not run in CI) ──────────────────────
 //
 // Purpose: prove the new v1.0 model (packages/shared) can ingest EVERY real
-// legacy board — from a private, non-versioned boards directory such as
-// figmalade's `boards/` — without silent data loss.
+// legacy board — from a private, non-versioned boards directory supplied by
+// the caller — without silent data loss.
 //
 // This is intentionally a plain Node script, not a vitest test: it reads
 // private local data that CI does not have access to, and never should.
@@ -13,13 +13,12 @@
 //     field NAMES, counts, and error messages.
 //   - Never copy anything from the boards dir into this repo.
 //
-// Usage:
-//   npm run oracle                          # defaults to figmalade's boards/
+// Usage (the boards dir is REQUIRED — there is no default):
 //   node scripts/oracle.mjs /path/to/boards
-//   ORACLE_BOARDS_DIR=/path/to/boards node scripts/oracle.mjs
+//   ORACLE_BOARDS_DIR=/path/to/boards npm run oracle
 //
 // Prerequisite: `npm run typecheck` must have been run at least once so
-// packages/shared/dist exists (this script imports the BUILT @easel/shared,
+// packages/shared/dist exists (this script imports the BUILT @figemite/shared,
 // not the TypeScript source, to avoid needing a TS loader).
 
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
@@ -33,15 +32,23 @@ const sharedDistIndex = join(repoRoot, 'packages', 'shared', 'dist', 'index.js')
 if (!existsSync(sharedDistIndex)) {
   console.error(
     `error: ${sharedDistIndex} does not exist.\n` +
-      `Run "npm run typecheck" first to build @easel/shared before running the oracle.`,
+      `Run "npm run typecheck" first to build @figemite/shared before running the oracle.`,
   );
   process.exit(1);
 }
 
 const { deserialise, serialise, parseCommentsFile, parseTagsFile } = await import(sharedDistIndex);
 
-const DEFAULT_BOARDS_DIR = '/Users/nickwoods/Projects/figmalade/boards';
-const boardsDir = process.argv[2] || process.env.ORACLE_BOARDS_DIR || DEFAULT_BOARDS_DIR;
+const boardsDir = process.argv[2] || process.env.ORACLE_BOARDS_DIR;
+
+if (!boardsDir) {
+  console.error(
+    'error: no boards directory supplied.\n' +
+      'Usage: node scripts/oracle.mjs /path/to/boards\n' +
+      '   or: ORACLE_BOARDS_DIR=/path/to/boards node scripts/oracle.mjs',
+  );
+  process.exit(1);
+}
 
 if (!existsSync(boardsDir)) {
   console.error(`error: boards dir does not exist: ${boardsDir}`);

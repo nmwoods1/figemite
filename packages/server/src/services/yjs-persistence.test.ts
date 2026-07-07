@@ -24,7 +24,7 @@ import {
   addNode,
   moveNode,
   type BoardFile,
-} from '@easel/shared';
+} from '@figemite/shared';
 import { YjsWebsocketService } from './yjs-ws.js';
 import { BoardRepository } from '../repository/board-repo.js';
 import { SnapshotHistoryService } from '../services/snapshot-history.js';
@@ -42,7 +42,7 @@ interface Harness {
 const DEBOUNCE_MS = 50;
 
 async function startHarness(): Promise<Harness> {
-  const boardsRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'easel-yjs-persist-'));
+  const boardsRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'figemite-yjs-persist-'));
   const repo = new BoardRepository(boardsRoot);
   const history = new SnapshotHistoryService(boardsRoot);
   const suppressed: Array<{ slug: string; subPath: string[] }> = [];
@@ -345,7 +345,7 @@ describe('metadata (boardLabel/viewport) preserved across a doc-driven persist',
 
 describe('dispose flushes a pending write', () => {
   it('flushes a debounced write immediately on dispose, before the debounce would have fired', async () => {
-    const boardsRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'easel-yjs-persist-dispose-'));
+    const boardsRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'figemite-yjs-persist-dispose-'));
     const repo = new BoardRepository(boardsRoot);
     const history = new SnapshotHistoryService(boardsRoot);
     repo.seedBoard('my-board', 'My Board');

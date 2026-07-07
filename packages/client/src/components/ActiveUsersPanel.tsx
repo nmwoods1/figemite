@@ -1,7 +1,7 @@
 // ── ActiveUsersPanel: floating "who's online" panel ─────────────────────────
 //
 // P5-T30. Ported (structure/behavior, not pixel-for-pixel styling) from the
-// legacy figmalade prototype's `src/components/ActiveUsersPanel.tsx` —
+// original prototype's `src/components/ActiveUsersPanel.tsx` —
 // colored dot + name per online user, a Follow button per remote — adapted
 // to take plain data (`localUser`/`remotes`, sourced from
 // `hooks/usePresence.ts`) and follow-mode state as props
@@ -10,7 +10,7 @@
 // component pure render logic. Each row shows an explicit "Follow"/"Stop"
 // button (rather than the legacy's click-the-avatar-to-toggle gesture),
 // which keeps every entry's control unambiguous for both users and tests.
-import type { PresenceUser } from '@easel/shared';
+import type { PresenceUser } from '@figemite/shared';
 import type { RemotePresence } from '../hooks/usePresence.js';
 
 export interface ActiveUsersPanelProps {

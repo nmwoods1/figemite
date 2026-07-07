@@ -3,7 +3,7 @@ import fsSync from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { emptyBoard, makeStickyNode, deserialise, type BoardFile } from '@easel/shared';
+import { emptyBoard, makeStickyNode, deserialise, type BoardFile } from '@figemite/shared';
 import { BoardRepository } from '../repository/board-repo.js';
 import { SnapshotHistoryService } from '../services/snapshot-history.js';
 import { FileWatcher } from '../services/file-watcher.js';
@@ -36,7 +36,7 @@ function makeCtx(root: string): TestCtx {
 }
 
 beforeEach(async () => {
-  tmpRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'easel-persist-'));
+  tmpRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'figemite-persist-'));
   ctx = makeCtx(tmpRoot);
 });
 

@@ -3,7 +3,7 @@
 // Mounts a y-websocket-compatible relay on an existing `http.Server`. Each
 // board (and sub-board) gets its own room, keyed by `<slug>` or
 // `<slug>.<NodeId>.<SubId>` — clients connect to `ws://<host>:<port>/yjs/<room>`.
-// Ported from the figmalade prototype's `yjsPlugin()` Vite plugin
+// Ported from the original prototype's `yjsPlugin()` Vite plugin
 // (vite.config.ts ~785-806).
 //
 // Vite's HMR (Phase 2) uses the same HTTP server for its own WebSocket
@@ -15,7 +15,7 @@
 //
 // y-websocket's server-side room/doc bookkeeping lives in its CJS-only
 // `y-websocket/bin/utils` subpath export (there is no ESM build of it — see
-// the package's `exports` map). `@easel/server` is an ESM package
+// the package's `exports` map). `@figemite/server` is an ESM package
 // (`"type": "module"`), but Node's ESM loader supports named imports from a
 // CJS module via static analysis of its `module.exports` shape (cjs-module-
 // lexer), so `import { setupWSConnection } from 'y-websocket/bin/utils'`
@@ -122,7 +122,7 @@ import { WebSocketServer } from 'ws';
 // @ts-expect-error -- untyped CJS subpath export, see module doc above
 import { setupWSConnection, setPersistence } from 'y-websocket/bin/utils';
 import * as Y from 'yjs';
-import { FORMAT_VERSION, getSnapshot, loadBoardIntoDoc, type BoardFile } from '@easel/shared';
+import { FORMAT_VERSION, getSnapshot, loadBoardIntoDoc, type BoardFile } from '@figemite/shared';
 import type { BoardRepository } from '../repository/board-repo.js';
 import type { SnapshotHistoryService } from './snapshot-history.js';
 import { parseRoomName } from './room-name.js';

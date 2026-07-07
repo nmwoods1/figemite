@@ -1,7 +1,7 @@
 // ── SseHub ───────────────────────────────────────────────────────────────────
 //
 // Manages Server-Sent-Events subscribers per board/sub-board key. Ported from
-// the figmalade prototype's `sseSubscribers` map + `broadcast()` helper
+// the original prototype's `sseSubscribers` map + `broadcast()` helper
 // embedded in the dev-server Vite plugin (vite.config.ts ~356-367, ~640-668)
 // into a standalone, transport-testable service: it depends only on a small
 // `write(chunk): void` + optional `on('close', ...)` shape (satisfied by

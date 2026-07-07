@@ -2,14 +2,14 @@
 //
 // The expanded thread view: the root comment + its replies (author, time,
 // text), a reply box, a resolve/unresolve toggle, and delete. Ported
-// (structure/behavior) from the legacy figmalade prototype's
+// (structure/behavior) from the original prototype's
 // `src/components/CommentThread.tsx`, rewired onto this rewrite's
 // `useComments`-shaped callback props instead of the legacy's bespoke
 // mutate-and-persist closures.
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
-import type { BoardComment } from '@easel/shared';
+import type { BoardComment } from '@figemite/shared';
 import { CommentThread } from './CommentThread.js';
 
 function fixtureComment(overrides: Partial<BoardComment> = {}): BoardComment {

@@ -1,6 +1,6 @@
 // ── PresenceLayer: remote cursors + editing outlines ────────────────────────
 //
-// P5-T30. Ported from the legacy figmalade prototype's
+// P5-T30. Ported from the original prototype's
 // `src/components/PresenceLayer.tsx` (visual style kept faithfully — colored
 // arrow cursor + name pill, colored outline + "{name} editing" pill), adapted
 // to this codebase's conventions:
@@ -24,7 +24,7 @@
 // inside the same measured container. Reads the live viewport via
 // `useViewport()` (requires a `<ReactFlowProvider>`/`<ReactFlow>` ancestor).
 import { useViewport } from '@xyflow/react';
-import type { BoardNode } from '@easel/shared';
+import type { BoardNode } from '@figemite/shared';
 import type { RemotePresence } from '../hooks/usePresence.js';
 import { flowToScreen, nodeRect } from '../canvas/coords.js';
 

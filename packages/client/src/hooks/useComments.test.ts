@@ -1,19 +1,19 @@
 // ── useComments tests ─────────────────────────────────────────────────────────
 //
 // Comments live in boards/<slug>/comments.json — a file SEPARATE from the Yjs
-// board doc (the AI/CRDT loop never touches it; see @easel/shared's
+// board doc (the AI/CRDT loop never touches it; see @figemite/shared's
 // model/comments.ts module doc). This hook is the one place that loads that
 // file for a board and exposes mutations that update local state AND persist
 // via `lib/boards-api.ts`'s `saveComments`.
 //
-// Ported semantics from the legacy figmalade prototype's `src/lib/
+// Ported semantics from the original prototype's `src/lib/
 // comment-io.ts` (addComment/addReply/toggleResolved/deleteComment), but
-// ids now come from `@easel/shared`'s `generateId` (not a bespoke `c-<ts>-
+// ids now come from `@figemite/shared`'s `generateId` (not a bespoke `c-<ts>-
 // <rand>` uid) and identity from `lib/identity.ts`'s `getLocalUser`.
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { renderHook, act } from '@testing-library/react';
-import type { CommentsFile } from '@easel/shared';
+import type { CommentsFile } from '@figemite/shared';
 import { useComments } from './useComments.js';
 
 const boardsApiMock = vi.hoisted(() => ({

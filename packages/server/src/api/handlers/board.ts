@@ -17,7 +17,7 @@ import {
   emptyBoard,
   parseBoardFile,
   type BoardFile,
-} from '@easel/shared';
+} from '@figemite/shared';
 import { getQuery, parsePathParam, readJsonBody, sendJson } from '../../http/body.js';
 import { persistBoard } from '../persist.js';
 import { LockedError, NotFoundError, ValidationError } from '../errors.js';

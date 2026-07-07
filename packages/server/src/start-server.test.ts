@@ -31,7 +31,7 @@ describe('startServer', () => {
   });
 
   it('binds to an ephemeral port on 127.0.0.1 by default and resolves a usable url', async () => {
-    boardsRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'easel-start-server-'));
+    boardsRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'figemite-start-server-'));
     handle = await startServer({ boardsRoot, port: 0 });
 
     expect(handle.url).toMatch(/^http:\/\/127\.0\.0\.1:\d+$/);
@@ -42,7 +42,7 @@ describe('startServer', () => {
   });
 
   it('sets requestTimeout/headersTimeout/keepAliveTimeout to the configured budget', async () => {
-    boardsRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'easel-start-server-'));
+    boardsRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'figemite-start-server-'));
     handle = await startServer({ boardsRoot, port: 0, requestTimeoutMs: 12_345 });
 
     expect(handle.httpServer.requestTimeout).toBe(12_345);
@@ -51,7 +51,7 @@ describe('startServer', () => {
   });
 
   it('defaults the socket-timeout budget to 30 seconds', async () => {
-    boardsRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'easel-start-server-'));
+    boardsRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'figemite-start-server-'));
     handle = await startServer({ boardsRoot, port: 0 });
 
     expect(handle.httpServer.requestTimeout).toBe(30_000);
@@ -60,7 +60,7 @@ describe('startServer', () => {
   });
 
   it('close() resolves and leaves the http server not listening', async () => {
-    boardsRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'easel-start-server-'));
+    boardsRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'figemite-start-server-'));
     handle = await startServer({ boardsRoot, port: 0 });
 
     await handle.close();
@@ -72,7 +72,7 @@ describe('startServer', () => {
     'relays Yjs updates between two WebsocketProvider clients through the composed server',
     { retry: 2, timeout: 15_000 },
     async () => {
-      boardsRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'easel-start-server-'));
+      boardsRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'figemite-start-server-'));
       handle = await startServer({ boardsRoot, port: 0 });
 
       const wsUrl = handle.url.replace('http://', 'ws://') + '/yjs/test-room';

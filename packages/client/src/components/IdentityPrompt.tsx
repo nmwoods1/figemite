@@ -1,6 +1,6 @@
 // ── IdentityPrompt: first-time display-name capture ─────────────────────────
 //
-// Ported from the legacy figmalade prototype's `src/components/
+// Ported from the original prototype's `src/components/
 // IdentityPrompt.tsx` (visual design kept faithfully), rewired from the
 // legacy's `setStoredAuthor` (src/lib/comment-io.ts) onto this codebase's
 // `lib/identity.ts`'s `setLocalUser` — the same stored name backs both

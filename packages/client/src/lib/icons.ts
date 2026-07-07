@@ -1,6 +1,6 @@
 // ── Icon registry ────────────────────────────────────────────────────────────
 //
-// Ported verbatim from the legacy figmalade prototype's src/lib/icons.ts.
+// Ported verbatim from the original prototype's src/lib/icons.ts.
 // Inline SVG paths for a small curated set of icons. Adding a new icon means
 // dropping its name + `paths` (one or more path-data strings) into ICONS, then
 // it shows up automatically in the toolbar's icon picker.

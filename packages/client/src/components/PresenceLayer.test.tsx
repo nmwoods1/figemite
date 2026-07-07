@@ -6,7 +6,7 @@
 // `canvas/coords.ts`'s `flowToScreen`/`nodeRect` — the SAME transform every
 // other overlay in this codebase uses (MultiSelectResizer, the toolbar's
 // viewCenter, etc.) — rather than re-deriving the screen<->flow math inline
-// (which is what the legacy figmalade PresenceLayer did).
+// (which is what the original prototype PresenceLayer did).
 //
 // `useViewport()` (from `@xyflow/react`) needs a real `<ReactFlow>` render
 // context, so tests mount inside one with a fixed `defaultViewport`, mirroring
@@ -15,7 +15,7 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { cleanup, render } from '@testing-library/react';
 import { ReactFlow } from '@xyflow/react';
-import type { BoardNode } from '@easel/shared';
+import type { BoardNode } from '@figemite/shared';
 import type { RemotePresence } from '../hooks/usePresence.js';
 import { PresenceLayer } from './PresenceLayer.js';
 

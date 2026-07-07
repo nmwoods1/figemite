@@ -1,6 +1,6 @@
 // ── multi-select-scale: pure group-resize transform ──────────────────────────
 //
-// Ported from figmalade's `handleMultiScale` (src/components/BoardCanvas.tsx
+// Ported from the prototype's `handleMultiScale` (src/components/BoardCanvas.tsx
 // ~L1507-1545): given a scale factor (sx, sy) anchored at a fixed corner and
 // each selected node's ORIGINAL flow-space rect, compute the patch to apply
 // to each node so the whole group scales as one object (Figma-style).
@@ -13,7 +13,7 @@
 //   - text: position-only (no size to scale).
 
 import { describe, it, expect } from 'vitest';
-import type { BoardNode } from '@easel/shared';
+import type { BoardNode } from '@figemite/shared';
 import { scaleNodeForGroupResize } from './multi-select-scale.js';
 import type { OriginalRect } from './multi-select-scale.js';
 

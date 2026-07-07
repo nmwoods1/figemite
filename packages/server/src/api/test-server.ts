@@ -40,7 +40,7 @@ export interface TestHarnessOptions {
 
 /** Builds a fresh temp boards dir, wires all services, and starts listening. */
 export async function startTestServer(options: TestHarnessOptions = {}): Promise<TestHarness> {
-  const boardsRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'easel-api-'));
+  const boardsRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'figemite-api-'));
   const config: ServerConfig = { boardsRoot };
 
   const repo = new BoardRepository(boardsRoot);

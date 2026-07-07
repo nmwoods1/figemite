@@ -1,8 +1,6 @@
-# easel (codename)
+# Figemite
 
 A local-first collaborative whiteboard.
-
-> "easel" is a placeholder codename and will be renamed before any public release.
 
 ## Development
 

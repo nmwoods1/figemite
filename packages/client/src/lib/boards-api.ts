@@ -2,13 +2,13 @@
 //
 // The single module every UI component uses to read/write board data. Every
 // function branches on `READONLY` (app/mode.ts):
-//   - dev mode hits the `/api/*` endpoints the mounted @easel/server exposes
+//   - dev mode hits the `/api/*` endpoints the mounted @figemite/server exposes
 //     (packages/server/src/api/router.ts) — same endpoint shapes/params.
 //   - READONLY mode fetches static JSON under `boards/` (as produced by
-//     @easel/server's `buildStaticBoards`, packages/server/src/static-export.ts)
+//     @figemite/server's `buildStaticBoards`, packages/server/src/static-export.ts)
 //     and disables every write (save/create/delete) by throwing ReadOnlyError.
 //
-// Ported from the figmalade prototype's `src/lib/comment-io.ts`,
+// Ported from the original prototype's `src/lib/comment-io.ts`,
 // `src/lib/tags-io.ts`, and the fetch logic inlined in `src/App.tsx`, unified
 // behind one module + one path-builder helper (`apiUrl` / `staticUrl`) instead
 // of scattering URL construction across components.
@@ -26,7 +26,7 @@ import {
   parseTagsFile,
   type BoardFile,
   type CommentsFile,
-} from '@easel/shared';
+} from '@figemite/shared';
 import { READONLY } from '../app/mode.js';
 
 // ── Errors ────────────────────────────────────────────────────────────────────

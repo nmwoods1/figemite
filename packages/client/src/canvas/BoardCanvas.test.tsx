@@ -20,7 +20,7 @@ import type { ComponentProps } from 'react';
 import { ReactFlow } from '@xyflow/react';
 import type { Connection } from '@xyflow/react';
 import * as Y from 'yjs';
-import type { BoardFile } from '@easel/shared';
+import type { BoardFile } from '@figemite/shared';
 import { BoardCanvas } from './BoardCanvas.js';
 import { FakeAwareness } from '../test/fake-awareness.js';
 import { setLocalUser } from '../lib/identity.js';
@@ -1014,7 +1014,7 @@ describe('BoardCanvas — pencil + annotation overlays, mode exclusivity (P6-T35
     fireEvent.pointerUp(overlay, { pointerId: 1, clientX: 60, clientY: 60 });
 
     const doc = getRoom().doc;
-    const { getSnapshot } = await import('@easel/shared');
+    const { getSnapshot } = await import('@figemite/shared');
     const { nodes } = getSnapshot(doc);
     expect(nodes.some((n) => n.type === 'drawing')).toBe(true);
   });
@@ -1046,7 +1046,7 @@ describe('BoardCanvas — pencil + annotation overlays, mode exclusivity (P6-T35
     fireEvent.pointerUp(overlay, { pointerId: 1, clientX: 60, clientY: 60 });
 
     const doc = getRoom().doc;
-    const { ANNOTATIONS, getSnapshot } = await import('@easel/shared');
+    const { ANNOTATIONS, getSnapshot } = await import('@figemite/shared');
     expect(doc.getArray(ANNOTATIONS).length).toBe(1);
     const { nodes } = getSnapshot(doc);
     expect(nodes.some((n) => n.type === 'drawing')).toBe(false);
@@ -1215,7 +1215,7 @@ describe('BoardCanvas — history panel (time-travel, P6-T36)', () => {
     // Exited preview, back to the (now-restored) live canvas.
     expect(screen.queryByText(/Previewing/)).not.toBeInTheDocument();
     // The live doc now equals the snapshot.
-    const { getSnapshot } = await import('@easel/shared');
+    const { getSnapshot } = await import('@figemite/shared');
     const liveSnapshot = getSnapshot(getRoom().doc);
     expect(liveSnapshot.nodes).toHaveLength(1);
     expect(liveSnapshot.nodes[0]).toMatchObject({

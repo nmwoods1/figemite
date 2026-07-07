@@ -1,6 +1,6 @@
 // ── Granular CRDT ops on a Y.Doc — shared by the client AND the MCP server ────
 //
-// Ported from mcp/airjam-mcp-server/src/ops.ts and reconciled with the client's
+// Ported from mcp/legacy-mcp-server/src/ops.ts and reconciled with the client's
 // sync effects in src/components/BoardCanvas.tsx. Operates directly on a
 // `Y.Doc`, using the schema constants (crdt/schema.ts) and the node↔map bridge
 // (crdt/accessors.ts) — the SINGLE definition both peers now import.
@@ -35,7 +35,7 @@ import { nodeText, nodeToSyncShape, reconstructNode } from './accessors.js';
  * Default transaction origin for a local (this-peer) mutation. A symbol so it's
  * globally unique and can't be confused with a string origin from elsewhere.
  */
-export const LOCAL_ORIGIN: unique symbol = Symbol('easel.local');
+export const LOCAL_ORIGIN: unique symbol = Symbol('figemite.local');
 
 /** Any value usable as a Yjs transaction origin. */
 export type Origin = unknown;

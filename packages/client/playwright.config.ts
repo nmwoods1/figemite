@@ -2,8 +2,8 @@
 // (P3-T21 + P4-T26)
 //
 // This is the deterministic Phase-3/4 gate: it drives a REAL Chromium against
-// the real dev server (Vite + the mounted @easel/server backend, see
-// `src/dev/easel-server-plugin.ts`) so `BoardCanvas` renders — and, for
+// the real dev server (Vite + the mounted @figemite/server backend, see
+// `src/dev/figemite-server-plugin.ts`) so `BoardCanvas` renders — and, for
 // `interaction.spec.ts`, is EDITED — in an actual browser layout/measurement/
 // input pipeline — the thing jsdom (packages/client's `vitest` suite)
 // structurally cannot do (see `canvas/BoardCanvas.test.tsx`'s module doc:
@@ -100,7 +100,7 @@ export default defineConfig({
     cwd: CLIENT_ROOT,
     url: BASE_URL,
     env: {
-      EASEL_BOARDS_DIR: path.join(REPO_ROOT, 'boards'),
+      FIGEMITE_BOARDS_DIR: path.join(REPO_ROOT, 'boards'),
     },
     // Always start a fresh server for a deterministic seed, even locally —
     // reusing a stale dev server would skip re-seeding `boards/` and could

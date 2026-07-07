@@ -1,5 +1,5 @@
 // IconNode: a registry icon (lib/icons.ts) rendered at a color + size, with
-// rotation. Ported from figmalade's IconNode.tsx — no editable text (icons
+// rotation. Ported from the prototype's IconNode.tsx — no editable text (icons
 // have no text to edit), connection handles + description badge carry over.
 
 import { createElement } from 'react';

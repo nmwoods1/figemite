@@ -1,6 +1,6 @@
 // ── MCP peer -> room -> server-persist integration test ─────────────────────
 //
-// Starts a REAL `@easel/server` (`startServer`) against a temp boards dir
+// Starts a REAL `@figemite/server` (`startServer`) against a temp boards dir
 // with a seeded board, connects a REAL `BoardPeer` (real WebsocketProvider,
 // real `ws` socket — no fakes) to its Yjs room, and calls `add_node` via the
 // peer. Asserts:
@@ -22,8 +22,8 @@ import { afterEach, describe, expect, it } from 'vitest';
 import * as Y from 'yjs';
 import { WebsocketProvider } from 'y-websocket';
 import WebSocket from 'ws';
-import { getSnapshot, roomNameFor, type BoardFile, emptyBoard } from '@easel/shared';
-import { BoardRepository, startServer, type StartedServer } from '@easel/server';
+import { getSnapshot, roomNameFor, type BoardFile, emptyBoard } from '@figemite/shared';
+import { BoardRepository, startServer, type StartedServer } from '@figemite/server';
 import { BoardPeer } from './peer.js';
 import { addNode, getBoard } from './tools.js';
 
@@ -60,7 +60,7 @@ interface Harness {
 }
 
 async function startHarness(): Promise<Harness> {
-  const boardsRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'easel-mcp-integration-'));
+  const boardsRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'figemite-mcp-integration-'));
   const repo = new BoardRepository(boardsRoot);
   repo.write('spend', [], { ...emptyBoard('Spend'), nodes: [], edges: [] } as BoardFile);
 

@@ -2,9 +2,9 @@
 //
 // Ported from the legacy Toolbar.tsx's shape popover + `ShapePreview`: a
 // 4-column grid of the 12 `SHAPE_KINDS`, each with a small SVG preview drawn
-// to match figmalade's exact preview art.
-import { SHAPE_KINDS } from '@easel/shared';
-import type { ShapeKind } from '@easel/shared';
+// to match the prototype's exact preview art.
+import { SHAPE_KINDS } from '@figemite/shared';
+import type { ShapeKind } from '@figemite/shared';
 import { POPOVER } from './styles.js';
 
 const SHAPE_LABELS: Record<ShapeKind, string> = {

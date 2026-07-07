@@ -1,6 +1,6 @@
 // ── Board file-layout path helpers ──────────────────────────────────────────
 //
-// Ported from the figmalade prototype's `vite.config.ts` (boardFile /
+// Ported from the original prototype's `vite.config.ts` (boardFile /
 // historyDir helpers embedded in the dev-server Vite plugin) into a
 // standalone, pure module with no HTTP/plugin dependencies.
 //
@@ -24,7 +24,7 @@
 // been a path-traversal hole; this module closes it structurally.
 
 import path from 'node:path';
-import { PathSegmentSchema, SlugSchema } from '@easel/shared';
+import { PathSegmentSchema, SlugSchema } from '@figemite/shared';
 
 /**
  * Throws unless `slug` and every `subPath` segment match the shared id

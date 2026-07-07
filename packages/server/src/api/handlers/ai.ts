@@ -18,7 +18,7 @@
 // the current disk state directly as the pre-AI restore point.
 
 import type { IncomingMessage, ServerResponse } from 'node:http';
-import { SlugSchema, PathSegmentSchema } from '@easel/shared';
+import { SlugSchema, PathSegmentSchema } from '@figemite/shared';
 import { getQuery, parsePathParam, readJsonBody, sendJson } from '../../http/body.js';
 import { NotFoundError, ValidationError } from '../errors.js';
 import type { RequestContext } from '../router.js';

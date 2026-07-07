@@ -1,11 +1,11 @@
 // ── Toolbar: node creation + styling controls ────────────────────────────────
 //
-// Ported from the legacy figmalade prototype's `src/components/Toolbar.tsx`
+// Ported from the original prototype's `src/components/Toolbar.tsx`
 // (visual design + affordances kept faithfully), rewired from the legacy's
 // `commit`-based board reducer to this codebase's doc-first `BoardStore`
 // mutation API (store/board-store.ts):
 //
-//   - Add-node buttons build a fresh `BoardNode` via the shared `@easel/shared`
+//   - Add-node buttons build a fresh `BoardNode` via the shared `@figemite/shared`
 //     factories (`makeStickyNode`/`makeTextNode`/…), with:
 //       - `pos` = the current ReactFlow view center (`canvas/coords.ts`'s
 //         `viewCenter`, fed the live `useReactFlow().getViewport()`) — so a
@@ -19,7 +19,7 @@
 //     mutation API didn't have a bare "add a fully-built node" method before
 //     this task (P4-T22..T24 only needed `addEdge`/`moveNode`/etc.), so this
 //     task ALSO adds `BoardStore.addNode`, a thin wrapper over
-//     `@easel/shared`'s `addNode` op (mirroring every other mutation method's
+//     `@figemite/shared`'s `addNode` op (mirroring every other mutation method's
 //     no-op-when-readonly guard).
 //   - The sticky/shape/frame color-cycle button ports the legacy's
 //     `onCycleColor` (NOT a picker for an existing selection — the legacy
@@ -92,7 +92,7 @@ import {
   makeIconNode,
   nextOrder,
   nextStickyColor,
-} from '@easel/shared';
+} from '@figemite/shared';
 import type {
   ArrowStyle,
   BoardNode,
@@ -100,7 +100,7 @@ import type {
   EdgeKind,
   LineStyle,
   ShapeKind,
-} from '@easel/shared';
+} from '@figemite/shared';
 import type { BoardStore } from '../store/board-store.js';
 import { useBoardStore } from '../store/use-board-store.js';
 import { viewCenter } from '../canvas/coords.js';

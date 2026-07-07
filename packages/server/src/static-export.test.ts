@@ -2,7 +2,7 @@
 //
 // Seeds boards via BoardRepository (+ writeComments/writeTags for the repo-
 // managed sidecar files) and asserts the exported static bundle matches what
-// the legacy figmalade `scripts/build-static.mjs` produced: per-board copies
+// the original prototype `scripts/build-static.mjs` produced: per-board copies
 // of board.json/board.<segs>.json/comments.json/tags.json, plus a top-level
 // boards/index.json manifest.
 
@@ -10,7 +10,7 @@ import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { emptyBoard, makeStickyNode, serialise, type BoardFile } from '@easel/shared';
+import { emptyBoard, makeStickyNode, serialise, type BoardFile } from '@figemite/shared';
 import { BoardRepository } from './repository/board-repo.js';
 import { writeComments } from './repository/comments-repo.js';
 import { writeTags } from './repository/tags-repo.js';
@@ -29,8 +29,8 @@ let outDir: string;
 let repo: BoardRepository;
 
 beforeEach(async () => {
-  boardsRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'easel-static-export-src-'));
-  outDir = await fs.mkdtemp(path.join(os.tmpdir(), 'easel-static-export-out-'));
+  boardsRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'figemite-static-export-src-'));
+  outDir = await fs.mkdtemp(path.join(os.tmpdir(), 'figemite-static-export-out-'));
   repo = new BoardRepository(boardsRoot);
 });
 
@@ -180,7 +180,7 @@ describe('buildStaticBoards', () => {
     expect(manifest.boards).toEqual([]);
   });
 
-  it('produces canonically-serialised board JSON (round-trips through @easel/shared)', async () => {
+  it('produces canonically-serialised board JSON (round-trips through @figemite/shared)', async () => {
     repo.seedBoard('canon', 'Canon');
     await buildStaticBoards(boardsRoot, outDir);
     const raw = await fs.readFile(path.join(outDir, 'boards', 'canon', 'board.json'), 'utf-8');

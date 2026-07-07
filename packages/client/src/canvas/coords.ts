@@ -1,6 +1,6 @@
 // ── The SINGLE canvas <-> screen coordinate transform ────────────────────────
 //
-// The legacy prototype (figmalade's BoardCanvas.tsx) duplicated this exact
+// The legacy prototype (its BoardCanvas.tsx) duplicated this exact
 // math — `(screenX - rect.left - viewport.x) / viewport.zoom` and its inverse
 // — inline in every overlay that needed to place something in flow space
 // (comment pins, the pencil layer, the annotation layer, the multi-select
@@ -11,7 +11,7 @@
 // data (see `getFlowPointer`'s `rect` param) so this stays testable outside a
 // browser.
 
-import type { BoardNode } from '@easel/shared';
+import type { BoardNode } from '@figemite/shared';
 
 export interface XY {
   x: number;
@@ -87,7 +87,7 @@ export function nodeRect(node: BoardNode): Rect {
 // ── New-node placement (Toolbar / P4-T25) ────────────────────────────────────
 //
 // Ported from the legacy prototype's inline `snapToGrid`/`getViewCenter`
-// (figmalade's BoardCanvas.tsx). New nodes snap to a 20px grid so
+// (the prototype's BoardCanvas.tsx). New nodes snap to a 20px grid so
 // toolbar-created nodes land on the same grid a dragged node would settle on.
 
 /** The grid size (px, flow space) new nodes snap to. */

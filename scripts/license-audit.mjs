@@ -29,7 +29,7 @@ const require = createRequire(join(rootDir, 'package.json'));
 
 /** Our own workspace packages — not third-party, skip them. */
 function isOwnPackage(name) {
-  return name.startsWith('@easel/');
+  return name.startsWith('@figemite/');
 }
 
 /**

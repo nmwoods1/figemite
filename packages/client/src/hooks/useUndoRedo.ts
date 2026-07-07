@@ -10,7 +10,7 @@
 // `Y.UndoManager` fixes this at the CRDT level: it records per-origin deltas
 // against the tracked Y types and can revert exactly those deltas, rebasing
 // across any remote structural changes that happened in between. Scoping
-// `trackedOrigins` to `LOCAL_ORIGIN` (every op in `@easel/shared`'s crdt/ops.ts
+// `trackedOrigins` to `LOCAL_ORIGIN` (every op in `@figemite/shared`'s crdt/ops.ts
 // commits under that origin by default) is what makes undo "mine only": a
 // remote-origin transaction is never captured onto this client's stack, so it
 // can never be undone here, and it is never disturbed by a local undo/redo
@@ -36,7 +36,7 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import * as Y from 'yjs';
-import { ANNOTATIONS, EDGE_DATA, LOCAL_ORIGIN, NODE_DATA, NODE_TEXTS } from '@easel/shared';
+import { ANNOTATIONS, EDGE_DATA, LOCAL_ORIGIN, NODE_DATA, NODE_TEXTS } from '@figemite/shared';
 import type { BoardStore } from '../store/board-store.js';
 
 /** Mirrors the legacy MAX_UNDO — a soft cap on the undo stack's length. */

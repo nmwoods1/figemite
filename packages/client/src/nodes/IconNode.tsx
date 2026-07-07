@@ -1,6 +1,6 @@
 // ── IconNode ──────────────────────────────────────────────────────────────────
 //
-// Ported from figmalade's IconNode.tsx: a glyph from the icon registry
+// Ported from the prototype's IconNode.tsx: a glyph from the icon registry
 // (lib/icons.js) rendered at the chosen size + color. No editable text
 // (icons have no text to edit) — `editable` (which gates connection handles
 // and hover-reveal on the description badge) is derived from

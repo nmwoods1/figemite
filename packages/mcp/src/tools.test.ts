@@ -3,12 +3,12 @@
 // Drives the node/edge tool functions directly against a real in-memory
 // Y.Doc (via a BoardPeer built with a fake, non-networked provider) — no MCP
 // transport, no real websocket. Proves each tool calls the correct
-// `@easel/shared` crdt op with the right arguments, and that reads
+// `@figemite/shared` crdt op with the right arguments, and that reads
 // (getBoard/getNode/listNodes) reflect the writes.
 
 import { describe, it, expect } from 'vitest';
 import * as Y from 'yjs';
-import { getSnapshot } from '@easel/shared';
+import { getSnapshot } from '@figemite/shared';
 import { BoardPeer, type ProviderFactory } from './peer.js';
 import { FakeAwareness } from './test/fake-awareness.js';
 import {

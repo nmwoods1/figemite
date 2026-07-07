@@ -1,4 +1,4 @@
-// Ported from figmalade's src/lib/draw-utils.ts: quadratic-Bézier stroke
+// Ported from the prototype's src/lib/draw-utils.ts: quadratic-Bézier stroke
 // smoothing + point-thinning for the freehand pencil tool.
 
 import { describe, it, expect } from 'vitest';

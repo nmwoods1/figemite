@@ -1,6 +1,6 @@
 // ── Shared Toolbar visual constants ──────────────────────────────────────────
 //
-// Ported verbatim (colors/sizes) from the legacy figmalade prototype's
+// Ported verbatim (colors/sizes) from the original prototype's
 // Toolbar.tsx so the new toolbar matches its visual design. Split into its
 // own module so Toolbar.tsx and its picker sub-components (ShapePicker,
 // EmojiPicker, IconPicker, EdgeControls) share one source of truth instead of

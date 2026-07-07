@@ -1,7 +1,7 @@
 // ── BoardRepository ──────────────────────────────────────────────────────────
 //
 // Pure file-persistence layer for boards and sub-boards. Ported from the
-// figmalade prototype's `vite.config.ts` (read/write/list/delete/seed/label
+// original prototype's `vite.config.ts` (read/write/list/delete/seed/label
 // logic embedded in the dev-server Vite plugin) into a standalone module with
 // no HTTP or plugin dependencies — this class is the sole read/write path for
 // board JSON on disk.
@@ -14,7 +14,7 @@
 
 import fs from 'node:fs';
 import path from 'node:path';
-import { deserialise, emptyBoard, serialise, type BoardFile } from '@easel/shared';
+import { deserialise, emptyBoard, serialise, type BoardFile } from '@figemite/shared';
 import { boardDirPath, boardFilePath, validateSlugAndPath } from './paths.js';
 import { atomicWriteFileSync } from './atomic-write.js';
 
@@ -47,7 +47,7 @@ export class BoardRepository {
   }
 
   /**
-   * Serialises (canonical, via `@easel/shared`) and atomically writes a board
+   * Serialises (canonical, via `@figemite/shared`) and atomically writes a board
    * or sub-board. Writes to a temp file in the same directory, then
    * `fs.renameSync`s over the target (atomic on the same filesystem). This is
    * the sole write path — every mutation to board JSON on disk should route

@@ -1,10 +1,10 @@
 // ── Toolbar ───────────────────────────────────────────────────────────────────
 //
-// Ported from the legacy figmalade prototype's Toolbar.tsx (node-creation +
+// Ported from the original prototype's Toolbar.tsx (node-creation +
 // styling controls), wired to the new doc-first store's mutation API instead
 // of the legacy's `commit`. Node-creation buttons compute the new node's
 // position at the current ReactFlow view center (canvas/coords.ts's
-// `viewCenter`), build it via the shared `@easel/shared` factories with a
+// `viewCenter`), build it via the shared `@figemite/shared` factories with a
 // fresh id (`generateId` over existing ids) and `order = nextOrder(...)`, and
 // commit via `store.addNode` (the P4-T24 mutation API doesn't have a bespoke
 // `addNode` yet — see module doc in Toolbar.tsx for how it's added here).
@@ -18,7 +18,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { ReactFlowProvider } from '@xyflow/react';
-import type { BoardFile } from '@easel/shared';
+import type { BoardFile } from '@figemite/shared';
 import { createBoardStore } from '../store/board-store.js';
 import type { BoardStore } from '../store/board-store.js';
 import { Toolbar } from './Toolbar.js';

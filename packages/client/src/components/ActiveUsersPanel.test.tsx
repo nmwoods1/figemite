@@ -3,7 +3,7 @@
 // P5-T30. A small floating panel listing who's online (self + remotes),
 // colored dots/avatars + names, AI peers marked, and a Follow button per
 // remote (Following…/Stop while active). Ported intent from the legacy
-// figmalade prototype's `src/components/ActiveUsersPanel.tsx`, adapted to
+// original prototype's `src/components/ActiveUsersPanel.tsx`, adapted to
 // take plain `RemotePresence[]` (sourced from `hooks/usePresence.ts`) rather
 // than a `BoardRoom` + its own awareness subscription — keeping this
 // component pure render logic, matching PresenceLayer's split.

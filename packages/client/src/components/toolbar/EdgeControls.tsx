@@ -4,7 +4,7 @@
 // `LineStyleToggle`. Shown only when the current selection is edge-only
 // (Toolbar.tsx gates rendering this whole group); each control commits
 // through the P4-T24 edge-style store methods for every selected edge.
-import type { ArrowStyle, Cardinality, EdgeKind, LineStyle } from '@easel/shared';
+import type { ArrowStyle, Cardinality, EdgeKind, LineStyle } from '@figemite/shared';
 import { LINE_BTN_BASE, SELECT } from './styles.js';
 
 const ARROW_OPTIONS: { value: ArrowStyle; label: string }[] = [

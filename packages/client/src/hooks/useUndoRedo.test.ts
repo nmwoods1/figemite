@@ -9,8 +9,8 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { renderHook, act } from '@testing-library/react';
-import { addNode, moveNode } from '@easel/shared';
-import type { BoardFile } from '@easel/shared';
+import { addNode, moveNode } from '@figemite/shared';
+import type { BoardFile } from '@figemite/shared';
 import { createBoardStore } from '../store/board-store.js';
 import type { BoardStore } from '../store/board-store.js';
 import { useUndoRedo } from './useUndoRedo.js';

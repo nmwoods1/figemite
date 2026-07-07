@@ -1,19 +1,19 @@
 // ── Local user identity ───────────────────────────────────────────────────────
 //
-// Ported from the legacy figmalade prototype's `getStoredAuthor`/
+// Ported from the original prototype's `getStoredAuthor`/
 // `setStoredAuthor` (src/lib/comment-io.ts) and `getLocalUser`
 // (src/lib/realtime.ts), unified behind one module since this rewrite's
 // presence/awareness identity IS the comment-author identity (one display
 // name per browser, not two independently-tracked ones).
 //
-// `colorForName` (from `@easel/shared`'s identity/color.ts) deterministically
+// `colorForName` (from `@figemite/shared`'s identity/color.ts) deterministically
 // derives a cursor/presence color from the name, so two tabs/sessions with the
 // same stored name always render the same color — no server round-trip needed
 // to agree on identity.
-import { colorForName } from '@easel/shared';
-import type { PresenceUser } from '@easel/shared';
+import { colorForName } from '@figemite/shared';
+import type { PresenceUser } from '@figemite/shared';
 
-const NAME_KEY = 'easel:author';
+const NAME_KEY = 'figemite:author';
 
 /** Stable per-browser fallback so awareness always has a non-empty name, even
  * before IdentityPrompt has ever run (e.g. a test harness, or a user who

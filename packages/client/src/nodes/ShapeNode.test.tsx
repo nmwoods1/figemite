@@ -1,6 +1,6 @@
 // ShapeNode: the 12 ShapeKinds rendered as scalable SVG (rect/roundRect/
 // ellipse/diamond/triangle/parallelogram/hexagon/pentagon/star/cylinder/
-// cloud/arrow), + centered text + rotation. Ported from figmalade's (428-line)
+// cloud/arrow), + centered text + rotation. Ported from the prototype's (428-line)
 // ShapeNode.tsx — the biggest port in this task. Resize/rotate interaction
 // HANDLERS are Phase 4; `data.rotation` is applied as a static CSS transform.
 
@@ -12,7 +12,7 @@ import { NodeResizer } from '@xyflow/react';
 import { RfTestHarness, makeNodeProps } from '../test/rf.js';
 import { ShapeNode } from './ShapeNode.js';
 import type { ShapeNodeData } from './ShapeNode.js';
-import type { ShapeKind } from '@easel/shared';
+import type { ShapeKind } from '@figemite/shared';
 
 // See StickyNode.test.tsx's identical technique/rationale.
 const resizerCalls: ComponentProps<typeof NodeResizer>[] = [];

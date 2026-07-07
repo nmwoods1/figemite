@@ -1,4 +1,4 @@
-// FrameNode: a titled container. Ported from figmalade's FrameNode.tsx.
+// FrameNode: a titled container. Ported from the prototype's FrameNode.tsx.
 // Legacy FrameNode has no description badge and no connection handles (it's
 // a container, not an edge endpoint) and no rotation — none of those are
 // added here either, matching legacy behaviour faithfully.

@@ -2,7 +2,7 @@
 //
 // Drives PeerDiscovery against a fake Bonjour/Browser pair (injected via
 // `makeBonjour`) so these tests never open a real multicast socket — mirrors
-// how `@easel/server`'s MdnsService tests presumably fake `Bonjour`
+// how `@figemite/server`'s MdnsService tests presumably fake `Bonjour`
 // (`makeBonjour` factory pattern).
 
 import { describe, it, expect } from 'vitest';
@@ -49,10 +49,10 @@ function makeDiscovery() {
 }
 
 describe('PeerDiscovery.start', () => {
-  it('browses the _easel._tcp service type', () => {
+  it('browses the _figemite._tcp service type', () => {
     const { discovery, fake } = makeDiscovery();
     discovery.start();
-    expect(fake.lastFindType).toBe('easel');
+    expect(fake.lastFindType).toBe('figemite');
   });
 
   it('is idempotent — a second start() does not re-browse', () => {
@@ -86,7 +86,7 @@ describe('PeerDiscovery peer tracking', () => {
       host: 'nick.local',
       port: 5400,
       addresses: ['10.0.0.5'],
-      fqdn: 'nick._easel._tcp.local',
+      fqdn: 'nick._figemite._tcp.local',
       txt: { name: 'nick', boards: 'spend,planning' },
     });
 
@@ -108,7 +108,7 @@ describe('PeerDiscovery peer tracking', () => {
       name: 'fallback-name',
       host: 'nick.local',
       port: 5400,
-      fqdn: 'nick._easel._tcp.local',
+      fqdn: 'nick._figemite._tcp.local',
     });
     expect(discovery.getPeers()[0]?.name).toBe('fallback-name');
   });
@@ -120,7 +120,7 @@ describe('PeerDiscovery peer tracking', () => {
       name: 'nick',
       host: 'nick.local',
       port: 5400,
-      fqdn: 'nick._easel._tcp.local',
+      fqdn: 'nick._figemite._tcp.local',
       txt: { name: 'nick', boards: '' },
     });
     expect(discovery.getPeers()[0]?.boards).toEqual([]);
@@ -133,7 +133,7 @@ describe('PeerDiscovery peer tracking', () => {
       name: 'nick',
       host: 'nick.local',
       port: 5400,
-      fqdn: 'nick._easel._tcp.local',
+      fqdn: 'nick._figemite._tcp.local',
       txt: { name: 'nick', boards: '' },
     };
     fake.browser.emitUp(service);
@@ -151,7 +151,7 @@ describe('PeerDiscovery.resolvePeer', () => {
       name: 'Nick',
       host: 'nick.local',
       port: 5400,
-      fqdn: 'nick._easel._tcp.local',
+      fqdn: 'nick._figemite._tcp.local',
       txt: { name: 'Nick', boards: '' },
     });
     expect(discovery.resolvePeer('nick')?.name).toBe('Nick');
@@ -165,7 +165,7 @@ describe('PeerDiscovery.resolvePeer', () => {
       name: 'display-name',
       host: 'nick.local',
       port: 5400,
-      fqdn: 'nick._easel._tcp.local',
+      fqdn: 'nick._figemite._tcp.local',
       txt: { name: 'display-name', boards: '' },
     });
     expect(discovery.resolvePeer('nick.local')?.host).toBe('nick.local');
@@ -217,7 +217,7 @@ describe('PeerDiscovery.warmUp', () => {
   it('starts discovery if not already started and resolves after the timeout', async () => {
     const { discovery, fake } = makeDiscovery();
     await discovery.warmUp(5);
-    expect(fake.lastFindType).toBe('easel');
+    expect(fake.lastFindType).toBe('figemite');
   });
 
   it('only waits once — a second call resolves the same promise', async () => {

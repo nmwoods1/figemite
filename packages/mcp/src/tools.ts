@@ -1,7 +1,7 @@
 // ── Tool → shared-op wiring ──────────────────────────────────────────────────
 //
 // The pure logic behind every board-editing MCP tool: validates/normalizes
-// input, builds a node/edge via the `@easel/shared` factories
+// input, builds a node/edge via the `@figemite/shared` factories
 // (`makeStickyNode`/`makeDrawingNode`/`makeEdge`/etc.) + `generateId`/
 // `nextOrder`, and applies it to the connected `BoardPeer`'s doc via the
 // SHARED `crdt/ops` — the exact same ops the browser client uses. Kept
@@ -42,7 +42,7 @@ import {
   makeIconNode,
   makeDrawingNode,
   makeEdge,
-} from '@easel/shared';
+} from '@figemite/shared';
 import type { BoardPeer } from './peer.js';
 
 // ── Reads ─────────────────────────────────────────────────────────────────────
@@ -76,7 +76,7 @@ export interface AddNodeInput {
   description?: string;
 }
 
-/** Builds the node via the matching `@easel/shared` factory, then applies any extra fields (text/rotation/description) the factory doesn't take directly. */
+/** Builds the node via the matching `@figemite/shared` factory, then applies any extra fields (text/rotation/description) the factory doesn't take directly. */
 function buildNode(input: AddNodeInput, id: string, order: number): BoardNode {
   let node: BoardNode;
   switch (input.type) {

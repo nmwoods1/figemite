@@ -1,6 +1,6 @@
 // ── SnapshotHistoryService ───────────────────────────────────────────────────
 //
-// Ported from the figmalade prototype's `vite.config.ts` (the `snapshot` /
+// Ported from the original prototype's `vite.config.ts` (the `snapshot` /
 // `listSnapshots` / `readSnapshot` / `thinSnapshotIds` helpers embedded in the
 // dev-server Vite plugin, lines ~106–324) into a standalone module with no
 // HTTP/plugin dependencies.

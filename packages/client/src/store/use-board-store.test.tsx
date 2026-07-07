@@ -1,7 +1,7 @@
 import { describe, it, expect, afterEach } from 'vitest';
 import { cleanup, renderHook, act } from '@testing-library/react';
-import { addNode } from '@easel/shared';
-import type { BoardFile } from '@easel/shared';
+import { addNode } from '@figemite/shared';
+import type { BoardFile } from '@figemite/shared';
 import { createBoardStore } from './board-store.js';
 import { useBoardStore, useBoardViewport } from './use-board-store.js';
 

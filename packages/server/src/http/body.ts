@@ -4,7 +4,7 @@
 // and size-capping a JSON request body, extracting query params, splitting the
 // dotted `path` sub-board query param, and writing JSON / error responses.
 //
-// Ported from the figmalade prototype's inline `readBody` / `json` closures and
+// Ported from the original prototype's inline `readBody` / `json` closures and
 // `parseBoard` / `parsePath` helpers (vite.config.ts ~54-81, ~450-453), with
 // two deliberate hardenings:
 //   - `readJsonBody` caps the accumulated body at `MAX_BODY_BYTES` and aborts

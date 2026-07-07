@@ -5,7 +5,7 @@
 // back as an empty tags list.
 
 import fs from 'node:fs';
-import { parseTagsFile, type TagsFile } from '@easel/shared';
+import { parseTagsFile, type TagsFile } from '@figemite/shared';
 import { tagsPath } from './paths.js';
 import { atomicWriteFileSync } from './atomic-write.js';
 

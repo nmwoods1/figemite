@@ -11,7 +11,7 @@
 // response for this request.
 
 import type { IncomingMessage, ServerResponse } from 'node:http';
-import { SlugSchema, PathSegmentSchema } from '@easel/shared';
+import { SlugSchema, PathSegmentSchema } from '@figemite/shared';
 import { getQuery, parsePathParam } from '../../http/body.js';
 import { ValidationError } from '../errors.js';
 import type { RequestContext } from '../router.js';

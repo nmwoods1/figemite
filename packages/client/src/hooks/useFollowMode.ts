@@ -1,6 +1,6 @@
 // ── useFollowMode: FigJam-style "watch someone's screen" ────────────────────
 //
-// P5-T30. Ported from the legacy figmalade prototype's BoardCanvas.tsx follow-
+// P5-T30. Ported from the original prototype's BoardCanvas.tsx follow-
 // mode block (`followingClientId` state + the two effects that publish the
 // local viewport and apply the followed remote's), factored into its own
 // hook and adapted to this codebase's conventions:
@@ -24,7 +24,7 @@
 // here would lag visibly behind the leader by more than the gap between
 // their updates.
 import { useCallback, useEffect, useRef, useState } from 'react';
-import type { AwarenessState } from '@easel/shared';
+import type { AwarenessState } from '@figemite/shared';
 import type { Viewport } from '../canvas/coords.js';
 import type { PresenceAwareness } from './usePresence.js';
 

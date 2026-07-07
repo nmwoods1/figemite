@@ -1,5 +1,5 @@
 // Unifies the legacy's duplicated `hexToRgba` (StickyNode.tsx + FrameNode.tsx
-// in figmalade both defined the exact same function). One implementation now.
+// in the prototype both defined the exact same function). One implementation now.
 
 import { describe, it, expect } from 'vitest';
 import { hexToRgba } from './color.js';

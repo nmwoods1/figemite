@@ -1,5 +1,5 @@
 // The icon registry: inline SVG path data for a small curated set of icons.
-// Ported verbatim from figmalade's src/lib/icons.ts.
+// Ported verbatim from the prototype's src/lib/icons.ts.
 
 import { describe, it, expect } from 'vitest';
 import { ICONS, ICON_CATEGORIES, getIcon } from './icons.js';

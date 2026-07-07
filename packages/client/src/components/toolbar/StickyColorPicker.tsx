@@ -6,8 +6,8 @@
 // "recolor selection" popover — for now the selected-node recolor affordance
 // is the single-button "cycle colour" control (see Toolbar.tsx), matching the
 // legacy's own `onCycleColor` (not a picker) for an existing selection.
-import { STICKY_COLORS } from '@easel/shared';
-import type { StickyColor } from '@easel/shared';
+import { STICKY_COLORS } from '@figemite/shared';
+import type { StickyColor } from '@figemite/shared';
 import { POPOVER } from './styles.js';
 
 export function StickyColorPicker({ onPick }: { onPick: (color: StickyColor) => void }) {

@@ -26,7 +26,7 @@
 // `restore()` applies the CURRENTLY PREVIEWED board to the live doc via
 // `loadBoardIntoDoc(store.doc, previewedBoard)` (clears the three CRDT maps
 // then repopulates them, all in one transaction — see
-// `@easel/shared`'s `loadBoardIntoDoc` doc, "used for initial load and history
+// `@figemite/shared`'s `loadBoardIntoDoc` doc, "used for initial load and history
 // restore"). That transaction is a normal LOCAL_ORIGIN write, so it
 // CRDT-merges into the room like any other edit — every peer sees the
 // restored state, and the server's own persistence debounce picks it up same
@@ -43,8 +43,8 @@
 // all, since (per the isolation invariant above) nothing was ever touched.
 
 import { useCallback, useState } from 'react';
-import { loadBoardIntoDoc } from '@easel/shared';
-import type { BoardFile } from '@easel/shared';
+import { loadBoardIntoDoc } from '@figemite/shared';
+import type { BoardFile } from '@figemite/shared';
 import type { BoardStore } from '../store/board-store.js';
 import type { UndoRedo } from './useUndoRedo.js';
 import { fetchHistory, fetchVersion } from '../lib/boards-api.js';

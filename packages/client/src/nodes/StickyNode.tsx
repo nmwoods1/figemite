@@ -1,6 +1,6 @@
 // ── StickyNode ────────────────────────────────────────────────────────────────
 //
-// Ported from figmalade's StickyNode.tsx. Differences from the legacy:
+// Ported from the prototype's StickyNode.tsx. Differences from the legacy:
 //   - `hexToRgba` now comes from `./color.js` (was duplicated inline).
 //   - Uses `useEditableText` instead of local editing/draft state.
 //   - Uses `ConnectionHandles`/`BaseNode` for the shared chrome.

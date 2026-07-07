@@ -14,14 +14,14 @@
 // The in-progress stroke renders as a live smoothed SVG path (`smoothPath`,
 // packages/client/src/lib/draw-utils.ts, ported from the legacy in P3). On
 // pointerup, the accumulated points are thinned (`thinPoints`, same module)
-// and committed via `@easel/shared`'s `makeDrawingNode` (which computes the
+// and committed via `@figemite/shared`'s `makeDrawingNode` (which computes the
 // bbox + rebases points to be relative to it) + `store.addNode` — a NORMAL,
 // PERSISTED node that syncs and survives a reload through the doc, unlike
 // AnnotationLayer's ephemeral strokes (see that module's doc for the
 // contrast).
 //
 // Ported behavior (screen->flow conversion bypassing RF's own snap,
-// Shift-to-snap, live smoothed preview) from the legacy figmalade
+// Shift-to-snap, live smoothed preview) from the original
 // prototype's `src/components/PencilLayer.tsx`, rewired onto this codebase's
 // shared coords module and doc-first `BoardStore.addNode` instead of the
 // legacy's `onCommit` callback into a local reducer.
@@ -29,8 +29,8 @@
 import { useCallback, useRef, useState } from 'react';
 import type { PointerEvent as ReactPointerEvent, RefObject } from 'react';
 import { useViewport } from '@xyflow/react';
-import { generateId, makeDrawingNode, nextOrder } from '@easel/shared';
-import type { XY } from '@easel/shared';
+import { generateId, makeDrawingNode, nextOrder } from '@figemite/shared';
+import type { XY } from '@figemite/shared';
 import { getFlowPointer, snapToGrid } from '../canvas/coords.js';
 import { smoothPath, thinPoints } from '../lib/draw-utils.js';
 import type { BoardStore } from '../store/board-store.js';

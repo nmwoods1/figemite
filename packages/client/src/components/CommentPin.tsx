@@ -1,13 +1,13 @@
 // ── CommentPin: a small pin/badge for a placed comment ───────────────────────
 //
-// Ported (visual design) from the legacy figmalade prototype's
+// Ported (visual design) from the original prototype's
 // `src/components/CommentPin.tsx`: a teardrop-shaped bubble positioned at a
 // given screen coordinate, showing the reply count and dimming when the
 // comment is resolved. This rewrite's version is pure presentation — no
 // internal open/close state, no portal — CommentLayer owns "which pin's
 // thread is open" and renders `CommentThread` itself; this component only
 // reports clicks via `onClick`.
-import type { BoardComment } from '@easel/shared';
+import type { BoardComment } from '@figemite/shared';
 
 export interface CommentPinProps {
   comment: BoardComment;

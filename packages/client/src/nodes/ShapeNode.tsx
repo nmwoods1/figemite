@@ -1,6 +1,6 @@
 // ── ShapeNode ─────────────────────────────────────────────────────────────────
 //
-// Ported from figmalade's ShapeNode.tsx (the biggest single port in this
+// Ported from the prototype's ShapeNode.tsx (the biggest single port in this
 // task, ~428 lines): the 12 `ShapeKind`s rendered as scalable SVG, each with
 // a shape-specific text inset so labels stay clear of corners the shape
 // carves out (a triangle's tip, a diamond's points, …). The drill-in badge
@@ -29,7 +29,7 @@ import { useMemo, useRef } from 'react';
 import type { ReactNode } from 'react';
 import type { NodeProps, Node } from '@xyflow/react';
 import { NodeResizer } from '@xyflow/react';
-import type { ShapeKind } from '@easel/shared';
+import type { ShapeKind } from '@figemite/shared';
 import { ConnectionHandles } from './ConnectionHandles.js';
 import type { HandleAnchors } from './ConnectionHandles.js';
 import { BaseNode } from './BaseNode.js';

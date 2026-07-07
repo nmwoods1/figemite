@@ -18,7 +18,7 @@
 // mousemove effect on every tick.
 
 import { useCallback, useMemo } from 'react';
-import type { BoardNode } from '@easel/shared';
+import type { BoardNode } from '@figemite/shared';
 import type { BoardStore } from '../store/board-store.js';
 import { useBoardStore } from '../store/use-board-store.js';
 import { scaleNodeForGroupResize } from '../canvas/multi-select-scale.js';

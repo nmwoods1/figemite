@@ -1,6 +1,6 @@
 // ── DrawingNode ───────────────────────────────────────────────────────────────
 //
-// Ported from figmalade's DrawingNode.tsx: a persistent freehand pencil
+// Ported from the prototype's DrawingNode.tsx: a persistent freehand pencil
 // stroke. `points` are relative to the node's `pos` so dragging only updates
 // `pos` — the SVG path doesn't need rewriting on move. No editing, no
 // connection handles, no rotation — none exist for drawings in the legacy
@@ -12,7 +12,7 @@
 
 import type { NodeProps, Node } from '@xyflow/react';
 import { NodeResizer } from '@xyflow/react';
-import type { XY } from '@easel/shared';
+import type { XY } from '@figemite/shared';
 import { smoothPath } from '../lib/draw-utils.js';
 import { useIsMultiSelected } from './use-is-multi-selected.js';
 

@@ -6,7 +6,7 @@
 // (`store.doc.getArray(ANNOTATIONS)`) — it SYNCS live across peers via the
 // provider (same doc, same awareness of updates) but is never written to
 // `board.json`: the server's `getSnapshot`-based persistence path
-// (`@easel/shared`'s `crdt/ops.ts`) only ever reads `nodeData`/`nodeTexts`/
+// (`@figemite/shared`'s `crdt/ops.ts`) only ever reads `nodeData`/`nodeTexts`/
 // `edgeData`, never `annotations` — proven directly below via a real
 // `getSnapshot(doc)` call after strokes exist.
 //
@@ -20,7 +20,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { act, cleanup, fireEvent, render } from '@testing-library/react';
 import { ReactFlow } from '@xyflow/react';
 import * as Y from 'yjs';
-import { ANNOTATIONS, getSnapshot } from '@easel/shared';
+import { ANNOTATIONS, getSnapshot } from '@figemite/shared';
 import { AnnotationLayer } from './AnnotationLayer.js';
 
 afterEach(() => {

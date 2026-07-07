@@ -6,7 +6,7 @@
 // Read-only stores must no-op every mutation (guarded on `store.readonly`).
 
 import { describe, it, expect, vi } from 'vitest';
-import type { BoardEdge, BoardFile } from '@easel/shared';
+import type { BoardEdge, BoardFile } from '@figemite/shared';
 import { createBoardStore } from './board-store.js';
 
 function fixtureBoard(): BoardFile {

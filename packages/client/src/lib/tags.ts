@@ -2,7 +2,7 @@
 //
 // Pure functions operating on `BoardListItem[]` (from `./boards-api.js`) —
 // no fetching here, that's `fetchTags`/`saveTags` in `boards-api.ts`. Ported
-// from the figmalade prototype's `src/lib/tags-io.ts`, minus the fetch/save
+// from the original prototype's `src/lib/tags-io.ts`, minus the fetch/save
 // wrappers which are superseded by the new data-access layer.
 
 import type { BoardListItem } from './boards-api.js';

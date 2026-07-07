@@ -1,8 +1,8 @@
-// ── PeerDiscovery — mDNS lookup of running easel servers on the LAN ─────────
+// ── PeerDiscovery — mDNS lookup of running figemite servers on the LAN ─────────
 //
-// Ported from the legacy figmalade prototype's
-// mcp/airjam-mcp-server/src/discovery.ts, renamed to match this rewrite's
-// mDNS service type (`_easel._tcp`, published by `@easel/server`'s
+// Ported from the original prototype's
+// mcp/legacy-mcp-server/src/discovery.ts, renamed to match this rewrite's
+// mDNS service type (`_figemite._tcp`, published by `@figemite/server`'s
 // `MdnsService` — see packages/server/src/services/mdns.ts). TXT record
 // shape is unchanged: `name` (advertised hostname) and `boards`
 // (comma-separated slugs).
@@ -20,7 +20,7 @@ export interface PeerInfo {
   host: string;
   /** IPv4 addresses resolved from the service record. */
   addresses: string[];
-  /** TCP port the easel server is listening on. */
+  /** TCP port the figemite server is listening on. */
   port: number;
   /** Board slugs from the TXT record. */
   boards: string[];
@@ -52,7 +52,7 @@ export interface PeerDiscoveryOptions {
   makeBonjour?: () => BonjourLike;
 }
 
-const SERVICE_TYPE = 'easel'; // bonjour-service renders this as `_easel._tcp`
+const SERVICE_TYPE = 'figemite'; // bonjour-service renders this as `_figemite._tcp`
 const DEFAULT_PORT = 5400;
 
 function defaultMakeBonjour(): BonjourLike {
@@ -70,7 +70,7 @@ export class PeerDiscovery {
     this.makeBonjour = options?.makeBonjour ?? defaultMakeBonjour;
   }
 
-  /** Starts browsing for `_easel._tcp` peers. Idempotent — a second call is a no-op. */
+  /** Starts browsing for `_figemite._tcp` peers. Idempotent — a second call is a no-op. */
   start(): void {
     if (this.started) return;
     this.started = true;

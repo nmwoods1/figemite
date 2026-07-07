@@ -7,7 +7,7 @@
 
 import { describe, it, expect, vi } from 'vitest';
 import * as Y from 'yjs';
-import { roomNameFor, colorForName } from '@easel/shared';
+import { roomNameFor, colorForName } from '@figemite/shared';
 import { BoardPeer } from './peer.js';
 import { FakeAwareness } from './test/fake-awareness.js';
 

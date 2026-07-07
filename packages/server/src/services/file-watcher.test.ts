@@ -201,7 +201,7 @@ describe('FileWatcher fs.watch integration (real filesystem)', () => {
   let tmpRoot: string;
 
   beforeEach(async () => {
-    tmpRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'easel-file-watcher-'));
+    tmpRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'figemite-file-watcher-'));
     await fs.mkdir(path.join(tmpRoot, 'my-board'), { recursive: true });
   });
 

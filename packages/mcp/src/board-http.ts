@@ -2,7 +2,7 @@
 //
 // `list_boards`/`create_board` talk to the plain REST API (no Yjs room
 // connection required) rather than a BoardPeer's doc — ported from the
-// legacy figmalade prototype's inline `fetch` calls in server.ts, pulled out
+// original prototype's inline `fetch` calls in server.ts, pulled out
 // into their own module so they're testable with a mocked `fetch` without
 // touching MCP tool registration at all.
 

@@ -1,5 +1,5 @@
 // ArrowEdge: a bezier edge with arrowhead markers (none/end/both), solid/dashed
-// stroke, and an optional label. Ported from figmalade's ArrowEdge.tsx.
+// stroke, and an optional label. Ported from the prototype's ArrowEdge.tsx.
 // P4-T24 wires the label-editing seam (double-click -> edit -> commit via
 // `data.onLabelChange`), gated the same way every node's text-edit seam is
 // (P3-T19's pattern) — absent in Phase 3, live here.

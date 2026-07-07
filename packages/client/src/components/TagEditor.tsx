@@ -1,6 +1,6 @@
 // ── Tag editor popover ───────────────────────────────────────────────────────
 //
-// Ported from the figmalade prototype's `src/components/TagEditor.tsx`.
+// Ported from the original prototype's `src/components/TagEditor.tsx`.
 // Deviations:
 //   - `saveTags` now comes from `lib/boards-api.ts` (which throws
 //     `ReadOnlyError` in READONLY mode) instead of the prototype's

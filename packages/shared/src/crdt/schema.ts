@@ -1,7 +1,7 @@
 // ── Shared CRDT schema — the ONE definition of the Yjs doc layout ────────────
 //
 // Historically the browser client (src/components/BoardCanvas.tsx) and the MCP
-// server (mcp/airjam-mcp-server/src/ops.ts) EACH declared these Y.Map names and
+// server (mcp/legacy-mcp-server/src/ops.ts) EACH declared these Y.Map names and
 // the node↔map projection separately. A field-name drift between the two would
 // corrupt multiplayer sync silently, with no error. This module is the single
 // source of truth both sides import so that can never happen again.

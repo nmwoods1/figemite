@@ -1,6 +1,6 @@
 // ── multi-select-scale: pure group-resize transform ──────────────────────────
 //
-// Ported from figmalade's `handleMultiScale` (src/components/BoardCanvas.tsx
+// Ported from the prototype's `handleMultiScale` (src/components/BoardCanvas.tsx
 // ~L1507-1545) — see this module's test file for the full per-type
 // breakdown. Pure and DOM-free: given a node's ORIGINAL flow-space rect and a
 // scale spec (factor + fixed anchor corner), returns the store-patch to
@@ -13,7 +13,7 @@
 // either — see rf-adapters.ts/useEditableCanvas.ts), so this only keeps the
 // MIN_BBOX floor, not the grid rounding.
 
-import type { BoardNode, WH, XY } from '@easel/shared';
+import type { BoardNode, WH, XY } from '@figemite/shared';
 
 export interface OriginalRect {
   x: number;

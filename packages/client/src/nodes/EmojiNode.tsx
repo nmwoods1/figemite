@@ -1,6 +1,6 @@
 // ── EmojiNode ─────────────────────────────────────────────────────────────────
 //
-// Ported from figmalade's EmojiNode.tsx: a single emoji glyph rendered at
+// Ported from the prototype's EmojiNode.tsx: a single emoji glyph rendered at
 // `size` pixels. Uses `useEditableText`/`ConnectionHandles`/`BaseNode` for
 // the shared chrome. `ConnectionHandles` is nested INSIDE `BaseNode`'s
 // children (i.e. inside the rotation wrapper), matching the legacy's DOM

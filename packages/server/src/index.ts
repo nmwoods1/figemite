@@ -1,4 +1,4 @@
-export const PACKAGE_NAME = '@easel/server';
+export const PACKAGE_NAME = '@figemite/server';
 
 export * from './config.js';
 export * from './repository/paths.js';

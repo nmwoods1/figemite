@@ -1,6 +1,6 @@
 // ── MultiSelectResizer ────────────────────────────────────────────────────────
 //
-// Ported from figmalade's src/components/MultiSelectResizer.tsx: when 2+
+// Ported from the prototype's src/components/MultiSelectResizer.tsx: when 2+
 // board nodes are selected, overlays a single bounding-box with 8 handles
 // (4 corners + 4 edges) that scale the WHOLE group as one object. This
 // component is pure UI/geometry (mouse tracking + screen projection via the
@@ -15,7 +15,7 @@ import { createRef } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render } from '@testing-library/react';
 import { ReactFlow } from '@xyflow/react';
-import type { BoardNode } from '@easel/shared';
+import type { BoardNode } from '@figemite/shared';
 import { MultiSelectResizer } from './MultiSelectResizer.js';
 
 afterEach(() => {

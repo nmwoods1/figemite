@@ -1,6 +1,6 @@
 // ── Cursor colour identity ───────────────────────────────────────────────────
 //
-// Ported verbatim from figmalade's src/lib/realtime-core.ts. Hashing a name
+// Ported verbatim from the prototype's src/lib/realtime-core.ts. Hashing a name
 // into the palette gives the same colour across sessions for the same identity.
 
 /** Palette of distinguishable cursor colours. */

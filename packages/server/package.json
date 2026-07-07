@@ -1,5 +1,5 @@
 {
-  "name": "@easel/server",
+  "name": "@figemite/server",
   "version": "0.0.0",
   "private": true,
   "type": "module",
@@ -9,7 +9,7 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@easel/shared": "*",
+    "@figemite/shared": "*",
     "bonjour-service": "^1.4.2",
     "ws": "^8.21.0",
     "y-websocket": "^2.1.0",

@@ -1,6 +1,6 @@
 // ── HTTP API router ──────────────────────────────────────────────────────────
 //
-// Ported from the figmalade prototype's `server.middlewares.use(...)` chain of
+// Ported from the original prototype's `server.middlewares.use(...)` chain of
 // `if (pathname === ... && req.method === ...)` blocks (vite.config.ts ~446-768)
 // into a dispatch table + a single `createRequestHandler(ctx)` factory. This is
 // the one function the composition layer (P1-T13) and the Phase-2 Vite

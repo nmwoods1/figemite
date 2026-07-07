@@ -1,6 +1,6 @@
 // ── ArrowEdge ─────────────────────────────────────────────────────────────────
 //
-// Ported from figmalade's ArrowEdge.tsx: a bezier path with arrowhead markers
+// Ported from the prototype's ArrowEdge.tsx: a bezier path with arrowhead markers
 // per `data.arrow` (`none`/`end`/`both`), solid/dashed stroke per `data.style`,
 // and an optional label. P4-T24 wires the inline label-editing seam (ported
 // from the legacy): double-click the label region to edit, Enter/blur
@@ -15,7 +15,7 @@
 
 import { BaseEdge, EdgeLabelRenderer, getBezierPath } from '@xyflow/react';
 import type { Edge, EdgeProps } from '@xyflow/react';
-import type { ArrowStyle, LineStyle } from '@easel/shared';
+import type { ArrowStyle, LineStyle } from '@figemite/shared';
 import { useEditableText } from '../nodes/useEditableText.js';
 
 export interface ArrowEdgeData extends Record<string, unknown> {

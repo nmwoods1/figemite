@@ -3,7 +3,7 @@
 // Plan v2 §3. The Y.Doc — not a React state tree — is the source of truth for
 // nodes/edges, and every read goes through the shared `getSnapshot(doc)`.
 // Mutations (Phase 4's ops-driven interaction handlers) write to the doc
-// directly via `@easel/shared`'s ops — this store doesn't wrap them, it just
+// directly via `@figemite/shared`'s ops — this store doesn't wrap them, it just
 // exposes `doc` so callers can.
 //
 // ── Hydration: two paths (P5-T29) ────────────────────────────────────────────
@@ -18,7 +18,7 @@
 //   - `readonly: false` + `opts.room` given (the real editable app,
 //     App.tsx's board route) — the doc starts EMPTY and joins the server room
 //     via `lib/realtime.ts`'s `joinBoardRoom`, which attaches a
-//     `WebsocketProvider`. The server (`@easel/server`'s `YjsWebsocketService`,
+//     `WebsocketProvider`. The server (`@figemite/server`'s `YjsWebsocketService`,
 //     P5-T28) is the single content writer: it seeds the room from disk and
 //     persists it back on a debounce. This store does NOT call
 //     `loadBoardIntoDoc` in this path — doing so would race/duplicate the
@@ -60,7 +60,7 @@ import {
   setNodeText as setNodeTextOp,
   updateEdge as updateEdgeOp,
   updateNode as updateNodeOp,
-} from '@easel/shared';
+} from '@figemite/shared';
 import type {
   ArrowStyle,
   BoardEdge,
@@ -71,7 +71,7 @@ import type {
   LineStyle,
   WH,
   XY,
-} from '@easel/shared';
+} from '@figemite/shared';
 import type { Viewport } from '../canvas/coords.js';
 import { joinBoardRoom } from '../lib/realtime.js';
 import type { BoardRoom } from '../lib/realtime.js';
@@ -115,12 +115,12 @@ export interface BoardStore {
 
   // ── Mutation API (the doc-first write surface — see module doc) ─────────────
   //
-  // Thin, typed wrappers over the shared `@easel/shared` CRDT ops, so callers
+  // Thin, typed wrappers over the shared `@figemite/shared` CRDT ops, so callers
   // (BoardCanvas's interaction handlers) commit through named methods rather
   // than importing raw ops. Every mutation is a NO-OP on a read-only store.
 
   /** Add a fully-built node to the doc (Toolbar's node-creation buttons — the
-   * caller builds it via a shared `@easel/shared` factory with a fresh id and
+   * caller builds it via a shared `@figemite/shared` factory with a fresh id and
    * `order`). No-op if read-only. */
   addNode(node: BoardNode): void;
   /** Commit a node's final position to the doc. No-op if read-only. */
@@ -134,7 +134,7 @@ export interface BoardStore {
 
   /** Merge an arbitrary patch of non-text fields into an existing node (e.g.
    * the Toolbar's color picker setting `{ color }`). No-op if read-only, and
-   * a no-op if the node doesn't exist (see `@easel/shared`'s `updateNode`). */
+   * a no-op if the node doesn't exist (see `@figemite/shared`'s `updateNode`). */
   updateNode(id: string, patch: Partial<BoardNode>): void;
   /** Commit a node's text/title (sticky/text/shape/emoji's `text`, frame's
    * `title`) to the doc via `nodeTexts`. No-op if read-only. */

@@ -1,10 +1,10 @@
-// ── easel MCP server — the AI-agent peer on the shared CRDT contract ────────
+// ── figemite MCP server — the AI-agent peer on the shared CRDT contract ────────
 //
-// Connects to a running `@easel/server` as a multiplayer AI peer (via
+// Connects to a running `@figemite/server` as a multiplayer AI peer (via
 // `BoardPeer`) and exposes board operations as MCP tools. Ported from the
-// legacy figmalade prototype's mcp/airjam-mcp-server/src/server.ts, with the
+// original prototype's mcp/legacy-mcp-server/src/server.ts, with the
 // private per-project `ops.ts` deleted entirely: every node/edge mutation
-// below calls straight into `@easel/shared`'s `crdt/ops` (via `./tools.js`)
+// below calls straight into `@figemite/shared`'s `crdt/ops` (via `./tools.js`)
 // — the SAME ops the browser client uses. That's the whole point of this
 // package: ONE contract, not two hand-synced copies.
 //
@@ -13,7 +13,7 @@
 // Yjs room itself (P5-T28) — a peer only needs to get its edit onto the
 // room; the server takes it from there. See peer.ts's module doc.
 //
-// Registered as `createEaselMcpServer(...)` (a factory, not a module-level
+// Registered as `createFigemiteMcpServer(...)` (a factory, not a module-level
 // singleton) so tests can construct an isolated server instance; `index.ts`
 // is the thin runnable entry that builds one from env/CLI config and
 // connects it to stdio.
@@ -38,7 +38,7 @@ import {
   updateEdge,
   deleteEdge,
 } from './tools.js';
-import type { BoardNode, XY } from '@easel/shared';
+import type { BoardNode, XY } from '@figemite/shared';
 
 // ── Cursor-lead niceties ──────────────────────────────────────────────────────
 // Ported verbatim from the legacy: park the cursor where a mutation is about
@@ -107,7 +107,7 @@ function jsonResult(value: unknown): { content: [{ type: 'text'; text: string }]
 
 // ── Config ────────────────────────────────────────────────────────────────────
 
-export interface EaselMcpServerOptions {
+export interface FigemiteMcpServerOptions {
   /** Default HTTP base URL used by board-mgmt tools before any connect_board call. Defaults to `http://localhost:5400`. */
   defaultHttpUrl?: string;
   /** Default display name for the AI's presence. Defaults to "AI". */
@@ -153,7 +153,7 @@ function resolveUrls(
  * (not a module singleton) so tests can construct an isolated instance and
  * so `index.ts` stays a thin entry point.
  */
-export function createEaselMcpServer(options: EaselMcpServerOptions = {}): McpServer {
+export function createFigemiteMcpServer(options: FigemiteMcpServerOptions = {}): McpServer {
   const defaultHttpUrl = options.defaultHttpUrl ?? DEFAULT_HTTP_URL;
   const defaultName = options.defaultName ?? 'AI';
   const defaultAgentClient = options.defaultAgentClient ?? 'claude-code';
@@ -168,7 +168,7 @@ export function createEaselMcpServer(options: EaselMcpServerOptions = {}): McpSe
     return peer;
   }
 
-  const server = new McpServer({ name: 'easel', version: '0.1.0' });
+  const server = new McpServer({ name: 'figemite', version: '0.1.0' });
 
   // ── connect_board / disconnect ───────────────────────────────────────────
 
@@ -176,7 +176,7 @@ export function createEaselMcpServer(options: EaselMcpServerOptions = {}): McpSe
     'connect_board',
     {
       description: [
-        'Connect to an easel board as a multiplayer AI peer.',
+        'Connect to a figemite board as a multiplayer AI peer.',
         'Call this first in every session. Returns the current board snapshot.',
         'The AI gets a visible cursor and "AI" name pill in everyone\'s browser.',
         '',
@@ -189,7 +189,7 @@ export function createEaselMcpServer(options: EaselMcpServerOptions = {}): McpSe
           .string()
           .optional()
           .describe(
-            'mDNS peer name, IP, or hostname of the peer\'s easel server, e.g. "nick", ' +
+            'mDNS peer name, IP, or hostname of the peer\'s figemite server, e.g. "nick", ' +
               '"10.21.66.67", or "10.21.66.67:5400". Omit to connect to your own local server.',
           ),
         path: z
@@ -260,7 +260,7 @@ export function createEaselMcpServer(options: EaselMcpServerOptions = {}): McpSe
     'list_boards',
     {
       description: [
-        'List all boards on the currently targeted easel server (defaults to your own localhost server).',
+        'List all boards on the currently targeted figemite server (defaults to your own localhost server).',
         "Does not require connect_board first. Returns each board's slug, label, tags,",
         'last-modified time, and sub-board paths.',
       ].join(' '),
@@ -273,7 +273,7 @@ export function createEaselMcpServer(options: EaselMcpServerOptions = {}): McpSe
     'create_board',
     {
       description: [
-        'Create a new, empty board on the currently targeted easel server (defaults to localhost).',
+        'Create a new, empty board on the currently targeted figemite server (defaults to localhost).',
         'Does not require connect_board first — call connect_board with the returned slug',
         'afterwards to start editing it.',
       ].join(' '),

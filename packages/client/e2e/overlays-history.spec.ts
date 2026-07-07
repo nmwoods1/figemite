@@ -14,7 +14,7 @@
 //      spec's disk assertions poll only for eventual-consistency slack (the
 //      POST + fs write), not a debounce window.
 //   2. Pencil (P6-T35): a real pointer-drawn stroke commits a PERSISTED
-//      `DrawingNode` (`@easel/shared`'s `makeDrawingNode` + `store.addNode`)
+//      `DrawingNode` (`@figemite/shared`'s `makeDrawingNode` + `store.addNode`)
 //      that reaches `board.json` via the SAME server-debounced room-persist
 //      path `interaction.spec.ts`'s `waitForPersisted` already proves for
 //      other node types (`YjsWebsocketService`'s `DEFAULT_PERSIST_DEBOUNCE_MS`,
@@ -257,7 +257,7 @@ function nodeLocator(page: Page, id: string) {
  * fallback) so comment-author assertions are stable. */
 async function newIdentifiedContext(browser: Browser, name: string): Promise<BrowserContext> {
   const context = await browser.newContext();
-  await context.addInitScript((n) => window.localStorage.setItem('easel:author', n), name);
+  await context.addInitScript((n) => window.localStorage.setItem('figemite:author', n), name);
   return context;
 }
 
@@ -288,7 +288,7 @@ test.describe('comments, pencil, annotation, history (Phase 6 gate)', () => {
   test.beforeEach(async ({ context }) => {
     seedSlug(SLUG);
     await context.addInitScript(
-      (n) => window.localStorage.setItem('easel:author', n),
+      (n) => window.localStorage.setItem('figemite:author', n),
       'Overlay Tester',
     );
   });

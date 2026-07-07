@@ -1,6 +1,6 @@
 // ── FrameNode ─────────────────────────────────────────────────────────────────
 //
-// Ported from figmalade's FrameNode.tsx: a titled container. Legacy
+// Ported from the prototype's FrameNode.tsx: a titled container. Legacy
 // FrameNode has no description badge, no connection handles, and no
 // rotation — none of those are added here either. `hexToRgba` now comes from
 // `./color.js` (was duplicated inline, identically to StickyNode's copy).

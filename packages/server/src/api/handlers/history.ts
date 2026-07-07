@@ -4,7 +4,7 @@
 // GET /api/history/version?board=&path=&id= — read one snapshot's raw JSON.
 
 import type { IncomingMessage, ServerResponse } from 'node:http';
-import { SlugSchema, PathSegmentSchema } from '@easel/shared';
+import { SlugSchema, PathSegmentSchema } from '@figemite/shared';
 import { getQuery, parsePathParam, sendJson } from '../../http/body.js';
 import { NotFoundError, ValidationError } from '../errors.js';
 import type { RequestContext } from '../router.js';

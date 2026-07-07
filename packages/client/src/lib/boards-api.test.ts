@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { BoardFile, CommentsFile, TagsFile } from '@easel/shared';
+import type { BoardFile, CommentsFile, TagsFile } from '@figemite/shared';
 
 // `boards-api.ts` branches on `READONLY` from `../app/mode.js`. Mocking that
 // module lets each test flip the flag independently of Vite's env handling

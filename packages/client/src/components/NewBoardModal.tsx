@@ -1,6 +1,6 @@
 // ── New board modal ──────────────────────────────────────────────────────────
 //
-// Ported from the figmalade prototype's `src/components/NewBoardModal.tsx`.
+// Ported from the original prototype's `src/components/NewBoardModal.tsx`.
 // Deviations:
 //   - Slug validity is now checked against the shared `ID_GRAMMAR` (via
 //     `isValidId`) instead of the prototype's local `SLUG_RE`, so the
@@ -9,7 +9,7 @@
 //   - Submission calls the new `lib/boards-api.ts`'s `createBoard` instead of
 //     a raw `fetch('/api/boards', ...)`.
 import { useEffect, useRef, useState } from 'react';
-import { isValidId } from '@easel/shared';
+import { isValidId } from '@figemite/shared';
 import { createBoard } from '../lib/boards-api.js';
 
 interface NewBoardModalProps {

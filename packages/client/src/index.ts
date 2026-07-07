@@ -1,4 +1,4 @@
-export const PACKAGE_NAME = '@easel/client';
+export const PACKAGE_NAME = '@figemite/client';
 
 // ── Hash router + READONLY mode (P2-T15) ─────────────────────────────────────
 export * from './app/mode.js';

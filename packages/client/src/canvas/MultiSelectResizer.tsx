@@ -1,6 +1,6 @@
 // ── MultiSelectResizer ────────────────────────────────────────────────────────
 //
-// Ported from figmalade's src/components/MultiSelectResizer.tsx: when 2+
+// Ported from the prototype's src/components/MultiSelectResizer.tsx: when 2+
 // board nodes are selected, this overlay draws a single bounding box around
 // the whole group with 8 resize handles (4 corners + 4 edges), mimicking how
 // Figma/Sketch/Keynote scale a multi-selection as one. It sits as an
@@ -24,7 +24,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useViewport } from '@xyflow/react';
 import type { RefObject } from 'react';
-import type { BoardNode } from '@easel/shared';
+import type { BoardNode } from '@figemite/shared';
 import { boundingBox, flowToScreen, nodeRect } from './coords.js';
 import type { Rect } from './coords.js';
 import type { OriginalRect, ScaleSpec } from './multi-select-scale.js';

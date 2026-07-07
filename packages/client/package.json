@@ -1,5 +1,5 @@
 {
-  "name": "@easel/client",
+  "name": "@figemite/client",
   "version": "0.0.0",
   "private": true,
   "type": "module",
@@ -14,7 +14,7 @@
     "test:e2e:visual": "playwright test --project=chromium-visual"
   },
   "dependencies": {
-    "@easel/shared": "*",
+    "@figemite/shared": "*",
     "@tiptap/extension-list": "^3.27.2",
     "@tiptap/markdown": "^3.27.2",
     "@tiptap/react": "^3.27.2",
@@ -28,7 +28,7 @@
     "yjs": "^13.6.31"
   },
   "devDependencies": {
-    "@easel/server": "*",
+    "@figemite/server": "*",
     "@playwright/test": "^1.61.1",
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/react": "^16.3.2",

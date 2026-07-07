@@ -1,17 +1,17 @@
 // ── BoardPeer — an AI agent's connection to a board's Yjs room ──────────────
 //
-// Ported from the legacy figmalade prototype's mcp/airjam-mcp-server/src/peer.ts,
+// Ported from the original prototype's mcp/legacy-mcp-server/src/peer.ts,
 // adapted to the shared CRDT contract:
 //
 //   - Room naming, presence types, and colour identity now come from
-//     `@easel/shared` (`roomNameFor`, `colorForName`, `AwarenessState`)
+//     `@figemite/shared` (`roomNameFor`, `colorForName`, `AwarenessState`)
 //     instead of being duplicated inline — the whole point of this rewrite
 //     is ONE contract shared by the browser client and this MCP peer.
 //   - NO disk flush. The legacy peer scheduled a debounced `POST /api/board`
 //     after every write (`scheduleFlush`/`flushToDisk` in the legacy
 //     server.ts). That is gone entirely: the server now seeds and persists
 //     each Yjs room itself (P5-T28's `YjsWebsocketService`), so a peer that
-//     edits the room via `@easel/shared`'s ops needs no client-side
+//     edits the room via `@figemite/shared`'s ops needs no client-side
 //     persistence step at all — the CRDT update reaching the server over the
 //     websocket is sufficient; the server's own debounced writeback takes it
 //     from there.
@@ -19,12 +19,12 @@
 // `makeProvider` is an injectable `WebsocketProvider` factory (defaulting to
 // the real one) so unit tests can drive BoardPeer against a fake provider
 // without opening a real socket — mirrors the `makeBonjour` factory pattern
-// already used by `@easel/server`'s `MdnsService`.
+// already used by `@figemite/server`'s `MdnsService`.
 
 import * as Y from 'yjs';
 import { WebsocketProvider } from 'y-websocket';
 import { WebSocket } from 'ws';
-import { roomNameFor, colorForName, type AwarenessState } from '@easel/shared';
+import { roomNameFor, colorForName, type AwarenessState } from '@figemite/shared';
 
 export type ProviderFactory = (wsUrl: string, roomname: string, doc: Y.Doc) => WebsocketProvider;
 
@@ -37,7 +37,7 @@ function defaultMakeProvider(wsUrl: string, roomname: string, doc: Y.Doc): Webso
 }
 
 export interface BoardPeerOptions {
-  /** Base WebSocket URL of the easel server, e.g. `ws://localhost:5400/yjs`. */
+  /** Base WebSocket URL of the figemite server, e.g. `ws://localhost:5400/yjs`. */
   wsUrl: string;
   /** Board slug, e.g. "spend". */
   slug: string;

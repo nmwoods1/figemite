@@ -43,8 +43,8 @@ import type {
   OnNodesChange,
   OnNodesDelete,
 } from '@xyflow/react';
-import { generateId, makeEdge } from '@easel/shared';
-import type { BoardEdge } from '@easel/shared';
+import { generateId, makeEdge } from '@figemite/shared';
+import type { BoardEdge } from '@figemite/shared';
 import type { BoardStore } from '../store/board-store.js';
 import { useBoardStore } from '../store/use-board-store.js';
 import { boardToRf } from '../canvas/rf-adapters.js';

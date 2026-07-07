@@ -1,6 +1,6 @@
 // ── Pure board helpers ───────────────────────────────────────────────────────
 //
-// Ported from the figmalade prototype's `src/lib/board-io.ts`, with two
+// Ported from the original prototype's `src/lib/board-io.ts`, with two
 // additions required by the T2 data model:
 //
 //   1. Every node factory now takes an explicit `order` (the authoritative

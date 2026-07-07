@@ -1,4 +1,4 @@
-// ── createEaselMcpServer tool-registration tests ────────────────────────────
+// ── createFigemiteMcpServer tool-registration tests ────────────────────────────
 //
 // Drives the MCP server end-to-end at the protocol layer (a real `Client`
 // talking to the server over `InMemoryTransport.createLinkedPair()`) but with
@@ -12,7 +12,7 @@ import { describe, it, expect, vi, afterEach } from 'vitest';
 import * as Y from 'yjs';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
-import { createEaselMcpServer } from './server.js';
+import { createFigemiteMcpServer } from './server.js';
 import { BoardPeer, type ProviderFactory } from './peer.js';
 import { PeerDiscovery } from './discovery.js';
 import { FakeAwareness } from './test/fake-awareness.js';
@@ -44,8 +44,8 @@ function makePeerTracker() {
   return { peers, makePeer, lastPeer: () => peers[peers.length - 1] };
 }
 
-async function connectedClient(options: Parameters<typeof createEaselMcpServer>[0] = {}) {
-  const server = createEaselMcpServer(options);
+async function connectedClient(options: Parameters<typeof createFigemiteMcpServer>[0] = {}) {
+  const server = createFigemiteMcpServer(options);
   const client = new Client({ name: 'test-client', version: '0.0.0' });
   const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
   await Promise.all([client.connect(clientTransport), server.connect(serverTransport)]);
@@ -76,7 +76,7 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-describe('createEaselMcpServer tool list', () => {
+describe('createFigemiteMcpServer tool list', () => {
   it('registers all 18 board tools', async () => {
     const { client } = await connectedClient();
     const { tools } = await client.listTools();

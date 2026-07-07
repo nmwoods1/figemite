@@ -35,7 +35,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useViewport } from '@xyflow/react';
 import type { RefObject } from 'react';
-import type { BoardComment, BoardNode, CommentTarget } from '@easel/shared';
+import type { BoardComment, BoardNode, CommentTarget } from '@figemite/shared';
 import { flowToScreen, getFlowPointer, nodeRect } from '../canvas/coords.js';
 import { hasStoredUser } from '../lib/identity.js';
 import { CommentPin } from './CommentPin.js';
@@ -60,7 +60,7 @@ export interface CommentLayerProps {
 }
 
 /** Lightweight inline form for a new comment's text, positioned at the click
- * point — ported (visual design) from the legacy figmalade prototype's
+ * point — ported (visual design) from the original prototype's
  * `NewCommentForm`. */
 function NewCommentForm({
   screenX,

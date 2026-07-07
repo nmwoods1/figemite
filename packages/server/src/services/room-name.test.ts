@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { roomNameFor } from '@easel/shared';
+import { roomNameFor } from '@figemite/shared';
 import { parseRoomName } from './room-name.js';
 
 describe('parseRoomName', () => {

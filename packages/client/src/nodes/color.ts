@@ -1,6 +1,6 @@
 // ── The single hexToRgba implementation ──────────────────────────────────────
 //
-// Ported from the legacy figmalade prototype, which defined this exact same
+// Ported from the original prototype, which defined this exact same
 // function twice — once in StickyNode.tsx, once in FrameNode.tsx. Both node
 // components need "the fill color at reduced alpha" (sticky's border shadow,
 // frame's fill + border), so this lives once here and both import it.

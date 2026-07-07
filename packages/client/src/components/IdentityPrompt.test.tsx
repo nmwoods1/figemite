@@ -2,7 +2,7 @@
 //
 // A first-time modal capturing the local display name (used by presence — a
 // later task — and already used by comments). Ported from the legacy
-// figmalade prototype's IdentityPrompt.tsx, rewired onto this codebase's
+// original prototype's IdentityPrompt.tsx, rewired onto this codebase's
 // `lib/identity.ts` (`setLocalUser`) instead of the legacy's
 // `setStoredAuthor`. The "gate a returning user" half of the contract lives in
 // `lib/identity.ts`'s `hasStoredUser` — this component itself just captures a

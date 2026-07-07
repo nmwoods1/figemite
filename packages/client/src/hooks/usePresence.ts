@@ -20,7 +20,7 @@
 // board that never joins one at all) — in which case `remotes` stays empty
 // and every publish function is a safe no-op.
 import { useCallback, useEffect, useRef, useState } from 'react';
-import type { AwarenessState, PresenceCursor, PresenceUser } from '@easel/shared';
+import type { AwarenessState, PresenceCursor, PresenceUser } from '@figemite/shared';
 import type { Viewport } from '../canvas/coords.js';
 
 /** The minimal awareness surface this hook needs — satisfied by both the

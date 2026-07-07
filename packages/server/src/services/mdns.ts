@@ -2,10 +2,10 @@
 //
 // Advertises this board host on the LAN via mDNS/Bonjour so peers (e.g. an
 // MCP server running elsewhere on the network) can discover it without a
-// hardcoded IP or URL. Ported from the figmalade prototype's `mdnsPlugin()`
-// Vite plugin (vite.config.ts ~866-990): service type `_easel._tcp`
-// (`_airjam._tcp` in the legacy prototype), TXT record carrying `name` (the
-// advertised hostname) and `boards` (comma-separated slugs).
+// hardcoded IP or URL. Ported from the original prototype's `mdnsPlugin()`
+// Vite plugin (vite.config.ts ~866-990): service type `_figemite._tcp`
+// (a different service name in the legacy prototype), TXT record carrying
+// `name` (the advertised hostname) and `boards` (comma-separated slugs).
 //
 // Deviation from the legacy prototype — DEFAULT OFF: the legacy plugin was
 // unconditionally wired into `plugins: [...]` in vite.config.ts regardless of
@@ -18,7 +18,7 @@
 // Other simplifications versus the legacy plugin (left for a later phase or
 // deliberately out of scope for P1-T11, which only needs the core
 // publish/TXT/dispose behaviour, config-gated):
-//   - No VPN-aware interface picking (`pickMdnsInterface`/`AIRJAM_MDNS_INTERFACE`).
+//   - No VPN-aware interface picking (`pickMdnsInterface`/the legacy `*_MDNS_INTERFACE` env var).
 //   - No automatic re-publish on boards-directory watch (`scheduleRepublish`).
 //   - No uncaughtException safety net for stray multicast dgram errors.
 // `getBoards()` is read fresh on every `start()`/publish, so whatever wires
@@ -54,7 +54,7 @@ export interface MdnsServiceOptions {
   makeBonjour?: () => BonjourLike;
 }
 
-const SERVICE_TYPE = 'easel'; // bonjour-service renders this as `_easel._tcp`
+const SERVICE_TYPE = 'figemite'; // bonjour-service renders this as `_figemite._tcp`
 
 function defaultMakeBonjour(): BonjourLike {
   return new Bonjour();
@@ -77,7 +77,7 @@ export class MdnsService {
     this.makeBonjour = options.makeBonjour ?? defaultMakeBonjour;
   }
 
-  /** Publishes the `_easel._tcp` service. A no-op unless `enabled` was passed as `true`. */
+  /** Publishes the `_figemite._tcp` service. A no-op unless `enabled` was passed as `true`. */
   start(): void {
     if (!this.enabled) return;
 

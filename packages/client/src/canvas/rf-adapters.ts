@@ -1,6 +1,6 @@
 // ── BoardNode/BoardEdge <-> ReactFlow adapters ────────────────────────────────
 //
-// Ported from the legacy figmalade prototype's `boardNodesToRF` /
+// Ported from the original prototype's `boardNodesToRF` /
 // `boardEdgesToRF` (src/components/BoardCanvas.tsx ~L175-308), faithfully
 // preserving the frame-behind-non-frame stacking rule and the per-node-type
 // data shape each node component needs to render. Two deliberate deviations
@@ -11,7 +11,7 @@
 //      suffix convention — one registered RF component per board node type,
 //      named after that type directly.
 //   2. Frame-vs-non-frame z-ordering reuses the shared `order` field (see
-//      `@easel/shared`'s `normalizeOrder`/`reorderLayers`) instead of a fixed
+//      `@figemite/shared`'s `normalizeOrder`/`reorderLayers`) instead of a fixed
 //      `zIndex: -10` sentinel: frames are assigned negative zIndex values
 //      derived from their `order`, non-frames get zIndex >= 0 derived from
 //      theirs. This keeps relative stacking *within* each partition
@@ -25,7 +25,7 @@
 // off a dragged RF node).
 
 import type { Node as RfNode, Edge as RfEdge } from '@xyflow/react';
-import type { BoardEdge, BoardNode, XY } from '@easel/shared';
+import type { BoardEdge, BoardNode, XY } from '@figemite/shared';
 
 // ── Node data shapes ──────────────────────────────────────────────────────────
 //
@@ -94,7 +94,7 @@ function nodeSize(node: BoardNode): { width?: number; height?: number } {
 // squash for emoji/icon lives in `onResizeEndSquare` itself (still ONE
 // stable function), not in a per-call wrapper here.
 //
-// Which callback(s) a node type receives mirrors `@easel/shared`'s
+// Which callback(s) a node type receives mirrors `@figemite/shared`'s
 // `nodeText` accessor (the frame/text-bearing/none split) for text editing,
 // plus `onOpenDescription` for every node type whose component actually
 // renders a `DescriptionBadge` (sticky/text/shape/emoji/icon — NOT frame or
@@ -250,7 +250,7 @@ export function boardEdgeToRf(edge: BoardEdge, callbacks?: EdgeCallbacks): Board
  * Map a whole board (nodes + edges) to ReactFlow shape. Nodes are sorted so
  * that ReactFlow's render order agrees with `zIndex`: all frames first
  * (ordered by their own `order`), then all non-frames (ordered by their own
- * `order`) — the exact partition scheme `@easel/shared`'s `normalizeOrder`
+ * `order`) — the exact partition scheme `@figemite/shared`'s `normalizeOrder`
  * uses, reused here rather than reinvented.
  */
 export function boardToRf(

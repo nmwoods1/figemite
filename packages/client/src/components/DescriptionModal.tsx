@@ -1,6 +1,6 @@
 // ── DescriptionModal: TipTap markdown editor for a node's description ───────
 //
-// Ported from the legacy figmalade prototype's
+// Ported from the original prototype's
 // `src/components/DescriptionModal.tsx`, same visual design and the same
 // TipTap extension set (StarterKit + TaskList/TaskItem + Markdown — see
 // package.json's `@tiptap/*` deps, all MIT). Deviations:

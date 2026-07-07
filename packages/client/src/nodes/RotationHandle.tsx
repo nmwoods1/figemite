@@ -1,6 +1,6 @@
 // ── RotationHandle ────────────────────────────────────────────────────────────
 //
-// Ported from figmalade's src/components/RotationHandle.tsx: a small circular
+// Ported from the prototype's src/components/RotationHandle.tsx: a small circular
 // grab target rendered above a node's top edge. It sits as a sibling OUTSIDE
 // the rotation wrapper (BaseNode's `data-testid="base-node-rotation"` div) so
 // it doesn't spin along with the node it's rotating. Dragging computes the

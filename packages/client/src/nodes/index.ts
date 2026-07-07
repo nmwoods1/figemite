@@ -1,7 +1,7 @@
 // ── The ReactFlow node-type registry ─────────────────────────────────────────
 //
 // BoardCanvas (P3-T20) passes this map to `<ReactFlow nodeTypes={nodeTypes} />`.
-// Keyed by each `BoardNode['type']` discriminant (@easel/shared) — matching
+// Keyed by each `BoardNode['type']` discriminant (@figemite/shared) — matching
 // `rf-adapters.ts`'s `boardNodeToRf`, which sets each RF node's `type` to the
 // board node's own `type` string (not a `<type>Node` suffix convention).
 
