@@ -33,6 +33,12 @@ export interface ServerConfig {
   debounceMs?: number;
   /** File-watcher self-write suppression window in ms — see `FileWatcher`. */
   suppressMs?: number;
+  /**
+   * Debounce window in ms between a Yjs room doc update and its write-back to
+   * `board.json` — see `YjsWebsocketService`. Defaults to ~1000ms. Configurable
+   * here so tests can shrink it.
+   */
+  yjsPersistDebounceMs?: number;
   /** AI auto-end timeout in ms — see `AiSessionManager`. */
   autoEndMs?: number;
   /** SSE heartbeat interval in ms — see `SseHub`. */

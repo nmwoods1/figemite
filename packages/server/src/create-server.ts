@@ -83,7 +83,17 @@ export function createServer(config: ServerConfig): ServerHandle {
   });
   watcher.start();
 
-  const yjsWs = new YjsWebsocketService();
+  // Server-side Yjs-doc persistence (P5-T28): seeds a cold room from disk and
+  // debounce-persists edits back, via the SAME repo/history/watcher instances
+  // the HTTP API uses — one `BoardRepository` write path, one snapshot
+  // history, one suppression map, regardless of whether a write originated
+  // from POST /api/board or from a Yjs room's debounced flush.
+  const yjsWs = new YjsWebsocketService({
+    repo,
+    history,
+    suppress: (slug, subPath) => watcher.suppress(slug, subPath),
+    debounceMs: config.yjsPersistDebounceMs,
+  });
 
   const mdns = new MdnsService({
     enabled: config.mdns ?? false,
