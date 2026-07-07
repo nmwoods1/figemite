@@ -1,23 +1,34 @@
-// ── Playwright config: browser-mode structural-parity gate (P3-T21) ─────────
+// ── Playwright config: browser-mode structural-parity + interaction gates ───
+// (P3-T21 + P4-T26)
 //
-// This is the deterministic Phase-3 gate: it drives a REAL Chromium against
+// This is the deterministic Phase-3/4 gate: it drives a REAL Chromium against
 // the real dev server (Vite + the mounted @easel/server backend, see
-// `src/dev/easel-server-plugin.ts`) so `BoardCanvas` renders in an actual
-// browser layout/measurement pipeline — the thing jsdom (packages/client's
-// `vitest` suite) structurally cannot do (see `canvas/BoardCanvas.test.tsx`'s
-// module doc: RF's edge-rendering pipeline is measurement-gated and never
-// mounts an edge in jsdom).
+// `src/dev/easel-server-plugin.ts`) so `BoardCanvas` renders — and, for
+// `interaction.spec.ts`, is EDITED — in an actual browser layout/measurement/
+// input pipeline — the thing jsdom (packages/client's `vitest` suite)
+// structurally cannot do (see `canvas/BoardCanvas.test.tsx`'s module doc:
+// RF's edge-rendering pipeline is measurement-gated and never mounts an edge
+// in jsdom).
 //
 // `webServer.command` seeds a gitignored `boards/` dir straight from
-// `fixtures/kitchen-sink` + `fixtures/minimal` (via `e2e/support/seed-boards.mjs`)
-// then starts `npm run dev` bound to a fixed port, so every test run gets a
-// deterministic, from-fixtures board regardless of what a developer has
-// scratched into their local `boards/` dir otherwise.
+// `fixtures/kitchen-sink` + `fixtures/minimal` + `fixtures/interaction` (via
+// `e2e/support/seed-boards.mjs`) then starts `npm run dev` bound to a fixed
+// port, so every test run gets a deterministic, from-fixtures board
+// regardless of what a developer has scratched into their local `boards/`
+// dir otherwise. `interaction.spec.ts` additionally re-seeds its own
+// `interaction` slug in a `beforeEach` (via that same script's exported
+// `seedSlug`), since its tests mutate the board and must not leak state
+// between tests.
 //
 // Two projects, deliberately separated by which specs they run:
-//   - `chromium` (default, matches `render-parity.spec.ts` only): the
-//     authoritative, deterministic Phase-3 gate. `npm run test:e2e` runs only
-//     this project — this is what CI treats as blocking.
+//   - `chromium` (default, matches `render-parity.spec.ts` AND
+//     `interaction.spec.ts`): the authoritative, deterministic Phase-3 +
+//     Phase-4 gate. `npm run test:e2e` runs only this project — this is what
+//     CI treats as blocking. `interaction.spec.ts` (P4-T26) is the Phase-4
+//     gate: real-browser single-user editing parity, asserting persistence
+//     to the same seeded `boards/` dir this config's `webServer` sets up (see
+//     that spec's module doc for how it re-seeds its own `interaction`
+//     fixture per-test via `e2e/support/seed-boards.mjs`'s `seedSlug`).
 //   - `chromium-visual` (matches `visual-regression.spec.ts` only): the
 //     best-effort screenshot layer (see that file's module doc for why a
 //     mismatch here is never trustworthy across environments — the baseline
@@ -59,7 +70,7 @@ export default defineConfig({
   projects: [
     {
       name: 'chromium',
-      testMatch: 'render-parity.spec.ts',
+      testMatch: ['render-parity.spec.ts', 'interaction.spec.ts'],
       use: { ...devices['Desktop Chrome'] },
     },
     {

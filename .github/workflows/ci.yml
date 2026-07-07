@@ -34,7 +34,7 @@ jobs:
       - name: Install Playwright chromium
         run: npx playwright install --with-deps chromium
 
-      - name: E2E (browser-mode structural-parity gate)
+      - name: E2E (browser-mode structural-parity + interaction gates)
         run: npm run test:e2e
 
       - name: Upload Playwright report

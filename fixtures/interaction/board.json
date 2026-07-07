@@ -1,0 +1,27 @@
+{
+  "formatVersion": 1,
+  "boardLabel": "Interaction",
+  "viewport": { "x": 40, "y": 40, "zoom": 1 },
+  "nodes": [
+    {
+      "id": "sticky1",
+      "type": "sticky",
+      "pos": { "x": 40, "y": 40 },
+      "order": 0,
+      "size": { "width": 200, "height": 160 },
+      "text": "",
+      "color": "#fef3c7"
+    },
+    {
+      "id": "shape1",
+      "type": "shape",
+      "pos": { "x": 480, "y": 60 },
+      "order": 1,
+      "size": { "width": 160, "height": 100 },
+      "shape": "rect",
+      "color": "#e2e8f0",
+      "description": "A plain rectangle for interaction tests."
+    }
+  ],
+  "edges": []
+}

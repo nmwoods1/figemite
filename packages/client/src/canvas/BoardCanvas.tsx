@@ -239,12 +239,78 @@ interface EditablePaneProps extends PaneProps {
   boardLabel: string;
 }
 
-export function BoardCanvas({ board, readonly, slug, path }: BoardCanvasProps) {
-  const store = useMemo(() => createBoardStore(board, { readonly }), [board, readonly]);
+/**
+ * `store`'s construction is INTENTIONALLY NOT a `useMemo` (a past version of
+ * this component used one, paired with a `useEffect(() => () =>
+ * store.destroy(), [store])` cleanup — a real bug, only visible under
+ * `<StrictMode>` in a real browser, that the render-only jsdom test suite
+ * structurally could not catch: React does not guarantee a `useMemo` value is
+ * computed exactly once per mount (the docs explicitly call this out; dev
+ * `<StrictMode>` deliberately double-invokes it to surface exactly this
+ * class of bug), so pairing a `useMemo`-sourced value with a teardown in an
+ * effect cleanup is unsound whenever the memo callback runs more than once
+ * for what the effect treats as "one mount." Concretely, `<StrictMode>`'s
+ * mount -> cleanup -> re-mount cycle called `store.destroy()` (which calls
+ * `doc.destroy()`, per board-store.ts) after the FIRST of the two `useMemo`
+ * calls, but the SECOND `useMemo` call's result — the one React actually
+ * kept — was never told about that teardown and went on being used for the
+ * rest of the component's real lifetime with an already-destroyed `Y.Doc`.
+ * The doc still silently accepted further writes (`Y.Doc.transact`/`.set`
+ * don't hard-fail post-destroy) and `useAutosave`'s OWN independent
+ * `doc.on('update', ...)` listener (attached in a later-mounting effect,
+ * i.e. after the premature destroy) kept firing — so autosave/persistence
+ * looked like it worked. But `board-store.ts`'s OWN internal `onDocUpdate`
+ * listener (which refreshes `getSnapshot()`'s cache and notifies
+ * `useSyncExternalStore` subscribers) had been `doc.off()`'d by that same
+ * `destroy()` call and never re-registered — so every toolbar-created node,
+ * drag, resize, etc. after mount silently stopped reaching the rendered
+ * ReactFlow canvas even though it kept landing in the doc and on disk. This
+ * is exactly the gap `e2e/interaction.spec.ts` (P4-T26, the Phase-4 gate)
+ * exists to catch: `render(<BoardCanvas />)` under vitest+jsdom never wraps
+ * in `<StrictMode>`, so no unit/component test could have caught this — a
+ * real browser mounting the REAL `main.tsx` (which does wrap in
+ * `<StrictMode>`) was required.
+ *
+ * The fix: construct AND tear down the store from the SAME effect, so
+ * StrictMode's double-invocation reliably reconstructs a fresh store on its
+ * simulated re-mount instead of reusing a torn-down one. `useState`'s lazy
+ * initializer seeds the FIRST store synchronously (so render never sees a
+ * null store); the effect then re-derives the correct store for the current
+ * `board`/`readonly` deps, replacing + destroying the previous one on a
+ * dependency change and destroying (without replacing) on unmount.
+ */
+function useBoardStoreLifecycle(board: BoardFile, readonly: boolean): BoardStore {
+  // Lazy initializer: builds the FIRST store synchronously during render, so
+  // render never sees a null/placeholder store. `initialStoreRef` remembers
+  // that exact instance (a `useState` lazy initializer's result is stable —
+  // even StrictMode's double-invoke of it discards one result, same as
+  // `useMemo`, but here we deliberately consume it from a ref exactly once,
+  // inside the paired effect below, rather than trusting `useMemo`-style
+  // reuse across renders).
+  const [store, setStore] = useState<BoardStore>(() => createBoardStore(board, { readonly }));
+  const initialStoreRef = useRef<BoardStore | null>(store);
 
   useEffect(() => {
-    return () => store.destroy();
-  }, [store]);
+    // Reuse the lazy-initialized store on this effect's FIRST-ever run (so a
+    // fresh mount doesn't construct a redundant second `Y.Doc` for the exact
+    // same `board`/`readonly` the initializer already built); every
+    // subsequent run (a real `board`/`readonly` change, OR StrictMode's
+    // simulated re-mount after having destroyed the previous one) builds a
+    // genuinely fresh store instead of resurrecting an already-destroyed
+    // one. This is what makes construction and teardown symmetric per effect
+    // run — see this function's module doc for why that symmetry is the
+    // actual fix.
+    const current = initialStoreRef.current ?? createBoardStore(board, { readonly });
+    initialStoreRef.current = null;
+    setStore(current);
+    return () => current.destroy();
+  }, [board, readonly]);
+
+  return store;
+}
+
+export function BoardCanvas({ board, readonly, slug, path }: BoardCanvasProps) {
+  const store = useBoardStoreLifecycle(board, readonly);
 
   const fitView = isDefaultViewport(board.viewport);
 
