@@ -319,12 +319,27 @@ async function waitForSaved(page: Page): Promise<void> {
 }
 
 test.describe('single-user editing parity + persistence (Phase 4 gate)', () => {
-  test.beforeEach(() => {
+  test.beforeEach(async ({ context }) => {
     // Fresh on-disk board before every test — see module doc. Tests run
     // serially (`workers: 1`) against one shared dev server, so re-seeding
     // between tests (rather than per-worker isolation) is what keeps every
     // test's starting state pristine regardless of run order.
     seedSlug(SLUG);
+
+    // P5-T33 found this suite pre-existingly broken (independent of anything
+    // in that task's own changes — reproduced from a clean worktree at the
+    // commit immediately before P5-T33 started): P5-T30 added
+    // `IdentityPrompt` ("Who are you?"), which mounts and modally intercepts
+    // every click whenever `lib/identity.ts`'s `hasStoredUser()` is false —
+    // true for every test here, since each gets a fresh default `page`/
+    // `context` fixture with empty storage. Seeding a name up front (via
+    // `addInitScript`, which runs before ANY page script in this context, on
+    // every navigation) skips that prompt entirely, exactly like a returning
+    // user — mirrors `multiplayer.spec.ts`'s `newIdentifiedContext` helper.
+    await context.addInitScript(
+      (n) => window.localStorage.setItem('easel:author', n),
+      'Interaction Tester',
+    );
   });
 
   // ── 1. Create + text ────────────────────────────────────────────────────

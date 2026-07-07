@@ -239,6 +239,72 @@ describe('useAiLock', () => {
       act(() => currentEventSource().emit('sync', { locked: true, epoch: 3 }));
       expect(result.current.aiLocked).toBe(true);
     });
+
+    // ── P5-T33 (Phase 5 gate, part C) ────────────────────────────────────────
+    //
+    // The gate's explicit assertion of the FULL lifecycle this hook exists to
+    // fix: begin -> drop -> end (missed) -> reconnect -> unlocked. A real
+    // Chromium `context.setOffline(true)` variant of this was tried first
+    // (packages/client/e2e/multiplayer.spec.ts) and abandoned after direct
+    // diagnosis: Chromium's offline emulation blocks NEW page requests but
+    // does NOT sever an ALREADY-OPEN `EventSource`/SSE stream in this
+    // environment, so a real-browser "drop" never actually happened — the
+    // locked page kept receiving the live `unlocked` frame regardless of
+    // "offline," which would make that test's recovery assertion pass for the
+    // wrong reason. This test drives the IDENTICAL state machine (the real
+    // `useAiLock` hook, unmodified) through a stubbed `EventSource` + `fetch`
+    // that CAN reliably simulate "the unlocked frame never arrived" (by
+    // simply never emitting it), which is the one guarantee the real-browser
+    // attempt could not make.
+    it('gate: full begin -> drop -> end -> reconnect -> unlocked path', async () => {
+      const { result } = renderHook(() => useAiLock('my-board', [], {}));
+
+      // Fresh connect: initial status is unlocked (mirrors a board nobody has
+      // begun an AI session on yet).
+      act(() => currentEventSource().emit('sync', { locked: false, epoch: 0 }));
+      expect(result.current.aiLocked).toBe(false);
+
+      // "begin": a real POST /api/ai/begin's `locked` SSE broadcast arrives
+      // over the still-healthy connection.
+      act(() => currentEventSource().emit('locked', { epoch: 1 }));
+      expect(result.current.aiLocked).toBe(true);
+
+      // "drop": the connection fails (a network blip) WHILE the AI session is
+      // still active — mirrors the real EventSource's `onerror` firing with
+      // no clean close frame.
+      const droppedSource = currentEventSource();
+      act(() => droppedSource.emitError());
+      expect(droppedSource.closed).toBe(true);
+
+      // "end" happens WHILE the socket is down: the real server would broadcast
+      // an `unlocked` SSE frame here, but this client's connection is dead, so
+      // it NEVER SEES that frame — simulated by simply never emitting one on
+      // the dropped source (which is now inert anyway) and instead updating
+      // what the NEXT status poll will report, exactly like a real
+      // GET /api/ai/status hitting the server AFTER the real end() call
+      // landed.
+      mockStatus({ locked: false, epoch: 2 });
+
+      // The hook is still (wrongly, transiently) locked at this instant —
+      // sanity check that this test is genuinely exercising "missed the
+      // unlock," not a no-op.
+      expect(result.current.aiLocked).toBe(true);
+
+      // "reconnect": the hook's own backoff timer fires, opening a fresh
+      // EventSource AND (per useAiLock.ts's module doc) immediately
+      // reconciling against GET /api/ai/status on that reconnect attempt,
+      // independent of whatever that fresh connection's own `sync` frame
+      // says.
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(5000);
+      });
+
+      expect(FakeEventSource.instances.length).toBeGreaterThan(1);
+      expect(currentEventSource()).not.toBe(droppedSource);
+
+      // Resolved to UNLOCKED — the bug this whole hook exists to fix.
+      expect(result.current.aiLocked).toBe(false);
+    });
   });
 
   describe('disabled paths', () => {

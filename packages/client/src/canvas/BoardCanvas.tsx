@@ -323,6 +323,22 @@ function EditableCanvas({ store, fitView, viewport, slug, path }: EditablePanePr
   // Publish the local cursor (flow-space) on pointer move over the measured
   // container; clear it when the pointer leaves. Throttled inside
   // usePresence's publishCursor, not here.
+  //
+  // P5-T33 (the Phase 5 gate) found this effect never attached its listeners
+  // at all for a room-joined store: `containerRef` is only attached to a DOM
+  // node on the render branch that returns the REAL canvas markup (below) —
+  // the render(s) that instead return `<ConnectingPlaceholder />` (while
+  // `syncStatus === 'connecting'`, which is true for every fresh room join —
+  // see that branch below) mount NO such node, so `containerRef.current` is
+  // still `null` the one time this effect used to run with an empty `[]` deps
+  // array. Once the room finished syncing and the function started returning
+  // the real markup, this effect never re-ran to pick up the now-attached
+  // ref, permanently losing cursor publishing for that whole component
+  // instance's lifetime (confirmed via `multiplayer.spec.ts`'s remote-cursor
+  // assertion). Depending on `syncStatus` re-runs this effect exactly when
+  // the rendered branch changes from the placeholder to the real canvas (or,
+  // for a no-room store, `syncStatus` is stable from the first real render
+  // onward, so this still attaches exactly once).
   useEffect(() => {
     const container = containerRef.current;
     if (!container) return;
@@ -339,8 +355,8 @@ function EditableCanvas({ store, fitView, viewport, slug, path }: EditablePanePr
       container.removeEventListener('pointermove', handleMove);
       container.removeEventListener('pointerleave', handleLeave);
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- `presence.publishCursor` is stable per `awareness` identity; the live viewport is read via `liveViewportRef` (see above) precisely so this effect mounts its DOM listeners once rather than re-binding on every viewport tick.
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- `presence.publishCursor` is stable per `awareness` identity; the live viewport is read via `liveViewportRef` (see above). `syncStatus` is the intentional re-attach trigger (see comment above) — it is NOT read inside the effect body itself.
+  }, [syncStatus]);
 
   // A room-joined store (P5-T29) starts with an EMPTY doc until the
   // provider's first sync completes — show a placeholder rather than an
@@ -459,58 +475,201 @@ interface EditablePaneProps extends PaneProps {
  * real browser mounting the REAL `main.tsx` (which does wrap in
  * `<StrictMode>`) was required.
  *
- * The fix: construct AND tear down the store from the SAME effect, so
- * StrictMode's double-invocation reliably reconstructs a fresh store on its
- * simulated re-mount instead of reusing a torn-down one. `useState`'s lazy
- * initializer seeds the FIRST store synchronously (so render never sees a
- * null store); the effect then re-derives the correct store for the current
- * `board`/`readonly`/`room` deps, replacing + destroying the previous one on
- * a dependency change and destroying (without replacing) on unmount.
+ * The original fix (P4-T22): construct AND tear down the store from the SAME
+ * effect, so StrictMode's double-invocation reliably reconstructs a fresh
+ * store on its simulated re-mount instead of reusing a torn-down one. That
+ * version seeded the FIRST store via a `useState` lazy initializer (so render
+ * never sees a null store); the effect then re-derived the correct store for
+ * the current `board`/`readonly`/`room` deps, replacing + destroying the
+ * previous one on a dependency change and destroying (without replacing) on
+ * unmount.
+ *
+ * P5-T33 (the Phase 5 gate) found a SECOND, related StrictMode bug in that
+ * scheme: the `useState(() => createBoardStore(...))` LAZY INITIALIZER is
+ * ALSO double-invoked by `<StrictMode>` (React's docs call this out
+ * explicitly, same rationale as the `useMemo` bug above) — but unlike an
+ * effect, a `useState` initializer's two invocations have no matched
+ * "cleanup" for whichever result React discards. Concretely: the discarded
+ * invocation's `createBoardStore` call still joined a REAL server room (a
+ * real `Y.Doc` + `WebsocketProvider` + websocket + awareness entry, per
+ * board-store.ts's `room` option) that nothing ever called `.destroy()` on —
+ * the effect only ever read/consumed ONE lazy result, so the discarded one's
+ * provider/socket/awareness state leaked for the lifetime of the page. Every
+ * OTHER connected peer then rendered a permanent PHANTOM duplicate presence
+ * entry for this same human (confirmed via `multiplayer.spec.ts`'s
+ * ActiveUsersPanel assertions and a manual repro logging each
+ * `joinBoardRoom` construction's `clientID`: THREE distinct clientIDs were
+ * constructed for what should be ONE store lifecycle — the kept lazy result,
+ * the LEAKED discarded lazy result, and the effect's own fresh
+ * StrictMode-remount construction).
+ *
+ * The fix (below) keeps construction in a `useState` lazy initializer (safe
+ * to READ during render — the problem was never that half) but closes the
+ * leak with `pendingStoreByKey`, a MODULE-level `Map` (deliberately NOT a
+ * `useRef` — the project's `react-hooks/refs` lint rule flags reading a REF
+ * as a render return value as unsound under React Compiler's assumptions,
+ * and this codebase takes that rule seriously; a plain module-level `Map` is
+ * not a ref at all, so it isn't subject to that rule, and is genuinely safe
+ * here since it's never read for render OUTPUT — only used as a handoff
+ * between two SUCCESSIVE lazy-initializer invocations for the same instance).
+ *
+ * CRITICAL correction from an earlier version of this fix (caught by manual
+ * repro, not by any automated test — see this function's own doc below for
+ * why): React's `<StrictMode>` double-invoke of a `useState` lazy initializer
+ * keeps the FIRST call's return value as the actual state and discards the
+ * SECOND's — NOT the reverse. An earlier version of this code assumed "last
+ * invocation wins" (destroying whatever a PRIOR invocation had built, keeping
+ * its OWN result) — which meant the real, kept `store` stayed bound to the
+ * FIRST invocation's store the whole time regardless, while every later
+ * invocation's freshly-built store (immediately discarded by React) was the
+ * one left live-but-orphaned. The fix: the SECOND invocation must return the
+ * SAME value the FIRST one did — `pendingStoreByKey` here means "the store
+ * already built for this instance," checked and REUSED (never rebuilt) by
+ * any invocation after the first.
+ *
+ * Reconstruction on a REAL `board`/`readonly`/`room` change uses the
+ * "derived-during-render reset on prop change" idiom this codebase already
+ * relies on elsewhere (hooks/usePresence.ts's `lastAwareness`,
+ * hooks/useSyncStatus.ts's `lastProvider`) — comparing the tracked deps key
+ * during render and calling `setState` synchronously in the render body
+ * (never inside an effect body, which `react-hooks/set-state-in-effect`
+ * correctly flags: a `setState` call textually inside `useEffect` risks
+ * cascading renders, even when — as an EARLIER version of this fix did —
+ * it's conditioned to be a no-op on the common path). The effect below is
+ * therefore pure cleanup, using a DEFERRED-DESTROY (`setTimeout(…, 0)`,
+ * cancelled by the very next setup if one follows immediately) rather than
+ * destroying synchronously in the cleanup itself: `store`'s underlying
+ * `WebsocketProvider`+socket is NOT a resumable resource (there is no
+ * "reconnect" once `destroy()` runs), so `<StrictMode>`'s OWN double-invoke
+ * of effects (mount -> cleanup -> immediate re-mount of EFFECTS ONLY, no new
+ * render) would otherwise destroy the store on the rehearsal cleanup and
+ * never rebuild it (no new render means the render-phase reset above never
+ * gets a chance to run again) — confirmed via manual repro: the
+ * "Connecting…" placeholder never resolved. Deferring the real `destroy()`
+ * by one macrotask means a same-tick StrictMode rehearsal reliably cancels
+ * it before it ever fires, while a genuine unmount/deps-change (no matching
+ * re-setup) lets it fire for real.
  *
  * `room` (P5-T29): identifies which server room an editable store should
  * join (`{ slug, path }`, see `board-store.ts`'s `BoardStoreOptions.room`) —
  * `undefined` for read-only stores and for the editable-without-`slug`
  * convenience path (see `BoardCanvasProps.slug`'s doc). Included in the
- * effect's dependency array (via its own `roomKey` — a plain object would
- * fail `Object.is` every render) so navigating to a different board/sub-board
+ * tracked deps key (via its own `roomKey` — a plain object would fail
+ * `Object.is` every render) so navigating to a different board/sub-board
  * rejoins the right room rather than keeping the previous one's.
  */
+
+/**
+ * Module-level (NOT `useRef`) handoff between two SUCCESSIVE `useState` lazy-
+ * initializer invocations for the same `useBoardStoreLifecycle` call site
+ * (StrictMode's double-RENDER, if it happens) — see that function's doc
+ * comment above for why this must live outside any per-instance hook state.
+ * Keyed by a token minted once per component instance (via its own
+ * `useState` lazy initializer, so it too survives StrictMode's double-invoke
+ * instead of becoming a fresh key each time) so concurrently-mounted
+ * `BoardCanvas` instances never see each other's pending store.
+ */
+const pendingStoreByKey = new Map<symbol, BoardStore>();
+
+/**
+ * Module-level handoff for the DEFERRED-DESTROY technique the effect below
+ * uses to survive StrictMode's double-effect-invocation — see that effect's
+ * comment for the full rationale. Maps an instance key to the pending
+ * `setTimeout` handle for a not-yet-executed `store.destroy()` call.
+ */
+const pendingDestroyByKey = new Map<symbol, ReturnType<typeof setTimeout>>();
+
 function useBoardStoreLifecycle(
   board: BoardFile,
   readonly: boolean,
   room: { slug: string; path: string[] } | undefined,
 ): BoardStore {
-  // Lazy initializer: builds the FIRST store synchronously during render, so
-  // render never sees a null/placeholder store. `initialStoreRef` remembers
-  // that exact instance (a `useState` lazy initializer's result is stable —
-  // even StrictMode's double-invoke of it discards one result, same as
-  // `useMemo`, but here we deliberately consume it from a ref exactly once,
-  // inside the paired effect below, rather than trusting `useMemo`-style
-  // reuse across renders).
-  const [store, setStore] = useState<BoardStore>(() => createBoardStore(board, { readonly, room }));
-  const initialStoreRef = useRef<BoardStore | null>(store);
+  // A stable per-instance key for `pendingStoreByKey` — `Symbol()` itself has
+  // no live-resource side effect (unlike `createBoardStore`), so constructing
+  // it via a lazy initializer is unremarkable; StrictMode's double-invoke
+  // just makes two symbols, one discarded, same as any other lazy `useState`
+  // value.
+  const [instanceKey] = useState(() => Symbol('board-store-lifecycle'));
 
-  // A stable, comparable key for `room` — `BoardCanvasProps.path` is a fresh
-  // array each render (App.tsx's board route note the same caveat), so
-  // depending on `room` object identity directly would rebuild the store
-  // every render. `undefined` (no room) stays its own stable key.
-  const roomKey = room ? `${room.slug} ${room.path.join(' ')}` : '';
+  // Lazy initializer: builds a store synchronously during render (so render
+  // never sees a null/placeholder store), destroying whatever a PRIOR
+  // invocation (for this same `instanceKey`) left pending first. Reading/
+  // returning a `useState` value during render is the well-established,
+  // lint-clean pattern this restores (vs. an intermediate version of this
+  // function that read a plain `useRef` as its render return value, which
+  // the project's `react-hooks/refs` lint rule correctly flags as unsound).
+  // This handles StrictMode's DOUBLE-RENDER (two back-to-back invocations of
+  // this initializer within the same initial commit).
+  const [store, setStore] = useState<BoardStore>(() => {
+    // React's `<StrictMode>` double-invoke of a `useState` lazy initializer
+    // keeps the FIRST call's return value as the actual state and discards
+    // the SECOND's (confirmed via manual repro — an earlier version of this
+    // fix wrongly assumed the reverse, which meant the REAL, kept `store`
+    // silently stayed bound to the FIRST invocation's (still-connecting, or
+    // already stale) provider forever, while all the "am I the latest"
+    // bookkeeping below tracked the discarded second one instead). So: if a
+    // store already exists for this `instanceKey`, REUSE it — a second
+    // invocation must return the SAME value the first one did, not build a
+    // redundant new one that React would discard anyway (which would also
+    // leak an un-destroyed extra provider/socket, the original P5-T33 bug).
+    const existing = pendingStoreByKey.get(instanceKey);
+    if (existing) return existing;
+    const created = createBoardStore(board, { readonly, room });
+    pendingStoreByKey.set(instanceKey, created);
+    return created;
+  });
 
+  // Derived-during-render "reset on prop change" (same idiom as
+  // hooks/usePresence.ts's `lastAwareness` / hooks/useSyncStatus.ts's
+  // `lastProvider`): if `board`/`readonly`/`room` genuinely changed since the
+  // last render, build a fresh store and call `setState` synchronously,
+  // right here in the render body — never inside an effect body (see this
+  // function's doc comment for why `react-hooks/set-state-in-effect`
+  // correctly rules that out). A stable, comparable `depsKey` stands in for
+  // `room` (a fresh object each render — App.tsx's board route notes the
+  // same caveat) so this doesn't rebuild on `room`'s per-render identity alone.
+  const roomKey = room ? `${room.slug} ${room.path.join(' ')}` : '';
+  const depsKey = `${readonly} ${roomKey}`;
+  const [lastBoard, setLastBoard] = useState(board);
+  const [lastDepsKey, setLastDepsKey] = useState(depsKey);
+  if (board !== lastBoard || depsKey !== lastDepsKey) {
+    setLastBoard(board);
+    setLastDepsKey(depsKey);
+    setStore(createBoardStore(board, { readonly, room }));
+  }
+
+  // Pure cleanup — no `setState` anywhere in this effect. Handles
+  // StrictMode's DOUBLE-EFFECT-INVOCATION (mount -> cleanup -> re-mount of
+  // EFFECTS ONLY, with NO new render and thus no chance to rebuild `store`
+  // via the render-phase logic above): `store`/`room-store.ts`'s underlying
+  // `WebsocketProvider`+socket is NOT a resumable resource (there is no
+  // "reconnect" — `destroy()` is final), so an effect that destroyed it on
+  // its first (rehearsal) cleanup and then just re-ran with the SAME,
+  // now-dead `store` would leave the page permanently stuck (confirmed via
+  // manual repro: the "Connecting…" placeholder never resolved). Deferring
+  // the actual `destroy()` by one macrotask (`setTimeout(…, 0)`) and having
+  // the NEXT setup cancel that pending timer instead of re-destroying is the
+  // standard technique for exactly this class of problem: StrictMode's
+  // rehearsal cleanup-then-immediate-re-setup happens synchronously, in the
+  // same tick, well before a `setTimeout(0)` callback ever fires, so the
+  // deferred destroy is reliably cancelled for a rehearsal and only ever
+  // actually runs for a REAL unmount/deps-change (where no matching re-setup
+  // follows to cancel it).
   useEffect(() => {
-    // Reuse the lazy-initialized store on this effect's FIRST-ever run (so a
-    // fresh mount doesn't construct a redundant second `Y.Doc` for the exact
-    // same `board`/`readonly`/`room` the initializer already built); every
-    // subsequent run (a real deps change, OR StrictMode's simulated re-mount
-    // after having destroyed the previous one) builds a genuinely fresh store
-    // instead of resurrecting an already-destroyed one. This is what makes
-    // construction and teardown symmetric per effect run — see this
-    // function's module doc for why that symmetry is the actual fix.
-    const current = initialStoreRef.current ?? createBoardStore(board, { readonly, room });
-    initialStoreRef.current = null;
-    setStore(current);
-    return () => current.destroy();
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- `roomKey` is the intentional stable proxy for `room` (see above); `room` itself is deliberately excluded to avoid rebuilding on its per-render object identity.
-  }, [board, readonly, roomKey]);
+    const pendingDestroy = pendingDestroyByKey.get(instanceKey);
+    if (pendingDestroy) {
+      clearTimeout(pendingDestroy);
+      pendingDestroyByKey.delete(instanceKey);
+    }
+    pendingStoreByKey.delete(instanceKey);
+    return () => {
+      const timer = setTimeout(() => {
+        pendingDestroyByKey.delete(instanceKey);
+        store.destroy();
+      }, 0);
+      pendingDestroyByKey.set(instanceKey, timer);
+    };
+  }, [store, instanceKey]);
 
   return store;
 }

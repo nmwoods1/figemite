@@ -21,14 +21,19 @@
 // between tests.
 //
 // Two projects, deliberately separated by which specs they run:
-//   - `chromium` (default, matches `render-parity.spec.ts` AND
-//     `interaction.spec.ts`): the authoritative, deterministic Phase-3 +
-//     Phase-4 gate. `npm run test:e2e` runs only this project — this is what
-//     CI treats as blocking. `interaction.spec.ts` (P4-T26) is the Phase-4
-//     gate: real-browser single-user editing parity, asserting persistence
-//     to the same seeded `boards/` dir this config's `webServer` sets up (see
-//     that spec's module doc for how it re-seeds its own `interaction`
-//     fixture per-test via `e2e/support/seed-boards.mjs`'s `seedSlug`).
+//   - `chromium` (default, matches `render-parity.spec.ts`,
+//     `interaction.spec.ts`, AND `multiplayer.spec.ts`): the authoritative,
+//     deterministic Phase-3 + Phase-4 + Phase-5 gate. `npm run test:e2e` runs
+//     only this project — this is what CI treats as blocking.
+//     `interaction.spec.ts` (P4-T26) is the Phase-4 gate: real-browser
+//     single-user editing parity, asserting persistence to the same seeded
+//     `boards/` dir this config's `webServer` sets up (see that spec's module
+//     doc for how it re-seeds its own `interaction` fixture per-test via
+//     `e2e/support/seed-boards.mjs`'s `seedSlug`). `multiplayer.spec.ts`
+//     (P5-T33) is the Phase-5 gate: TWO real browser contexts on the same
+//     seeded `multiplayer` board, proving realtime sync, presence/cursors,
+//     follow-mode, and AI-lock SSE-drop recovery all work end-to-end against
+//     the real dev server.
 //   - `chromium-visual` (matches `visual-regression.spec.ts` only): the
 //     best-effort screenshot layer (see that file's module doc for why a
 //     mismatch here is never trustworthy across environments — the baseline
@@ -70,7 +75,7 @@ export default defineConfig({
   projects: [
     {
       name: 'chromium',
-      testMatch: ['render-parity.spec.ts', 'interaction.spec.ts'],
+      testMatch: ['render-parity.spec.ts', 'interaction.spec.ts', 'multiplayer.spec.ts'],
       use: { ...devices['Desktop Chrome'] },
     },
     {

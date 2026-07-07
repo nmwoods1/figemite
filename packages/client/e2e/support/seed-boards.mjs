@@ -3,16 +3,18 @@
 //
 // Used by `playwright.config.ts`'s `webServer.command` (as a CLI, see the
 // `import.meta.url` guard at the bottom) — copies `fixtures/kitchen-sink`,
-// `fixtures/minimal`, and `fixtures/interaction` into `<repoRoot>/boards/`
-// (the dev-server's default `EASEL_BOARDS_DIR`, see
+// `fixtures/minimal`, `fixtures/interaction`, and `fixtures/multiplayer` into
+// `<repoRoot>/boards/` (the dev-server's default `EASEL_BOARDS_DIR`, see
 // `src/dev/easel-server-plugin.ts`'s `resolveDevBoardsRoot`) so the e2e gate
-// has real board JSON to fetch via `#/kitchen-sink`, `#/minimal`, `#/interaction`.
+// has real board JSON to fetch via `#/kitchen-sink`, `#/minimal`,
+// `#/interaction`, `#/multiplayer`.
 //
-// Also exported as `seedSlug`/`seedAll` for `interaction.spec.ts`'s
-// `beforeEach`, which re-seeds the `interaction` slug fresh before every test
-// — those tests MUTATE the board (drag/resize/rotate/delete/persist), so
-// each test needs its on-disk starting state reset to the pristine fixture,
-// not whatever the previous test left behind.
+// Also exported as `seedSlug`/`seedAll` for `interaction.spec.ts`'s and
+// `multiplayer.spec.ts`'s `beforeEach`, which re-seed their own slug fresh
+// before every test — those tests MUTATE the board (drag/resize/rotate/
+// delete/persist, or multi-peer edits), so each test needs its on-disk
+// starting state reset to the pristine fixture, not whatever the previous
+// test left behind.
 //
 // Deliberately copies (not symlinks) each fixture directory verbatim: the
 // fixtures dir's file layout (`board.json`, dotted sub-board files,
@@ -38,7 +40,7 @@ export const BOARDS_ROOT = process.env.EASEL_BOARDS_DIR
   ? path.resolve(process.env.EASEL_BOARDS_DIR)
   : path.join(REPO_ROOT, 'boards');
 
-export const SLUGS = ['kitchen-sink', 'minimal', 'interaction'];
+export const SLUGS = ['kitchen-sink', 'minimal', 'interaction', 'multiplayer'];
 
 /** Re-copies a single fixture slug's directory into `BOARDS_ROOT`, overwriting whatever is there. */
 export function seedSlug(slug) {
