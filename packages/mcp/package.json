@@ -5,7 +5,23 @@
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
+  "bin": {
+    "easel-mcp": "./dist/index.js"
+  },
   "scripts": {
     "test": "vitest run"
+  },
+  "dependencies": {
+    "@easel/shared": "*",
+    "@modelcontextprotocol/sdk": "^1.29.0",
+    "bonjour-service": "^1.4.2",
+    "ws": "^8.21.0",
+    "y-websocket": "^2.1.0",
+    "yjs": "^13.6.31",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@easel/server": "*",
+    "@types/ws": "^8.18.1"
   }
 }

@@ -1,0 +1,44 @@
+// ── Board-management HTTP client ─────────────────────────────────────────────
+//
+// `list_boards`/`create_board` talk to the plain REST API (no Yjs room
+// connection required) rather than a BoardPeer's doc — ported from the
+// legacy figmalade prototype's inline `fetch` calls in server.ts, pulled out
+// into their own module so they're testable with a mocked `fetch` without
+// touching MCP tool registration at all.
+
+export interface ListBoardsResult {
+  boards: unknown[];
+}
+
+export interface CreateBoardResult {
+  ok: true;
+  slug: string;
+}
+
+/** GET `${httpUrl}/api/boards`. Throws with the server's error message on a non-2xx response. */
+export async function listBoards(httpUrl: string): Promise<ListBoardsResult> {
+  const res = await fetch(`${httpUrl}/api/boards`);
+  const data = (await res.json()) as ListBoardsResult & { error?: string };
+  if (!res.ok) {
+    throw new Error(data?.error ?? `Failed to list boards: HTTP ${res.status}`);
+  }
+  return data;
+}
+
+/** POST `${httpUrl}/api/boards` with `{ slug, label? }`. Throws with the server's error message on a non-2xx response. */
+export async function createBoard(
+  httpUrl: string,
+  slug: string,
+  label?: string,
+): Promise<CreateBoardResult> {
+  const res = await fetch(`${httpUrl}/api/boards`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ slug, label }),
+  });
+  const data = (await res.json()) as CreateBoardResult & { error?: string };
+  if (!res.ok) {
+    throw new Error(data?.error ?? `Failed to create board: HTTP ${res.status}`);
+  }
+  return data;
+}
