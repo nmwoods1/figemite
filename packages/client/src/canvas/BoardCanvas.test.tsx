@@ -23,6 +23,7 @@ import * as Y from 'yjs';
 import type { BoardFile } from '@easel/shared';
 import { BoardCanvas } from './BoardCanvas.js';
 import { FakeAwareness } from '../test/fake-awareness.js';
+import { setLocalUser } from '../lib/identity.js';
 
 // ── P5-T29: realtime room wiring (mock lib/realtime's joinBoardRoom) ────────
 // The room/provider plumbing itself is unit-tested in lib/realtime.test.ts
@@ -38,6 +39,14 @@ vi.mock('../lib/realtime.js', () => ({
 }));
 
 const saveBoardSpy = vi.fn();
+// P6-T34: comments.json is fetched/saved via this same module's
+// `fetchComments`/`saveComments` (useComments.ts). Stubbed here (not spied
+// through to the real implementation, unlike `saveBoard` above) since jsdom
+// has no real `/api/comments` or static `boards/` fixture to hit — every
+// BoardCanvas test that doesn't specifically exercise comment wiring just
+// wants `fetchComments` to resolve empty and `saveComments` to no-op.
+const fetchCommentsMock = vi.fn();
+const saveCommentsMock = vi.fn();
 vi.mock('../lib/boards-api.js', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../lib/boards-api.js')>();
   return {
@@ -46,6 +55,8 @@ vi.mock('../lib/boards-api.js', async (importOriginal) => {
       saveBoardSpy(...args);
       return actual.saveBoard(...(args as Parameters<typeof actual.saveBoard>));
     },
+    fetchComments: (...args: unknown[]) => fetchCommentsMock(...args),
+    saveComments: (...args: unknown[]) => saveCommentsMock(...args),
   };
 });
 
@@ -140,6 +151,8 @@ beforeEach(() => {
   saveBoardSpy.mockReset();
   useAiLockMock.mockReset();
   useAiLockMock.mockReturnValue({ aiLocked: false });
+  fetchCommentsMock.mockReset().mockResolvedValue({ comments: [] });
+  saveCommentsMock.mockReset().mockResolvedValue(undefined);
 });
 
 afterEach(() => {
@@ -812,5 +825,106 @@ describe('BoardCanvas', () => {
     useAiLockMock.mockReturnValue({ aiLocked: true });
     render(<BoardCanvas board={fixtureBoard()} readonly={true} slug="my-board" path={[]} />);
     expect(screen.queryByText(/AI is editing/i)).not.toBeInTheDocument();
+  });
+});
+
+// ── P6-T34: comments layer wiring ────────────────────────────────────────────
+//
+// The comments hook/layer's OWN behaviour (placement math, mutation
+// persistence, read-only gating) is unit-tested in hooks/useComments.test.ts
+// and components/CommentLayer.test.tsx; here we only assert the top-level
+// integration: BoardCanvas fetches comments for `slug`, the Toolbar's comment
+// toggle flips comment-placement mode on/off, and read-only mode still shows
+// existing pins (view-only, no toggle).
+describe('BoardCanvas — comments (P6-T34)', () => {
+  it('fetches comments for the given slug in editable mode', async () => {
+    await act(async () => {
+      render(<BoardCanvas board={fixtureBoard()} readonly={false} slug="my-board" path={[]} />);
+    });
+    expect(fetchCommentsMock).toHaveBeenCalledWith('my-board');
+  });
+
+  it('renders a pin for an existing comment', async () => {
+    fetchCommentsMock.mockResolvedValue({
+      comments: [
+        {
+          id: 'c1',
+          target: { type: 'canvas', pos: { x: 10, y: 10 } },
+          author: 'Ada',
+          createdAt: '2024-01-01T00:00:00.000Z',
+          text: 'hi',
+          resolved: false,
+          replies: [],
+        },
+      ],
+    });
+    await act(async () => {
+      render(<BoardCanvas board={fixtureBoard()} readonly={false} slug="my-board" path={[]} />);
+    });
+    expect(screen.getByTestId('comment-pin-c1')).toBeInTheDocument();
+  });
+
+  it('clicking the Toolbar comment toggle enables comment-placement mode', async () => {
+    await act(async () => {
+      render(<BoardCanvas board={fixtureBoard()} readonly={false} slug="my-board" path={[]} />);
+    });
+    expect(screen.queryByTestId('comment-placement-overlay')).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: /comment/i }));
+
+    expect(screen.getByTestId('comment-placement-overlay')).toBeInTheDocument();
+  });
+
+  it('placing a comment via a canvas click adds it and persists via saveComments', async () => {
+    // A stored display name (the "returning user" path — see
+    // hooks/useComments.test.ts/components/CommentLayer.test.tsx for the
+    // first-time-user IdentityPrompt gate itself) so this integration test
+    // exercises the placement flow, not the identity-prompt detour.
+    setLocalUser('Ada');
+    await act(async () => {
+      render(<BoardCanvas board={fixtureBoard()} readonly={false} slug="my-board" path={[]} />);
+    });
+    fireEvent.click(screen.getByRole('button', { name: /comment/i }));
+    fireEvent.click(screen.getByTestId('comment-placement-overlay'), {
+      clientX: 500,
+      clientY: 500,
+    });
+    fireEvent.change(screen.getByPlaceholderText(/add a comment/i), {
+      target: { value: 'a new comment' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: /^save$/i }));
+
+    await act(async () => {});
+
+    expect(saveCommentsMock).toHaveBeenCalledWith(
+      'my-board',
+      expect.objectContaining({
+        comments: [expect.objectContaining({ text: 'a new comment' })],
+      }),
+    );
+  });
+
+  it('fetches comments for a read-only board too, rendering pins view-only', async () => {
+    fetchCommentsMock.mockResolvedValue({
+      comments: [
+        {
+          id: 'c1',
+          target: { type: 'canvas', pos: { x: 10, y: 10 } },
+          author: 'Ada',
+          createdAt: '2024-01-01T00:00:00.000Z',
+          text: 'hi',
+          resolved: false,
+          replies: [],
+        },
+      ],
+    });
+    await act(async () => {
+      render(<BoardCanvas board={fixtureBoard()} readonly={true} slug="my-board" path={[]} />);
+    });
+    expect(fetchCommentsMock).toHaveBeenCalledWith('my-board');
+    expect(screen.getByTestId('comment-pin-c1')).toBeInTheDocument();
+    // No Toolbar (and thus no comment-mode toggle) in read-only mode.
+    expect(screen.queryByRole('button', { name: /comment/i })).not.toBeInTheDocument();
+    expect(screen.queryByTestId('comment-placement-overlay')).not.toBeInTheDocument();
   });
 });

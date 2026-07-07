@@ -15,7 +15,7 @@
 // codebase's existing preference for exercising the real store over mocking
 // its mutation API (see BoardCanvas.test.tsx's module doc).
 
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { ReactFlowProvider } from '@xyflow/react';
 import type { BoardFile } from '@easel/shared';
@@ -73,6 +73,8 @@ function renderToolbar(
     selectedEdgeIds: Set<string>;
     syncStatus: 'connecting' | 'synced' | 'offline';
     readonly: boolean;
+    commentMode: boolean;
+    onToggleCommentMode: () => void;
   }> = {},
 ) {
   return render(
@@ -83,6 +85,8 @@ function renderToolbar(
         selectedEdgeIds={overrides.selectedEdgeIds ?? new Set()}
         syncStatus={overrides.syncStatus ?? 'connecting'}
         readonly={overrides.readonly ?? false}
+        commentMode={overrides.commentMode ?? false}
+        onToggleCommentMode={overrides.onToggleCommentMode ?? (() => {})}
       />
     </ReactFlowProvider>,
   );
@@ -313,5 +317,37 @@ describe('Toolbar — READONLY', () => {
     expect(screen.queryByRole('button', { name: /^shape$/i })).not.toBeInTheDocument();
     // The toolbar chrome itself renders nothing at all in readonly mode.
     expect(container.firstChild).toBeNull();
+  });
+
+  it('hides the comment-mode toggle when readonly', () => {
+    const store = createBoardStore(emptyBoard(), { readonly: true });
+    renderToolbar(store, { readonly: true });
+    expect(screen.queryByRole('button', { name: /comment/i })).not.toBeInTheDocument();
+  });
+});
+
+describe('Toolbar — comment-mode toggle', () => {
+  it('renders a comment-mode toggle button', () => {
+    const store = createBoardStore(emptyBoard(), { readonly: false });
+    renderToolbar(store);
+    expect(screen.getByRole('button', { name: /comment/i })).toBeInTheDocument();
+  });
+
+  it('calls onToggleCommentMode when clicked', () => {
+    const store = createBoardStore(emptyBoard(), { readonly: false });
+    const onToggleCommentMode = vi.fn();
+    renderToolbar(store, { onToggleCommentMode });
+    fireEvent.click(screen.getByRole('button', { name: /comment/i }));
+    expect(onToggleCommentMode).toHaveBeenCalled();
+  });
+
+  it('shows the toggle as active when commentMode is true', () => {
+    const store = createBoardStore(emptyBoard(), { readonly: false });
+    renderToolbar(store, { commentMode: true });
+    const btn = screen.getByRole('button', { name: /comment/i });
+    // ICON_BTN_ACTIVE styling (see components/toolbar/styles.tsx) sets a dark
+    // background — asserting the computed background is the simplest way to
+    // check "looks active" without depending on a CSS class name.
+    expect(btn.style.background).toBe('rgb(30, 41, 59)'); // #1e293b
   });
 });

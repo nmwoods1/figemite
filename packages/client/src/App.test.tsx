@@ -11,6 +11,14 @@ const boardsApiMock = vi.hoisted(() => ({
   createBoard: vi.fn(),
   deleteSubBoard: vi.fn(),
   saveTags: vi.fn(),
+  // P6-T34: BoardCanvas's comments layer (hooks/useComments.ts) fetches/saves
+  // comments.json unconditionally whenever a route has a `slug` — mocked here
+  // for the same reason as every other boards-api function above (fast,
+  // deterministic, network-free App-level routing tests; the comments layer's
+  // OWN behaviour is unit-tested in hooks/useComments.test.ts and
+  // components/CommentLayer.test.tsx).
+  fetchComments: vi.fn(),
+  saveComments: vi.fn(),
 }));
 vi.mock('./lib/boards-api.js', () => boardsApiMock);
 
@@ -66,6 +74,8 @@ describe('App view switch', () => {
     boardsApiMock.saveBoard.mockReset().mockResolvedValue(undefined);
     boardsApiMock.createBoard.mockReset().mockResolvedValue(undefined);
     boardsApiMock.deleteSubBoard.mockReset().mockResolvedValue(undefined);
+    boardsApiMock.fetchComments.mockReset().mockResolvedValue({ comments: [] });
+    boardsApiMock.saveComments.mockReset().mockResolvedValue(undefined);
     joinBoardRoomMock.mockReset().mockImplementation((_doc, slug: string) => fakeRoom(slug));
     setHash('');
     localStorage.clear();

@@ -48,7 +48,16 @@
 
 import { useCallback, useState } from 'react';
 import { useRef } from 'react';
-import { StickyNote, Type, Shapes, Frame, Smile, Sparkles, Palette } from 'lucide-react';
+import {
+  StickyNote,
+  Type,
+  Shapes,
+  Frame,
+  Smile,
+  Sparkles,
+  Palette,
+  MessageCircle,
+} from 'lucide-react';
 import { useReactFlow } from '@xyflow/react';
 import {
   generateId,
@@ -93,6 +102,12 @@ export interface ToolbarProps {
   selectedEdgeIds: Set<string>;
   syncStatus: SyncStatus;
   readonly: boolean;
+  /** True while the comment-placement mode (P6-T34) is active — mutually
+   * exclusive with any future annotation mode (pencil/etc.), which should
+   * plug into this same single "active mode" slot rather than adding its
+   * own independent boolean. */
+  commentMode: boolean;
+  onToggleCommentMode: () => void;
 }
 
 type OpenPicker = null | 'sticky' | 'shape' | 'emoji' | 'icon';
@@ -103,6 +118,8 @@ export function Toolbar({
   selectedEdgeIds,
   syncStatus,
   readonly,
+  commentMode,
+  onToggleCommentMode,
 }: ToolbarProps) {
   const { nodes, edges } = useBoardStore(store);
   const { getViewport } = useReactFlow();
@@ -285,6 +302,13 @@ export function Toolbar({
           />
         )}
       </IconButton>
+
+      <IconButton
+        icon={MessageCircle}
+        label="Comment"
+        active={commentMode}
+        onClick={onToggleCommentMode}
+      />
 
       <Divider />
 

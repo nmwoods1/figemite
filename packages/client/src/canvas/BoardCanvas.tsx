@@ -67,6 +67,7 @@ import { usePresence } from '../hooks/usePresence.js';
 import type { PresenceAwareness } from '../hooks/usePresence.js';
 import { useFollowMode } from '../hooks/useFollowMode.js';
 import { useEditingNodeTracker } from '../hooks/useEditingNodeTracker.js';
+import { useComments } from '../hooks/useComments.js';
 import { boardToRf } from './rf-adapters.js';
 import { MultiSelectResizer } from './MultiSelectResizer.js';
 import { nodeTypes } from '../nodes/index.js';
@@ -75,6 +76,7 @@ import { Toolbar } from '../components/Toolbar.js';
 import { DescriptionModal } from '../components/DescriptionModal.js';
 import { PresenceLayer } from '../components/PresenceLayer.js';
 import { ActiveUsersPanel } from '../components/ActiveUsersPanel.js';
+import { CommentLayer } from '../components/CommentLayer.js';
 import { nodeLabel } from './node-label.js';
 import { getFlowPointer } from './coords.js';
 import { getLocalUser } from '../lib/identity.js';
@@ -117,25 +119,53 @@ const commonReactFlowProps = {
   connectionMode: ConnectionMode.Loose,
 } as const;
 
-/** Read-only pane (P3-T20): store snapshot → boardToRf → render, no handlers. */
-function ReadOnlyCanvas({ store, fitView, viewport }: PaneProps) {
+/** Read-only pane (P3-T20): store snapshot → boardToRf → render, no handlers.
+ *
+ * P6-T34 adds VIEW-ONLY comments: `slug` (given by every real route — see
+ * `BoardCanvasProps.slug`'s doc, `App.tsx` always passes one even in
+ * read-only/static mode) fetches `comments.json` via `useComments` (in
+ * read-only mode, so every mutation is a no-op) and renders existing pins —
+ * comments are readable everywhere, writable only in the editable pane. No
+ * comment-mode toggle exists here (no Toolbar renders in read-only mode at
+ * all), so `CommentLayer`'s `commentMode` is always `false`: pins render,
+ * placement never does. A `containerRef` div now wraps `<ReactFlow>` (it
+ * didn't need one before this task) so `CommentLayer` has a measured element
+ * to project screen coordinates against, mirroring the editable pane below. */
+function ReadOnlyCanvas({ store, fitView, viewport, slug }: PaneProps & { slug?: string }) {
   const { nodes, edges } = useBoardStore(store);
   const rf = useMemo(() => boardToRf({ nodes, edges }, true), [nodes, edges]);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const comments = useComments(slug, { readonly: true });
 
   return (
-    <ReactFlow
-      {...commonReactFlowProps}
-      nodes={rf.nodes}
-      edges={rf.edges}
-      defaultViewport={fitView ? undefined : viewport}
-      fitView={fitView}
-      nodesDraggable={false}
-      nodesConnectable={false}
-      elementsSelectable={false}
-    >
-      <Background />
-      <Controls />
-    </ReactFlow>
+    <div ref={containerRef} style={{ width: '100%', height: '100%', position: 'relative' }}>
+      <ReactFlow
+        {...commonReactFlowProps}
+        nodes={rf.nodes}
+        edges={rf.edges}
+        defaultViewport={fitView ? undefined : viewport}
+        fitView={fitView}
+        nodesDraggable={false}
+        nodesConnectable={false}
+        elementsSelectable={false}
+      >
+        <Background />
+        <Controls />
+      </ReactFlow>
+      {slug && (
+        <CommentLayer
+          comments={comments.comments}
+          nodes={nodes}
+          commentMode={false}
+          containerRef={containerRef}
+          readonly={true}
+          onAddComment={() => {}}
+          onReply={() => {}}
+          onToggleResolved={() => {}}
+          onDelete={() => {}}
+        />
+      )}
+    </div>
   );
 }
 
@@ -255,6 +285,22 @@ function EditableCanvas({ store, fitView, viewport, slug, path }: EditablePanePr
   const undoRedo = useUndoRedo(store);
   const syncStatus = useSyncStatus(store.room?.provider ?? null);
 
+  // ── P6-T34: comments (comments.json — separate from the Yjs doc) ───────────
+  // `reloadCommentsRef` bridges useAiLock's single `onExternalChange`
+  // callback (below) to useComments' own re-fetch, registered via its
+  // subscription-style `onExternalChange` option — both this hook's SSE
+  // subscription and useComments' consumer contract only support ONE
+  // registration each, so a ref is the simplest way to compose "clear undo
+  // AND reload comments" out of the one upstream signal.
+  const reloadCommentsRef = useRef<() => void>(() => {});
+  const [commentMode, setCommentMode] = useState(false);
+  const comments = useComments(slug, {
+    readonly: false,
+    onExternalChange: (reload) => {
+      reloadCommentsRef.current = reload;
+    },
+  });
+
   // ── P5-T31: AI-session lock (SSE + reconnect + status reconcile) ───────────
   // A UX-only affordance now that server-side doc persistence (P5-T28) + MCP
   // edits via the room (P5-T32) mean an AI session's writes CRDT-merge into
@@ -262,7 +308,10 @@ function EditableCanvas({ store, fitView, viewport, slug, path }: EditablePanePr
   // hooks/useAiLock.ts's module doc for the reconnect-reconciliation fix and
   // the documented external-change-during-a-live-room limitation.
   const { aiLocked } = useAiLock(slug, path ?? [], {
-    onExternalChange: () => undoRedo.clear(),
+    onExternalChange: () => {
+      undoRedo.clear();
+      reloadCommentsRef.current();
+    },
   });
 
   // Cmd/Ctrl+S stays bound (useBoardInteractions calls it unconditionally on
@@ -402,7 +451,25 @@ function EditableCanvas({ store, fitView, viewport, slug, path }: EditablePanePr
         selectedEdgeIds={editable.selectedEdgeIds}
         syncStatus={syncStatus}
         readonly={false}
+        commentMode={commentMode}
+        onToggleCommentMode={() => setCommentMode((m) => !m)}
       />
+      {slug && (
+        <CommentLayer
+          comments={comments.comments}
+          nodes={nodes}
+          commentMode={commentMode}
+          containerRef={containerRef}
+          readonly={false}
+          onAddComment={(target, text) => {
+            comments.addComment(target, text);
+            setCommentMode(false);
+          }}
+          onReply={comments.addReply}
+          onToggleResolved={comments.toggleResolved}
+          onDelete={comments.deleteComment}
+        />
+      )}
       {aiLocked && <AiLockBanner />}
       {descNode && (
         <DescriptionModal
@@ -684,7 +751,7 @@ export function BoardCanvas({ board, readonly, slug, path }: BoardCanvasProps) {
     <div style={{ width: '100%', height: '100%' }}>
       <ReactFlowProvider>
         {readonly ? (
-          <ReadOnlyCanvas store={store} fitView={fitView} viewport={board.viewport} />
+          <ReadOnlyCanvas store={store} fitView={fitView} viewport={board.viewport} slug={slug} />
         ) : (
           <EditableCanvas
             store={store}
