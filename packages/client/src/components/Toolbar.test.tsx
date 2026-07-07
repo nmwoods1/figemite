@@ -77,6 +77,7 @@ function renderToolbar(
     onSetActiveMode: (mode: 'none' | 'comment' | 'pencil' | 'annotation') => void;
     hasAnnotations: boolean;
     onWipeAnnotations: () => void;
+    onOpenHistory: (() => void) | undefined;
   }> = {},
 ) {
   return render(
@@ -91,6 +92,7 @@ function renderToolbar(
         onSetActiveMode={overrides.onSetActiveMode ?? (() => {})}
         hasAnnotations={overrides.hasAnnotations ?? false}
         onWipeAnnotations={overrides.onWipeAnnotations ?? (() => {})}
+        onOpenHistory={overrides.onOpenHistory}
       />
     </ReactFlowProvider>,
   );
@@ -449,5 +451,27 @@ describe('Toolbar — mode exclusivity', () => {
     expect(screen.getByRole('button', { name: /comment/i }).style.background).not.toBe(dark);
     expect(screen.getByRole('button', { name: /pencil/i }).style.background).toBe(dark);
     expect(screen.getByRole('button', { name: /annotat/i }).style.background).not.toBe(dark);
+  });
+});
+
+describe('Toolbar — history button (P6-T36)', () => {
+  it('renders a History button when onOpenHistory is given', () => {
+    const store = createBoardStore(emptyBoard(), { readonly: false });
+    renderToolbar(store, { onOpenHistory: vi.fn() });
+    expect(screen.getByTitle('Version history')).toBeInTheDocument();
+  });
+
+  it('hides the History button when onOpenHistory is omitted (history unavailable)', () => {
+    const store = createBoardStore(emptyBoard(), { readonly: false });
+    renderToolbar(store, { onOpenHistory: undefined });
+    expect(screen.queryByTitle('Version history')).not.toBeInTheDocument();
+  });
+
+  it('calls onOpenHistory when clicked', () => {
+    const store = createBoardStore(emptyBoard(), { readonly: false });
+    const onOpenHistory = vi.fn();
+    renderToolbar(store, { onOpenHistory });
+    fireEvent.click(screen.getByTitle('Version history'));
+    expect(onOpenHistory).toHaveBeenCalled();
   });
 });

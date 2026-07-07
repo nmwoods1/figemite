@@ -68,6 +68,7 @@ import type { PresenceAwareness } from '../hooks/usePresence.js';
 import { useFollowMode } from '../hooks/useFollowMode.js';
 import { useEditingNodeTracker } from '../hooks/useEditingNodeTracker.js';
 import { useComments } from '../hooks/useComments.js';
+import { useHistory } from '../hooks/useHistory.js';
 import { boardToRf } from './rf-adapters.js';
 import { MultiSelectResizer } from './MultiSelectResizer.js';
 import { nodeTypes } from '../nodes/index.js';
@@ -75,6 +76,7 @@ import { edgeTypes } from '../edges/index.js';
 import { Toolbar } from '../components/Toolbar.js';
 import type { ToolbarMode } from '../components/Toolbar.js';
 import { DescriptionModal } from '../components/DescriptionModal.js';
+import { HistoryPanel } from '../components/HistoryPanel.js';
 import { PresenceLayer } from '../components/PresenceLayer.js';
 import { ActiveUsersPanel } from '../components/ActiveUsersPanel.js';
 import { CommentLayer } from '../components/CommentLayer.js';
@@ -195,6 +197,126 @@ function ConnectingPlaceholder() {
   );
 }
 
+/** Renders a previewed history snapshot READ-ONLY, in place of the live
+ * canvas (P6-T36). Builds its OWN, throwaway read-only `BoardStore` from the
+ * previewed `BoardFile` — a separate `Y.Doc` instance entirely — so nothing
+ * here ever touches the live `store`/its doc; the live board keeps syncing
+ * underneath, unseen, exactly as it would if this component didn't exist (see
+ * hooks/useHistory.ts's module doc for why that isolation matters). The
+ * throwaway store is rebuilt whenever `board` changes (a new preview target)
+ * and destroyed on unmount/change, mirroring `useBoardStoreLifecycle`'s own
+ * construct-and-tear-down-together discipline (minus that hook's StrictMode
+ * complications, which don't apply here — read-only stores never join a room
+ * or hold a socket, so there is no non-resumable resource to protect against
+ * a rehearsal double-invoke).
+ *
+ * "Rebuild on prop change" uses the same derived-during-render idiom as
+ * `useBoardStoreLifecycle`'s own `lastBoard`/`lastDepsKey` (comparing during
+ * render and calling `setState` synchronously in the render body) rather than
+ * a `useRef` comparison — this codebase's `react-hooks/refs` lint rule flags
+ * reading a ref's `.current` during render as unsound under React Compiler's
+ * assumptions, so a plain `useState`-held "last seen board" is used instead. */
+function HistoryPreviewPane({ board }: { board: BoardFile }) {
+  const [previewStore, setPreviewStore] = useState(() =>
+    createBoardStore(board, { readonly: true }),
+  );
+  const [lastBoard, setLastBoard] = useState(board);
+  if (board !== lastBoard) {
+    setLastBoard(board);
+    setPreviewStore(createBoardStore(board, { readonly: true }));
+  }
+  useEffect(() => {
+    return () => previewStore.destroy();
+  }, [previewStore]);
+
+  const fitView = isDefaultViewport(board.viewport);
+  return <ReadOnlyCanvas store={previewStore} fitView={fitView} viewport={board.viewport} />;
+}
+
+/** The "previewing an old version" banner (P6-T36) — a clear affordance that
+ * what's on screen right now is a READ-ONLY snapshot, not the live board,
+ * with Restore/Discard actions. Ported layout from the legacy prototype's
+ * inline preview banner (src/components/BoardCanvas.tsx ~L1728-1751). */
+function HistoryPreviewBanner({
+  timestamp,
+  onRestore,
+  onDiscard,
+}: {
+  timestamp: string;
+  onRestore: () => void;
+  onDiscard: () => void;
+}) {
+  const formatted = (() => {
+    try {
+      return new Date(timestamp).toLocaleString(undefined, {
+        month: 'short',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+      });
+    } catch {
+      return timestamp;
+    }
+  })();
+  return (
+    <div
+      style={{
+        position: 'absolute',
+        top: 60,
+        left: '50%',
+        transform: 'translateX(-50%)',
+        zIndex: 20,
+        background: '#fef3c7',
+        border: '1px solid #fcd34d',
+        color: '#92400e',
+        padding: '7px 14px',
+        borderRadius: 8,
+        fontSize: 12,
+        fontWeight: 500,
+        display: 'flex',
+        alignItems: 'center',
+        gap: 10,
+        boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
+      }}
+    >
+      <span>Previewing {formatted}</span>
+      <button
+        type="button"
+        onClick={onRestore}
+        style={{
+          background: '#92400e',
+          border: 'none',
+          cursor: 'pointer',
+          fontSize: 11,
+          color: '#fff',
+          fontWeight: 600,
+          padding: '3px 10px',
+          borderRadius: 4,
+        }}
+        title="Restore this version"
+      >
+        Restore
+      </button>
+      <button
+        type="button"
+        onClick={onDiscard}
+        style={{
+          background: 'none',
+          border: 'none',
+          cursor: 'pointer',
+          fontSize: 14,
+          color: '#92400e',
+          fontWeight: 700,
+          padding: '0 4px',
+        }}
+        title="Discard preview, return to current version"
+      >
+        ×
+      </button>
+    </div>
+  );
+}
+
 /** The "AI is editing" affordance (P5-T31), shown while `aiLocked`. Mirrors
  * the legacy prototype's banner (src/components/BoardCanvas.tsx ~L1924-1938):
  * a small pill centered near the top of the canvas, non-interactive
@@ -288,6 +410,14 @@ function EditableCanvas({ store, fitView, viewport, slug, path }: EditablePanePr
 
   const undoRedo = useUndoRedo(store);
   const syncStatus = useSyncStatus(store.room?.provider ?? null);
+
+  // ── P6-T36: history (time-travel — list/preview/restore/discard) ──────────
+  // See hooks/useHistory.ts's module doc for the preview-isolation and
+  // restore-application contracts. `available` is false without a `slug`
+  // (the no-room unit-test convenience path) — the Toolbar's History button
+  // is omitted entirely in that case (and, transitively, in READONLY mode:
+  // the read-only pane never mounts this component at all).
+  const history = useHistory({ slug, path: path ?? [], store, undo: undoRedo });
 
   // ── P6-T34: comments (comments.json — separate from the Yjs doc) ───────────
   // `reloadCommentsRef` bridges useAiLock's single `onExternalChange`
@@ -448,6 +578,29 @@ function EditableCanvas({ store, fitView, viewport, slug, path }: EditablePanePr
     return <ConnectingPlaceholder />;
   }
 
+  // ── P6-T36: history preview ─────────────────────────────────────────────
+  // While previewing (`history.previewedBoard` non-null), render THAT
+  // snapshot read-only INSTEAD OF the live canvas — the live doc keeps
+  // syncing underneath (this component's other hooks, e.g. presence/AI-lock,
+  // are all still mounted and running; only the RETURNED markup changes), but
+  // nothing here mutates it (see hooks/useHistory.ts's module doc). The
+  // History panel itself never shows at the same time as the preview (opening
+  // a preview closes the panel — see useHistory's `preview`), so no explicit
+  // guard against both being visible at once is needed here.
+  if (history.previewedBoard) {
+    const previewVersion = history.versions.find((v) => v.id === history.previewId);
+    return (
+      <div style={{ width: '100%', height: '100%', position: 'relative' }}>
+        <HistoryPreviewPane board={history.previewedBoard} />
+        <HistoryPreviewBanner
+          timestamp={previewVersion?.timestamp ?? new Date().toISOString()}
+          onRestore={history.restore}
+          onDiscard={history.discard}
+        />
+      </div>
+    );
+  }
+
   // Pencil/annotation mode suppresses normal RF interaction/selection for the
   // duration (see Toolbar.tsx's `ToolbarMode` doc) — the overlay captures
   // every pointer event instead, and letting RF's own drag/connect/select
@@ -496,7 +649,17 @@ function EditableCanvas({ store, fitView, viewport, slug, path }: EditablePanePr
         onSetActiveMode={setActiveMode}
         hasAnnotations={hasAnnotations}
         onWipeAnnotations={handleWipeAnnotations}
+        onOpenHistory={history.available ? history.openPanel : undefined}
       />
+      {history.panelOpen && (
+        <HistoryPanel
+          versions={history.versions}
+          loading={history.versionsLoading}
+          error={history.versionsError}
+          onSelect={(id) => void history.preview(id)}
+          onClose={history.closePanel}
+        />
+      )}
       {slug && (
         <CommentLayer
           comments={comments.comments}

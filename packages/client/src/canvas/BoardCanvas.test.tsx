@@ -47,6 +47,13 @@ const saveBoardSpy = vi.fn();
 // wants `fetchComments` to resolve empty and `saveComments` to no-op.
 const fetchCommentsMock = vi.fn();
 const saveCommentsMock = vi.fn();
+// P6-T36: history.json's snapshot list/version fetches (hooks/useHistory.ts).
+// Stubbed the same way as comments above — every BoardCanvas test that
+// doesn't specifically exercise history wiring just wants `fetchHistory` to
+// resolve empty (so the History button, always rendered given a slug, never
+// errors if accidentally clicked).
+const fetchHistoryMock = vi.fn();
+const fetchVersionMock = vi.fn();
 vi.mock('../lib/boards-api.js', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../lib/boards-api.js')>();
   return {
@@ -57,6 +64,8 @@ vi.mock('../lib/boards-api.js', async (importOriginal) => {
     },
     fetchComments: (...args: unknown[]) => fetchCommentsMock(...args),
     saveComments: (...args: unknown[]) => saveCommentsMock(...args),
+    fetchHistory: (...args: unknown[]) => fetchHistoryMock(...args),
+    fetchVersion: (...args: unknown[]) => fetchVersionMock(...args),
   };
 });
 
@@ -153,6 +162,8 @@ beforeEach(() => {
   useAiLockMock.mockReturnValue({ aiLocked: false });
   fetchCommentsMock.mockReset().mockResolvedValue({ comments: [] });
   saveCommentsMock.mockReset().mockResolvedValue(undefined);
+  fetchHistoryMock.mockReset().mockResolvedValue([]);
+  fetchVersionMock.mockReset();
 });
 
 afterEach(() => {
@@ -1050,5 +1061,171 @@ describe('BoardCanvas — pencil + annotation overlays, mode exclusivity (P6-T35
     expect(screen.queryByRole('button', { name: /annotat/i })).not.toBeInTheDocument();
     expect(screen.queryByTestId('pencil-overlay')).not.toBeInTheDocument();
     expect(screen.queryByTestId('annotation-overlay')).not.toBeInTheDocument();
+  });
+});
+
+describe('BoardCanvas — history panel (time-travel, P6-T36)', () => {
+  function historySnapshotBoard(): BoardFile {
+    return {
+      formatVersion: 1,
+      boardLabel: 'Fixture board',
+      nodes: [
+        {
+          id: 's1',
+          type: 'sticky',
+          pos: { x: 999, y: 888 },
+          order: 0,
+          size: { width: 200, height: 160 },
+          text: 'old text from history',
+          color: '#fef3c7',
+        },
+      ],
+      edges: [],
+      viewport: { x: 0, y: 0, zoom: 1 },
+    };
+  }
+
+  it('renders a History button in editable mode with a slug', async () => {
+    await act(async () => {
+      render(<BoardCanvas board={fixtureBoard()} readonly={false} slug="my-board" path={[]} />);
+    });
+    expect(screen.getByTitle('Version history')).toBeInTheDocument();
+  });
+
+  it('does not render a History button in read-only mode', async () => {
+    await act(async () => {
+      render(<BoardCanvas board={fixtureBoard()} readonly={true} slug="my-board" path={[]} />);
+    });
+    expect(screen.queryByTitle('Version history')).not.toBeInTheDocument();
+  });
+
+  it('does not render a History button without a slug (no-room convenience path)', async () => {
+    await act(async () => {
+      render(<BoardCanvas board={fixtureBoard()} readonly={false} />);
+    });
+    expect(screen.queryByTitle('Version history')).not.toBeInTheDocument();
+  });
+
+  it('clicking History fetches and lists snapshots, labelling AI-boundary ones distinctly', async () => {
+    fetchHistoryMock.mockResolvedValue([
+      { id: 'v3', timestamp: '2026-07-06T10:00:00.000Z', trigger: 'save' },
+      { id: 'v2', timestamp: '2026-07-06T09:00:00.000Z', trigger: 'ai' },
+      { id: 'v1', timestamp: '2026-07-06T08:00:00.000Z', trigger: 'preai' },
+    ]);
+    await act(async () => {
+      render(
+        <BoardCanvas board={fixtureBoard()} readonly={false} slug="my-board" path={['sub']} />,
+      );
+    });
+
+    fireEvent.click(screen.getByTitle('Version history'));
+
+    expect(fetchHistoryMock).toHaveBeenCalledWith('my-board', ['sub']);
+    await vi.waitFor(() => expect(screen.getByText('Human')).toBeInTheDocument());
+    expect(screen.getAllByText('AI')).toHaveLength(2);
+    expect(screen.getByText('Before AI changes')).toBeInTheDocument();
+    expect(screen.getByText('After AI changes')).toBeInTheDocument();
+  });
+
+  it('clicking a version fetches and previews it read-only WITHOUT touching the live doc', async () => {
+    // No `useFakeRoom()` here: this test only needs the LOCAL doc (the
+    // no-room convenience path — see board-store.ts's module doc), which
+    // hydrates synchronously from `fixtureBoard()` and lets us assert
+    // "Buy milk" (the live board's real content) is replaced on screen by the
+    // preview but never actually mutated underneath (verified via the
+    // isolated hook unit tests in hooks/useHistory.test.ts, which assert the
+    // live doc's cached snapshot reference — board-store.ts's
+    // `getSnapshot()` — is untouched; this integration test asserts the
+    // user-visible consequence: the live content is gone from the screen
+    // while previewing and comes back unchanged on discard, matching "a
+    // SEPARATE read-only view, not a mutation").
+    fetchHistoryMock.mockResolvedValue([
+      { id: 'v1', timestamp: '2026-07-06T08:00:00.000Z', trigger: 'save' },
+    ]);
+    fetchVersionMock.mockResolvedValue(historySnapshotBoard());
+    await act(async () => {
+      render(<BoardCanvas board={fixtureBoard()} readonly={false} slug="my-board" path={[]} />);
+    });
+    expect(screen.getByText('Buy milk')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByTitle('Version history'));
+    await vi.waitFor(() => expect(screen.getByText(/Latest/)).toBeInTheDocument());
+    await act(async () => {
+      fireEvent.click(screen.getByText(/Latest/));
+      await Promise.resolve();
+    });
+
+    expect(fetchVersionMock).toHaveBeenCalledWith('my-board', [], 'v1');
+    // The preview banner + Restore/Discard actions are visible...
+    expect(screen.getByText(/Previewing/)).toBeInTheDocument();
+    expect(screen.getByTitle('Restore this version')).toBeInTheDocument();
+    expect(screen.getByTitle('Discard preview, return to current version')).toBeInTheDocument();
+    // ...the previewed (old) text renders instead of the live content...
+    expect(screen.getByText('old text from history')).toBeInTheDocument();
+    expect(screen.queryByText('Buy milk')).not.toBeInTheDocument();
+  });
+
+  it('the live board keeps rendering normally underneath once discarded', async () => {
+    fetchHistoryMock.mockResolvedValue([
+      { id: 'v1', timestamp: '2026-07-06T08:00:00.000Z', trigger: 'save' },
+    ]);
+    fetchVersionMock.mockResolvedValue(historySnapshotBoard());
+    await act(async () => {
+      render(<BoardCanvas board={fixtureBoard()} readonly={false} slug="my-board" path={[]} />);
+    });
+
+    fireEvent.click(screen.getByTitle('Version history'));
+    await vi.waitFor(() => expect(screen.getByText(/Latest/)).toBeInTheDocument());
+    await act(async () => {
+      fireEvent.click(screen.getByText(/Latest/));
+      await Promise.resolve();
+    });
+    expect(screen.getByText('old text from history')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByTitle('Discard preview, return to current version'));
+
+    expect(screen.queryByText(/Previewing/)).not.toBeInTheDocument();
+    expect(screen.getByText('Buy milk')).toBeInTheDocument();
+  });
+
+  it('Restore applies the previewed snapshot to the live doc and clears undo, then exits preview', async () => {
+    const getRoom = useFakeRoom();
+    fetchHistoryMock.mockResolvedValue([
+      { id: 'v1', timestamp: '2026-07-06T08:00:00.000Z', trigger: 'save' },
+    ]);
+    fetchVersionMock.mockResolvedValue(historySnapshotBoard());
+    await act(async () => {
+      render(<BoardCanvas board={fixtureBoard()} readonly={false} slug="my-board" path={[]} />);
+    });
+    // Give undo something to clear, so we can positively assert it fires.
+    fireEvent.click(screen.getByTitle('Text'));
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1000);
+    });
+
+    fireEvent.click(screen.getByTitle('Version history'));
+    await vi.waitFor(() => expect(screen.getByText(/Latest/)).toBeInTheDocument());
+    await act(async () => {
+      fireEvent.click(screen.getByText(/Latest/));
+      await Promise.resolve();
+    });
+
+    fireEvent.click(screen.getByTitle('Restore this version'));
+
+    // Exited preview, back to the (now-restored) live canvas.
+    expect(screen.queryByText(/Previewing/)).not.toBeInTheDocument();
+    // The live doc now equals the snapshot.
+    const { getSnapshot } = await import('@easel/shared');
+    const liveSnapshot = getSnapshot(getRoom().doc);
+    expect(liveSnapshot.nodes).toHaveLength(1);
+    expect(liveSnapshot.nodes[0]).toMatchObject({
+      id: 's1',
+      pos: { x: 999, y: 888 },
+      text: 'old text from history',
+    });
+    expect(screen.getByText('old text from history')).toBeInTheDocument();
+    // Undo/redo was cleared as part of the hard reset — Cmd+Z should be a no-op now.
+    fireEvent.keyDown(window, { key: 'z', metaKey: true });
+    expect(screen.getByText('old text from history')).toBeInTheDocument();
   });
 });

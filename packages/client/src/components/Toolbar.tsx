@@ -56,6 +56,14 @@
 // legacy's own toggle-off behaviour for each of its three independent
 // booleans). A Wipe button (annotation mode only, and only once at least one
 // annotation exists) clears the shared annotations array for every peer.
+//
+// P6-T36 adds the History button (time-travel: list/preview/restore/discard
+// snapshots — hooks/useHistory.ts + components/HistoryPanel.tsx). `onOpenHistory`
+// is OPTIONAL and only rendered when given: EditableCanvas omits it whenever
+// `useHistory`'s `available` is false (no slug — the no-room unit-test
+// convenience path), so the button is naturally absent there too, on top of
+// the Toolbar-wide `readonly` early-return already hiding every write
+// affordance (including this one) in READONLY mode.
 
 import { useCallback, useState } from 'react';
 import { useRef } from 'react';
@@ -71,6 +79,7 @@ import {
   Pencil,
   Eraser,
   Trash2,
+  History,
 } from 'lucide-react';
 import { useReactFlow } from '@xyflow/react';
 import {
@@ -132,6 +141,10 @@ export interface ToolbarProps {
   hasAnnotations: boolean;
   /** Clear every annotation stroke for every peer (P6-T35). */
   onWipeAnnotations: () => void;
+  /** Opens the history panel (P6-T36). Omitted (not just disabled) when
+   * history isn't available — see this module's doc — which hides the button
+   * entirely rather than rendering it disabled. */
+  onOpenHistory?: () => void;
 }
 
 type OpenPicker = null | 'sticky' | 'shape' | 'emoji' | 'icon';
@@ -146,6 +159,7 @@ export function Toolbar({
   onSetActiveMode,
   hasAnnotations,
   onWipeAnnotations,
+  onOpenHistory,
 }: ToolbarProps) {
   const { nodes, edges } = useBoardStore(store);
   const { getViewport } = useReactFlow();
@@ -381,6 +395,10 @@ export function Toolbar({
 
           <LineStyleToggle value={selectedLineStyle} onChange={setLineStyleOnSelection} />
         </>
+      )}
+
+      {onOpenHistory && (
+        <IconButton icon={History} label="Version history" onClick={onOpenHistory} />
       )}
 
       <Divider />
