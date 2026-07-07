@@ -71,7 +71,7 @@ function renderToolbar(
   overrides: Partial<{
     selectedNodeIds: Set<string>;
     selectedEdgeIds: Set<string>;
-    saveStatus: 'idle' | 'dirty' | 'saving' | 'saved' | 'error' | 'locked';
+    syncStatus: 'connecting' | 'synced' | 'offline';
     readonly: boolean;
   }> = {},
 ) {
@@ -81,7 +81,7 @@ function renderToolbar(
         store={store}
         selectedNodeIds={overrides.selectedNodeIds ?? new Set()}
         selectedEdgeIds={overrides.selectedEdgeIds ?? new Set()}
-        saveStatus={overrides.saveStatus ?? 'idle'}
+        syncStatus={overrides.syncStatus ?? 'connecting'}
         readonly={overrides.readonly ?? false}
       />
     </ReactFlowProvider>,
@@ -275,17 +275,32 @@ describe('Toolbar — edge-style controls', () => {
   });
 });
 
-describe('Toolbar — save-status indicator', () => {
-  it('renders an error indicator with a retry affordance when saveStatus is error', () => {
+describe('Toolbar — sync-status indicator (P5-T29)', () => {
+  it('shows an offline indicator when syncStatus is offline', () => {
     const store = createBoardStore(emptyBoard(), { readonly: false });
-    renderToolbar(store, { saveStatus: 'error' });
-    expect(screen.getByText(/save failed/i)).toBeInTheDocument();
+    renderToolbar(store, { syncStatus: 'offline' });
+    expect(screen.getByTestId('save-status-dot')).toHaveAttribute(
+      'title',
+      expect.stringMatching(/offline/i),
+    );
   });
 
-  it('renders no error indicator when saveStatus is saved', () => {
+  it('shows a synced indicator when syncStatus is synced', () => {
     const store = createBoardStore(emptyBoard(), { readonly: false });
-    renderToolbar(store, { saveStatus: 'saved' });
-    expect(screen.queryByText(/save failed/i)).not.toBeInTheDocument();
+    renderToolbar(store, { syncStatus: 'synced' });
+    expect(screen.getByTestId('save-status-dot')).toHaveAttribute(
+      'title',
+      expect.stringMatching(/saved/i),
+    );
+  });
+
+  it('shows a connecting indicator when syncStatus is connecting', () => {
+    const store = createBoardStore(emptyBoard(), { readonly: false });
+    renderToolbar(store, { syncStatus: 'connecting' });
+    expect(screen.getByTestId('save-status-dot')).toHaveAttribute(
+      'title',
+      expect.stringMatching(/connecting/i),
+    );
   });
 });
 

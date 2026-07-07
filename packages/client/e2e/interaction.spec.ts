@@ -1,6 +1,7 @@
 // ── Interaction E2E: single-user editing parity + persistence (P4-T26) ──────
 //
-// This is the Phase-4 GATE: a REAL Chromium against the REAL dev server
+// This is the Phase-4 GATE (kept green through P5-T29's realtime rework —
+// see that task's note below): a REAL Chromium against the REAL dev server
 // (same `webServer` as render-parity.spec.ts — see playwright.config.ts),
 // editing a board in DEV mode (`READONLY` is a build-time flag that defaults
 // off — see app/mode.ts — so `npx vite` here serves the editable pane) and
@@ -8,8 +9,24 @@
 // board's `board.json` back off the dev server's `EASEL_BOARDS_DIR`
 // (playwright.config.ts's `webServer.env`, resolved the same way
 // `easel-server-plugin.ts`'s `resolveDevBoardsRoot` resolves it for the
-// running server) after the ~1.5s autosave debounce (`useAutosave.ts`'s
-// `SAVE_DEBOUNCE_MS`) or an explicit Cmd/Ctrl+S flush.
+// running server).
+//
+// P5-T29: persistence no longer flows client -> server via POST. Every edit
+// here commits to the doc-first store, which is now backed by a
+// `WebsocketProvider` joined to the dev server's realtime room
+// (`src/dev/easel-server-plugin.ts` mounts `@easel/server`'s
+// `YjsWebsocketService`, P5-T28, on the SAME dev-server port/process this
+// spec's `webServer` starts). The SERVER seeds that room from `board.json` and
+// debounce-persists it back (`YjsWebsocketService`'s
+// `DEFAULT_PERSIST_DEBOUNCE_MS`, ~1s) — the client never POSTs board content
+// at all anymore. Every persistence assertion below therefore POLLS
+// `board.json` (`waitForPersisted`) rather than reading it once immediately
+// after a UI-visible "saved" signal: the save-status dot (`waitForSaved`)
+// now reflects the REALTIME PROVIDER's connection/sync state
+// (`useSyncStatus`), which settles fast (the room already has the update
+// in-memory) — but the SERVER's debounced disk write can still lag a beat
+// behind that, so a poll (not a single read) is what actually proves the
+// room -> server persistence path is wired end-to-end.
 //
 // Render-parity's `kitchen-sink`/`minimal` fixtures are read-only structural
 // fixtures shared across many small assertions; reusing them here for
@@ -88,10 +105,12 @@ function findNode(board: PersistedBoard, id: string): PersistedNode {
 }
 
 /** Polls the on-disk `board.json` until `predicate` passes (or times out),
- * matching the ~1.5s autosave debounce (`useAutosave.ts`'s `SAVE_DEBOUNCE_MS`)
- * plus network/fs slack. Used for every persistence assertion in this file —
- * disk state is asynchronous relative to the on-screen DOM state, so a single
- * immediate read is inherently racy. */
+ * matching the SERVER's own debounced persist-on-update
+ * (`YjsWebsocketService`'s `DEFAULT_PERSIST_DEBOUNCE_MS`, P5-T28 — ~1s) plus
+ * network/fs slack. Used for every persistence assertion in this file — disk
+ * state is asynchronous relative to the on-screen DOM state (and, since
+ * P5-T29, relative to the client's own realtime-provider sync state too — see
+ * this file's module doc), so a single immediate read is inherently racy. */
 async function waitForPersisted(
   predicate: (board: PersistedBoard) => boolean,
   message: string,
@@ -272,15 +291,27 @@ async function selectNode(page: Page, id: string): Promise<void> {
 
 // `ControlOrMeta` is Playwright's OS-aware modifier alias — it sends Meta on
 // macOS and Control elsewhere, matching `useBoardInteractions.ts`'s
-// `e.metaKey || e.ctrlKey` mod-key check on both platforms.
+// `e.metaKey || e.ctrlKey` mod-key check on both platforms. P5-T29: this no
+// longer triggers a client-side flush (there is none) — BoardCanvas.tsx's
+// EditableCanvas binds a no-op `flushNow` to this shortcut so it stays
+// harmless rather than falling through to the browser's native save dialog.
+// Kept in every test's flow (rather than removed) so the shortcut's
+// harmlessness stays exercised throughout this whole suite, not just in the
+// one test dedicated to it.
 async function flushSave(page: Page): Promise<void> {
   await page.keyboard.press('ControlOrMeta+s');
 }
 
 /** Polls the toolbar's save-status dot until it reads 'saved' (its `title`
- * attribute, set by SaveIndicator.tsx's `DOT_LABELS`) — a screen-visible
- * proxy for "the debounced/flushed save has completed" that's faster and
- * less flaky than a blind `waitForTimeout`. */
+ * attribute, set by SaveIndicator.tsx's `DOT_LABELS`) — P5-T29: this now
+ * reflects the REALTIME PROVIDER's sync state (`useSyncStatus`), not a
+ * client save result. It settles quickly (the room already has the update
+ * applied in-memory the instant the local op commits), well before the
+ * SERVER's own debounced disk write necessarily lands — so this is a
+ * screen-visible proxy for "the UI thinks it's caught up", NOT proof the
+ * edit has reached `board.json` yet. Every actual persistence assertion in
+ * this file polls `board.json` itself afterward (`waitForPersisted`) rather
+ * than trusting this alone. */
 async function waitForSaved(page: Page): Promise<void> {
   await expect(page.getByTestId('save-status-dot')).toHaveAttribute('title', 'All changes saved', {
     timeout: 10_000,
@@ -970,9 +1001,24 @@ test.describe('single-user editing parity + persistence (Phase 4 gate)', () => {
     assertNoReactFlowErrors(capture);
   });
 
-  // ── 10. Cmd+S flush ──────────────────────────────────────────────────────
-
-  test('Cmd/Ctrl+S flushes pending edits to board.json promptly (no debounce wait)', async ({
+  // ── 10. Cmd+S (now a no-op) still doesn't break persistence ─────────────
+  //
+  // P5-T29: the server (not the client) persists board content, on its OWN
+  // debounce (`YjsWebsocketService`'s `DEFAULT_PERSIST_DEBOUNCE_MS`, P5-T28)
+  // — there is no client-side `flushNow` request to bypass a wait with
+  // anymore. `Cmd/Ctrl+S` stays BOUND (useBoardInteractions still calls
+  // `flushNow()` unconditionally on the shortcut) but is now a harmless
+  // no-op passed in by BoardCanvas.tsx's EditableCanvas — see that file's
+  // module doc. This test used to assert "flush bypasses the debounce and
+  // saves promptly"; that contract no longer exists (there is nothing left
+  // on the client to bypass a wait with), so it's re-scoped to what's still
+  // true and still worth gating: pressing Cmd/Ctrl+S doesn't throw, doesn't
+  // block, doesn't corrupt anything, and the drag it followed still reaches
+  // disk via the room -> server persistence path (polled, since the write is
+  // now server-debounced rather than client-flushed — see this spec's module
+  // doc's `waitForPersisted` for why every persistence assertion here polls
+  // rather than reading immediately).
+  test('Cmd/Ctrl+S is harmless and the preceding edit still persists to board.json via the room', async ({
     page,
   }) => {
     const capture = attachConsoleCapture(page);
@@ -982,26 +1028,14 @@ test.describe('single-user editing parity + persistence (Phase 4 gate)', () => {
     const startPos = findNode(before, 'sticky1').pos;
 
     await dragNodeBy(page, 'sticky1', 60, 30);
-
-    // Flush immediately (bypassing the debounce timer per useAutosave.ts's
-    // `flushNow`) and assert the save-status dot reaches 'saved' fast.
-    const flushStart = Date.now();
     await flushSave(page);
-    await waitForSaved(page);
-    const flushElapsed = Date.now() - flushStart;
-    // Generous upper bound — this is asserting "promptly", not chasing a
-    // tight perf budget; the debounce alone is 1.5s, so a flush taking
-    // meaningfully longer than that would indicate flushNow isn't actually
-    // bypassing the timer.
-    expect(flushElapsed).toBeLessThan(5000);
 
-    const persisted = readBoardJson();
+    const persisted = await waitForPersisted((b) => {
+      const p = findNode(b, 'sticky1').pos;
+      return Math.abs(p.x - (startPos.x + 60)) < 10 && Math.abs(p.y - (startPos.y + 30)) < 10;
+    }, 'dragged node position never persisted to board.json after Cmd/Ctrl+S');
+
     const p = findNode(persisted, 'sticky1').pos;
-    // Tolerance of 10 (not an exact match): dragNodeBy's drag-start
-    // threshold residual (see its doc) leaves a few px of slack even at
-    // zoom 1 — this assertion cares that the flush delivered the DRAGGED
-    // position promptly, not sub-pixel exactness (which isn't this test's
-    // point; the drag test already covers precision).
     expect(Math.abs(p.x - (startPos.x + 60))).toBeLessThan(10);
     expect(Math.abs(p.y - (startPos.y + 30))).toBeLessThan(10);
 

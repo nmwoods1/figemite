@@ -1,8 +1,41 @@
-import { describe, it, expect, vi } from 'vitest';
+import { afterEach, describe, it, expect, vi } from 'vitest';
 import * as Y from 'yjs';
 import { addNode } from '@easel/shared';
 import type { BoardFile, BoardNode } from '@easel/shared';
+
+// ── Realtime room mock (P5-T29) ──────────────────────────────────────────────
+// `createBoardStore`'s editable-with-room path delegates to `lib/realtime.js`'s
+// `joinBoardRoom` rather than seeding the doc locally — mocked here so these
+// are unit tests of the STORE's own branching (does it call loadBoardIntoDoc
+// or joinBoardRoom, does it seed content, does destroy tear the room down),
+// not an integration test against a real websocket (that's `realtime.test.ts`
+// + the E2E gate).
+const joinBoardRoomMock = vi.hoisted(() => vi.fn());
+vi.mock('../lib/realtime.js', () => ({
+  joinBoardRoom: joinBoardRoomMock,
+}));
+
 import { createBoardStore } from './board-store.js';
+
+interface FakeRoom {
+  roomName: string;
+  provider: unknown;
+  awareness: unknown;
+  synced: boolean;
+  onSyncedChange: ReturnType<typeof vi.fn>;
+  destroy: ReturnType<typeof vi.fn>;
+}
+
+function makeFakeRoom(roomName = 'spend'): FakeRoom {
+  return {
+    roomName,
+    provider: { id: 'fake-provider' },
+    awareness: { id: 'fake-awareness' },
+    synced: false,
+    onSyncedChange: vi.fn(() => vi.fn()),
+    destroy: vi.fn(),
+  };
+}
 
 function fixtureBoard(): BoardFile {
   return {
@@ -170,6 +203,141 @@ describe('createBoardStore', () => {
       const a = store.getViewport();
       const b = store.getViewport();
       expect(a).toBe(b);
+      store.destroy();
+    });
+  });
+
+  // ── Realtime room integration (P5-T29) ────────────────────────────────────
+  //
+  // Editable mode + a `room` option joins the server room via
+  // `joinBoardRoom` and does NOT seed content locally — the server is now the
+  // single content writer (P5-T28). Read-only mode (unchanged from Phase 3)
+  // and editable-WITHOUT-a-room (unit-test convenience — see this file's
+  // other describe blocks, which rely on immediate local seeding) both keep
+  // hydrating via `loadBoardIntoDoc` and never touch the network.
+  describe('realtime room integration', () => {
+    afterEach(() => {
+      joinBoardRoomMock.mockReset();
+    });
+
+    it('editable mode WITH a room option calls joinBoardRoom with the doc, slug, and path', () => {
+      const room = makeFakeRoom();
+      joinBoardRoomMock.mockReturnValue(room);
+
+      const store = createBoardStore(fixtureBoard(), {
+        readonly: false,
+        room: { slug: 'spend', path: ['NodeA'] },
+      });
+
+      expect(joinBoardRoomMock).toHaveBeenCalledTimes(1);
+      const [doc, slug, path] = joinBoardRoomMock.mock.calls[0]!;
+      expect(doc).toBe(store.doc);
+      expect(slug).toBe('spend');
+      expect(path).toEqual(['NodeA']);
+
+      store.destroy();
+    });
+
+    it('editable mode WITH a room option does NOT seed the doc from the passed-in board', () => {
+      const room = makeFakeRoom();
+      joinBoardRoomMock.mockReturnValue(room);
+
+      const board = fixtureBoard();
+      const store = createBoardStore(board, {
+        readonly: false,
+        room: { slug: 'spend', path: [] },
+      });
+
+      // fixtureBoard() has 2 nodes + 1 edge; a room-joined store must start
+      // EMPTY (content arrives from the room's sync), not pre-loaded from the
+      // fetched BoardFile passed in for metadata purposes only.
+      const snap = store.getSnapshot();
+      expect(snap.nodes).toHaveLength(0);
+      expect(snap.edges).toHaveLength(0);
+
+      store.destroy();
+    });
+
+    it('editable mode WITHOUT a room option does NOT call joinBoardRoom (unit-test/local-seed path)', () => {
+      const store = createBoardStore(fixtureBoard(), { readonly: false });
+      expect(joinBoardRoomMock).not.toHaveBeenCalled();
+      expect(store.getSnapshot().nodes).toHaveLength(2);
+      store.destroy();
+    });
+
+    it('read-only mode never calls joinBoardRoom, even if a room option is passed', () => {
+      const store = createBoardStore(fixtureBoard(), {
+        readonly: true,
+        room: { slug: 'spend', path: [] },
+      });
+      expect(joinBoardRoomMock).not.toHaveBeenCalled();
+      // Read-only still hydrates from the fetched board via loadBoardIntoDoc.
+      expect(store.getSnapshot().nodes).toHaveLength(2);
+      store.destroy();
+    });
+
+    it('exposes the joined room on the store', () => {
+      const room = makeFakeRoom('spend.NodeA');
+      joinBoardRoomMock.mockReturnValue(room);
+
+      const store = createBoardStore(fixtureBoard(), {
+        readonly: false,
+        room: { slug: 'spend', path: ['NodeA'] },
+      });
+
+      expect(store.room).toBe(room);
+      store.destroy();
+    });
+
+    it('store.room is null when no room option is given', () => {
+      const store = createBoardStore(fixtureBoard(), { readonly: false });
+      expect(store.room).toBeNull();
+      store.destroy();
+    });
+
+    it('store.room is null in read-only mode', () => {
+      const store = createBoardStore(fixtureBoard(), { readonly: true });
+      expect(store.room).toBeNull();
+      store.destroy();
+    });
+
+    it('destroy() tears down the joined room', () => {
+      const room = makeFakeRoom();
+      joinBoardRoomMock.mockReturnValue(room);
+
+      const store = createBoardStore(fixtureBoard(), {
+        readonly: false,
+        room: { slug: 'spend', path: [] },
+      });
+      store.destroy();
+
+      expect(room.destroy).toHaveBeenCalledTimes(1);
+    });
+
+    it('content synced into the doc (simulating the room applying a remote update) reaches getSnapshot', () => {
+      const room = makeFakeRoom();
+      joinBoardRoomMock.mockReturnValue(room);
+
+      const store = createBoardStore(fixtureBoard(), {
+        readonly: false,
+        room: { slug: 'spend', path: [] },
+      });
+
+      // Simulate the provider applying a synced update from the room by
+      // writing directly to the doc (exactly what y-websocket's sync
+      // protocol does under the hood) — the store's own doc `update`
+      // observer must pick this up the same way it does for local ops.
+      addNode(store.doc, {
+        id: 'from-room',
+        type: 'text',
+        pos: { x: 1, y: 1 },
+        order: 0,
+        text: 'synced content',
+      });
+
+      const snap = store.getSnapshot();
+      expect(snap.nodes.some((n) => n.id === 'from-room')).toBe(true);
+
       store.destroy();
     });
   });

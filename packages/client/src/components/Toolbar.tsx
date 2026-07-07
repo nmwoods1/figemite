@@ -30,9 +30,12 @@
 //     store methods (`setEdgeArrow`/`setEdgeLineStyle`/`setEdgeKind`/
 //     `setEdgeCardinality`) for every selected edge, shown only when the
 //     selection is edge-only (mirrors the legacy's `selectionIsEdgeOnly`).
-//   - `saveStatus` is a passed-in prop (`hooks/useAutosave.ts`'s
-//     `SaveStatus`) — this component doesn't own the autosave hook itself,
-//     matching how it doesn't own the store either.
+//   - `syncStatus` is a passed-in prop (`hooks/useSyncStatus.ts`'s
+//     `SyncStatus`, P5-T29) — this component doesn't own the realtime
+//     provider itself, matching how it doesn't own the store either. It
+//     replaces the earlier content-autosave's `SaveStatus`: the server, not
+//     the client, now persists board content, so what's shown here is
+//     connection/sync health, not a save result.
 //   - `readonly` hides every write affordance (the whole toolbar renders
 //     nothing), matching "READONLY hides every write affordance" for every
 //     other component in this codebase.
@@ -69,7 +72,7 @@ import type {
 import type { BoardStore } from '../store/board-store.js';
 import { useBoardStore } from '../store/use-board-store.js';
 import { viewCenter } from '../canvas/coords.js';
-import type { SaveStatus } from '../hooks/useAutosave.js';
+import type { SyncStatus } from '../hooks/useSyncStatus.js';
 import { IconButton } from './toolbar/IconButton.js';
 import { ShapePicker } from './toolbar/ShapePicker.js';
 import { EmojiPicker } from './toolbar/EmojiPicker.js';
@@ -88,10 +91,8 @@ export interface ToolbarProps {
   store: BoardStore;
   selectedNodeIds: Set<string>;
   selectedEdgeIds: Set<string>;
-  saveStatus: SaveStatus;
+  syncStatus: SyncStatus;
   readonly: boolean;
-  /** Retry a failed save. Optional — omitted callers just won't offer retry. */
-  onRetrySave?: () => void;
 }
 
 type OpenPicker = null | 'sticky' | 'shape' | 'emoji' | 'icon';
@@ -100,9 +101,8 @@ export function Toolbar({
   store,
   selectedNodeIds,
   selectedEdgeIds,
-  saveStatus,
+  syncStatus,
   readonly,
-  onRetrySave,
 }: ToolbarProps) {
   const { nodes, edges } = useBoardStore(store);
   const { getViewport } = useReactFlow();
@@ -308,7 +308,7 @@ export function Toolbar({
 
       <Divider />
 
-      <SaveIndicator status={saveStatus} onRetry={onRetrySave} />
+      <SaveIndicator status={syncStatus} />
     </div>
   );
 }

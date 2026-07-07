@@ -1,11 +1,39 @@
 // ── The doc-first board store ─────────────────────────────────────────────────
 //
 // Plan v2 §3. The Y.Doc — not a React state tree — is the source of truth for
-// nodes/edges: it's hydrated once from the initial BoardFile via the shared
-// `loadBoardIntoDoc`, and every subsequent read goes through the shared
-// `getSnapshot(doc)`. Mutations (Phase 4's ops-driven interaction handlers,
-// Phase 5's realtime provider) write to the doc directly via `@easel/shared`'s
-// ops — this store doesn't wrap them, it just exposes `doc` so callers can.
+// nodes/edges, and every read goes through the shared `getSnapshot(doc)`.
+// Mutations (Phase 4's ops-driven interaction handlers) write to the doc
+// directly via `@easel/shared`'s ops — this store doesn't wrap them, it just
+// exposes `doc` so callers can.
+//
+// ── Hydration: two paths (P5-T29) ────────────────────────────────────────────
+//
+// How the doc gets its initial content depends on `opts`:
+//
+//   - `readonly: true` (static/READONLY mode) — hydrated ONCE from the fetched
+//     `BoardFile` via the shared `loadBoardIntoDoc`. No provider, no network:
+//     this is a local, disconnected doc that never changes after construction
+//     (READONLY mode disables every mutation method below).
+//
+//   - `readonly: false` + `opts.room` given (the real editable app,
+//     App.tsx's board route) — the doc starts EMPTY and joins the server room
+//     via `lib/realtime.ts`'s `joinBoardRoom`, which attaches a
+//     `WebsocketProvider`. The server (`@easel/server`'s `YjsWebsocketService`,
+//     P5-T28) is the single content writer: it seeds the room from disk and
+//     persists it back on a debounce. This store does NOT call
+//     `loadBoardIntoDoc` in this path — doing so would race/duplicate the
+//     server's own seed and violate "server is the only writer of content."
+//     The passed-in `initialBoard`'s nodes/edges are ignored for content in
+//     this path; only its `viewport` is used (metadata, never CRDT content —
+//     see below).
+//
+//   - `readonly: false` WITHOUT `opts.room` — a convenience/unit-test path
+//     (every existing mutation-op unit test in this codebase constructs a
+//     store this way, expecting synchronous local content with no network
+//     involved). Behaves like the read-only path's hydration (immediate
+//     `loadBoardIntoDoc`) but leaves mutations enabled. Real app code (the
+//     board route) always supplies `room` for an editable board; this path
+//     exists for tests, not for the shipped app.
 //
 // Referential stability (CRITICAL): `getSnapshot()` must return the SAME
 // object reference across calls when nothing has changed, or
@@ -45,6 +73,8 @@ import type {
   XY,
 } from '@easel/shared';
 import type { Viewport } from '../canvas/coords.js';
+import { joinBoardRoom } from '../lib/realtime.js';
+import type { BoardRoom } from '../lib/realtime.js';
 
 export type { Viewport };
 
@@ -55,6 +85,13 @@ export interface BoardSnapshot {
 
 export interface BoardStoreOptions {
   readonly: boolean;
+  /**
+   * When given (and `readonly` is false), the store joins this room instead
+   * of seeding the doc locally from the passed-in `BoardFile` — see this
+   * module's doc for the two-hydration-paths rationale. Omitted for
+   * read-only stores and for the unit-test local-seed convenience path.
+   */
+  room?: { slug: string; path: string[] };
 }
 
 export interface BoardStore {
@@ -62,6 +99,9 @@ export interface BoardStore {
   doc: Y.Doc;
   /** Whether this store was created in read-only mode. */
   readonly: boolean;
+  /** The joined realtime room (P5-T29), or `null` when this store hydrated
+   * locally (read-only mode, or the no-`room` unit-test convenience path). */
+  room: BoardRoom | null;
   /** Subscribe to node/edge changes. Returns an unsubscribe function. */
   subscribe(listener: () => void): () => void;
   /** Referentially-stable snapshot of the current nodes/edges (see module doc). */
@@ -137,7 +177,18 @@ export interface BoardStore {
 
 export function createBoardStore(initialBoard: BoardFile, opts: BoardStoreOptions): BoardStore {
   const doc = new Y.Doc();
-  loadBoardIntoDoc(doc, { nodes: initialBoard.nodes, edges: initialBoard.edges });
+
+  // ── Hydration (see module doc for the two-paths rationale) ──────────────────
+  const room: BoardRoom | null =
+    !opts.readonly && opts.room ? joinBoardRoom(doc, opts.room.slug, opts.room.path) : null;
+
+  if (!room) {
+    // Read-only, or the no-`room` unit-test convenience path: hydrate
+    // immediately from the passed-in BoardFile. A room-joined store
+    // deliberately skips this — its content arrives from the server via the
+    // provider's sync, not from the fetched BoardFile (see module doc).
+    loadBoardIntoDoc(doc, { nodes: initialBoard.nodes, edges: initialBoard.edges });
+  }
 
   // ── Node/edge snapshot cache ────────────────────────────────────────────────
   let snapshot: BoardSnapshot = getDocSnapshot(doc);
@@ -158,6 +209,7 @@ export function createBoardStore(initialBoard: BoardFile, opts: BoardStoreOption
   return {
     doc,
     readonly: opts.readonly,
+    room,
 
     subscribe(listener: () => void) {
       listeners.add(listener);
@@ -280,6 +332,7 @@ export function createBoardStore(initialBoard: BoardFile, opts: BoardStoreOption
       doc.off('update', onDocUpdate);
       listeners.clear();
       viewportListeners.clear();
+      room?.destroy();
       doc.destroy();
     },
   };

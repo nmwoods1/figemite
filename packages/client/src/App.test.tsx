@@ -15,6 +15,33 @@ vi.mock('./lib/boards-api.js', () => boardsApiMock);
 const modeMock = vi.hoisted(() => ({ READONLY: false }));
 vi.mock('./app/mode.js', () => modeMock);
 
+// The (non-READONLY) board route always supplies a `slug`, so BoardCanvas
+// always joins a realtime room (P5-T29) — mocked here so these App-level
+// routing/rendering tests stay fast, deterministic, and network-free (they're
+// not exercising the realtime wiring itself: that's lib/realtime.test.ts and
+// board-store.test.ts's "realtime room integration" describe block). The fake
+// room starts pre-synced (`synced: true`) so BoardCanvas's connecting
+// placeholder never blocks these tests' assertions on the rendered canvas.
+const joinBoardRoomMock = vi.hoisted(() => vi.fn());
+vi.mock('./lib/realtime.js', () => ({
+  joinBoardRoom: joinBoardRoomMock,
+}));
+
+function fakeSyncedProvider() {
+  return { synced: true, on: vi.fn(), off: vi.fn() };
+}
+
+function fakeRoom(roomName = 'spend') {
+  return {
+    roomName,
+    provider: fakeSyncedProvider(),
+    awareness: {},
+    synced: true,
+    onSyncedChange: vi.fn(() => vi.fn()),
+    destroy: vi.fn(),
+  };
+}
+
 function setHash(hash: string) {
   window.location.hash = hash;
 }
@@ -33,6 +60,7 @@ describe('App view switch', () => {
     boardsApiMock.saveBoard.mockReset().mockResolvedValue(undefined);
     boardsApiMock.createBoard.mockReset().mockResolvedValue(undefined);
     boardsApiMock.deleteSubBoard.mockReset().mockResolvedValue(undefined);
+    joinBoardRoomMock.mockReset().mockImplementation((_doc, slug: string) => fakeRoom(slug));
     setHash('');
   });
 
@@ -89,7 +117,30 @@ describe('App view switch', () => {
     expect(screen.queryByText(/coming in phase 3/i)).not.toBeInTheDocument();
   });
 
-  it('renders a fixture board node inside the canvas via BoardCanvas', async () => {
+  // P5-T29: the editable board route joins the realtime room for the routed
+  // slug/path — this is the whole point of the board route wiring (App.tsx
+  // fetches the BoardFile for metadata/existence, then BoardCanvas's store
+  // joins the room for content).
+  it('an editable board route joins the realtime room for the routed slug/path', async () => {
+    setHash('#/spend/nodeA');
+    render(<App />);
+    await waitFor(() => expect(document.querySelector('.react-flow')).toBeInTheDocument());
+    expect(joinBoardRoomMock).toHaveBeenCalledTimes(1);
+    const [, slug, path] = joinBoardRoomMock.mock.calls[0]!;
+    expect(slug).toBe('spend');
+    expect(path).toEqual(['nodeA']);
+  });
+
+  // P5-T29: an EDITABLE board route no longer seeds rendered content from the
+  // fetched BoardFile at all — it joins the realtime room instead (see
+  // board-store.ts's module doc), so a fixture node from `getBoard` never
+  // appears here unless the (mocked) room actually delivers it. That path is
+  // covered by board-store.test.ts's "realtime room integration" describe
+  // block and the E2E gate; this test instead proves the OTHER hydration
+  // path App.tsx still uses verbatim — READONLY mode, which DOES seed
+  // directly from the fetched BoardFile (no room joined at all).
+  it('renders a fixture board node inside the canvas in READONLY mode (fetched-board hydration)', async () => {
+    modeMock.READONLY = true;
     boardsApiMock.getBoard.mockResolvedValue({
       formatVersion: 1,
       boardLabel: 'Spend Tracker',
@@ -110,6 +161,8 @@ describe('App view switch', () => {
     setHash('#/spend');
     render(<App />);
     await waitFor(() => expect(screen.getByText('Groceries')).toBeInTheDocument());
+    // READONLY never joins a room.
+    expect(joinBoardRoomMock).not.toHaveBeenCalled();
   });
 
   it('renders sub-board path segments in the breadcrumb for a nested board route', async () => {

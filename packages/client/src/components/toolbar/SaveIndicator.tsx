@@ -1,16 +1,17 @@
 // ── SaveIndicator ─────────────────────────────────────────────────────────────
 //
-// Ported from the legacy Toolbar.tsx's `SaveIndicator`, adapted to the new
-// `useAutosave`'s `SaveStatus` union ('idle' | 'dirty' | 'saving' | 'saved' |
-// 'error' | 'locked' — see hooks/useAutosave.ts). The legacy only surfaced
-// 'error' (with retry) and 'external' (a conflict state this codebase doesn't
-// have — the doc-first store's autosave has no separate "changed elsewhere"
-// signal); this port keeps that "stay quiet unless something needs
-// attention" philosophy and adds a 'locked' state (another AI session holds
-// the board's write lock) and a small dirty/saving dot for routine feedback,
-// per this task's "reflecting idle/dirty/saving/saved/error/locked" spec.
+// P5-T29: repurposed from the legacy/Phase-4 content-autosave status
+// ('idle' | 'dirty' | 'saving' | 'saved' | 'error' | 'locked' — see the
+// removed `hooks/useAutosave.ts`) to the realtime PROVIDER's connection/sync
+// status (`hooks/useSyncStatus.ts`'s `SyncStatus`). The server, not the
+// client, now persists board content (P5-T28's `YjsWebsocketService`), so
+// there is no client-side "save failed"/"retry" state anymore — a failed
+// persist is a server-side concern with its own retry-on-next-edit behavior.
+// What this indicator now answers is "is my view of the board live", i.e.
+// connected + caught up with the room ('synced'), still connecting/
+// resyncing ('connecting'), or disconnected ('offline').
 import type { CSSProperties } from 'react';
-import type { SaveStatus } from '../../hooks/useAutosave.js';
+import type { SyncStatus } from '../../hooks/useSyncStatus.js';
 
 const DOT_BASE: CSSProperties = {
   display: 'inline-block',
@@ -20,52 +21,23 @@ const DOT_BASE: CSSProperties = {
   flexShrink: 0,
 };
 
-const DOT_COLORS: Record<SaveStatus, string> = {
-  idle: '#cbd5e1',
-  dirty: '#f59e0b',
-  saving: '#3b82f6',
-  saved: '#22c55e',
-  error: '#dc2626',
-  locked: '#a855f7',
+const DOT_COLORS: Record<SyncStatus, string> = {
+  connecting: '#f59e0b',
+  synced: '#22c55e',
+  offline: '#dc2626',
 };
 
-const DOT_LABELS: Record<SaveStatus, string> = {
-  idle: 'No changes yet',
-  dirty: 'Unsaved changes',
-  saving: 'Saving…',
-  saved: 'All changes saved',
-  error: 'Save failed',
-  locked: 'Board locked by another session',
+const DOT_LABELS: Record<SyncStatus, string> = {
+  connecting: 'Connecting…',
+  synced: 'All changes saved',
+  offline: 'Offline — reconnecting…',
 };
 
 export interface SaveIndicatorProps {
-  status: SaveStatus;
-  onRetry?: () => void;
+  status: SyncStatus;
 }
 
-export function SaveIndicator({ status, onRetry }: SaveIndicatorProps) {
-  if (status === 'error') {
-    return (
-      <button
-        type="button"
-        style={{
-          padding: '6px 12px',
-          fontSize: 11,
-          fontWeight: 500,
-          border: '1px solid #fca5a5',
-          borderRadius: 6,
-          background: '#fef2f2',
-          color: '#dc2626',
-          cursor: 'pointer',
-        }}
-        onClick={onRetry}
-        title="Retry save"
-      >
-        Save failed · Retry
-      </button>
-    );
-  }
-
+export function SaveIndicator({ status }: SaveIndicatorProps) {
   return (
     <span
       data-testid="save-status-dot"
@@ -79,7 +51,7 @@ export function SaveIndicator({ status, onRetry }: SaveIndicatorProps) {
       }}
     >
       <span style={{ ...DOT_BASE, background: DOT_COLORS[status] }} />
-      {status === 'locked' && 'Locked'}
+      {status === 'offline' && 'Offline'}
     </span>
   );
 }

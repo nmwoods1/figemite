@@ -19,23 +19,83 @@ import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import type { ComponentProps } from 'react';
 import { ReactFlow } from '@xyflow/react';
 import type { Connection } from '@xyflow/react';
+import * as Y from 'yjs';
 import type { BoardFile } from '@easel/shared';
 import { BoardCanvas } from './BoardCanvas.js';
 
-// ── P4-T27: autosave wiring (mock boards-api's saveBoard) ────────────────────
-// The autosave/undo hooks themselves are unit-tested in
-// hooks/useAutosave.test.ts / hooks/useUndoRedo.test.ts; here we only assert
-// that BoardCanvas, given a slug/path, actually INSTANTIATES useAutosave
-// targeting the right board and that Cmd+Z reaches useUndoRedo's undo() —
-// i.e. the top-level integration gap this task closes.
-const saveBoardMock = vi.fn<(slug: string, path: string[], data: BoardFile) => Promise<void>>();
+// ── P5-T29: realtime room wiring (mock lib/realtime's joinBoardRoom) ────────
+// The room/provider plumbing itself is unit-tested in lib/realtime.test.ts
+// and board-store.test.ts's "realtime room integration" describe block; here
+// we only assert that BoardCanvas's editable pane, given a `slug`, actually
+// joins a room targeting the right board and gates rendering on `synced` —
+// i.e. the top-level integration gap this task closes. `saveBoard` is spied
+// (not mocked away) purely to assert it's NEVER called for content — P5-T29
+// removes the client content-POST entirely.
+const joinBoardRoomMock = vi.fn();
+vi.mock('../lib/realtime.js', () => ({
+  joinBoardRoom: (...args: unknown[]) => joinBoardRoomMock(...args),
+}));
+
+const saveBoardSpy = vi.fn();
 vi.mock('../lib/boards-api.js', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../lib/boards-api.js')>();
   return {
     ...actual,
-    saveBoard: (...args: [string, string[], BoardFile]) => saveBoardMock(...args),
+    saveBoard: (...args: unknown[]) => {
+      saveBoardSpy(...args);
+      return actual.saveBoard(...(args as Parameters<typeof actual.saveBoard>));
+    },
   };
 });
+
+/** A fake `BoardRoom` (see lib/realtime.ts) whose provider is already synced
+ * by default — most tests want BoardCanvas to render immediately rather than
+ * sitting on the "Connecting…" placeholder. Content arrives by writing
+ * directly to the SAME doc `joinBoardRoom` was called with (simulating what a
+ * real provider's sync protocol does under the hood), via `emitContent`. */
+function fakeRoom(doc: Y.Doc, opts: { synced?: boolean } = {}) {
+  const statusListeners = new Set<(e: { status: string }) => void>();
+  const syncListeners = new Set<(synced: boolean) => void>();
+  let synced = opts.synced ?? true;
+  return {
+    roomName: 'fake-room',
+    provider: {
+      get synced() {
+        return synced;
+      },
+      on: vi.fn((event: string, listener: (arg: unknown) => void) => {
+        if (event === 'status') statusListeners.add(listener as (e: { status: string }) => void);
+        if (event === 'sync') syncListeners.add(listener as (synced: boolean) => void);
+      }),
+      off: vi.fn(),
+    },
+    awareness: {},
+    get synced() {
+      return synced;
+    },
+    onSyncedChange: vi.fn(() => vi.fn()),
+    destroy: vi.fn(),
+    /** Test helper: simulates the provider completing (or losing) sync. */
+    setSynced(next: boolean) {
+      synced = next;
+      for (const l of statusListeners) l({ status: next ? 'connected' : 'disconnected' });
+      for (const l of syncListeners) l(next);
+    },
+    doc,
+  };
+}
+
+/** Installs `joinBoardRoomMock` to hand back a fresh `fakeRoom` for the doc
+ * it's called with, already synced by default. Returns the room so a test can
+ * drive `setSynced`/inspect calls on it. */
+function useFakeRoom(opts: { synced?: boolean } = {}) {
+  let room: ReturnType<typeof fakeRoom> | undefined;
+  joinBoardRoomMock.mockImplementation((doc: Y.Doc) => {
+    room = fakeRoom(doc, opts);
+    return room;
+  });
+  return () => room!;
+}
 
 // Record the props the real <ReactFlow> receives so we can assert BoardCanvas
 // wired the interaction handlers (and, by invoking a captured handler, that the
@@ -59,7 +119,8 @@ function lastReactFlowProps(): ComponentProps<typeof ReactFlow> {
 
 beforeEach(() => {
   vi.useFakeTimers();
-  saveBoardMock.mockReset().mockResolvedValue(undefined);
+  joinBoardRoomMock.mockReset();
+  saveBoardSpy.mockReset();
 });
 
 afterEach(() => {
@@ -389,34 +450,66 @@ describe('BoardCanvas', () => {
     expect(screen.queryByRole('button', { name: /^save$/i })).not.toBeInTheDocument();
   });
 
-  // ── P4-T27: autosave + undo/keyboard wiring (the integration gap) ──────────
+  // ── P5-T29: realtime room wiring (undo/keyboard + no client content-POST) ──
 
-  it('an edit in the editable canvas causes autosave to POST via saveBoard, targeting the given slug/path', async () => {
+  it('an editable board with a slug joins the realtime room targeting the given slug/path', () => {
+    useFakeRoom();
+    render(<BoardCanvas board={fixtureBoard()} readonly={false} slug="my-board" path={['sub']} />);
+
+    expect(joinBoardRoomMock).toHaveBeenCalledTimes(1);
+    const [, slug, path] = joinBoardRoomMock.mock.calls[0]!;
+    expect(slug).toBe('my-board');
+    expect(path).toEqual(['sub']);
+  });
+
+  it('shows a "Connecting…" placeholder (no canvas) while the room has not yet synced', () => {
+    useFakeRoom({ synced: false });
+    render(<BoardCanvas board={fixtureBoard()} readonly={false} slug="my-board" path={[]} />);
+
+    expect(screen.getByText(/connecting/i)).toBeInTheDocument();
+    expect(document.querySelector('.react-flow')).not.toBeInTheDocument();
+  });
+
+  it('renders the real canvas once the room reports synced', () => {
+    const getRoom = useFakeRoom({ synced: false });
+    render(<BoardCanvas board={fixtureBoard()} readonly={false} slug="my-board" path={[]} />);
+    expect(document.querySelector('.react-flow')).not.toBeInTheDocument();
+
+    act(() => getRoom().setSynced(true));
+
+    expect(document.querySelector('.react-flow')).toBeInTheDocument();
+    expect(screen.queryByText(/connecting/i)).not.toBeInTheDocument();
+  });
+
+  it('an edit in the editable canvas NEVER calls boards-api.saveBoard for content (server persists the room)', async () => {
+    useFakeRoom();
     render(<BoardCanvas board={fixtureBoard()} readonly={false} slug="my-board" path={['sub']} />);
     fireEvent.click(screen.getByTitle('Text'));
 
     await act(async () => {
-      await vi.advanceTimersByTimeAsync(1500);
+      await vi.advanceTimersByTimeAsync(5000);
     });
 
-    expect(saveBoardMock).toHaveBeenCalled();
-    const [slug, path, board] = saveBoardMock.mock.calls[0]!;
-    expect(slug).toBe('my-board');
-    expect(path).toEqual(['sub']);
-    expect(board.formatVersion).toBe(fixtureBoard().formatVersion);
-    expect(board.boardLabel).toBe(fixtureBoard().boardLabel);
-    expect(board.nodes.some((n) => n.type === 'text')).toBe(true);
+    expect(saveBoardSpy).not.toHaveBeenCalled();
   });
 
-  it('a read-only board never triggers autosave, even without slug/path', async () => {
+  it('a read-only board never joins a room and never calls saveBoard', async () => {
     render(<BoardCanvas board={fixtureBoard()} readonly={true} />);
     await act(async () => {
       await vi.advanceTimersByTimeAsync(5000);
     });
-    expect(saveBoardMock).not.toHaveBeenCalled();
+    expect(joinBoardRoomMock).not.toHaveBeenCalled();
+    expect(saveBoardSpy).not.toHaveBeenCalled();
+  });
+
+  it('an editable board WITHOUT a slug does not join a room (local-seed convenience path) and renders immediately', () => {
+    render(<BoardCanvas board={fixtureBoard()} readonly={false} />);
+    expect(joinBoardRoomMock).not.toHaveBeenCalled();
+    expect(document.querySelector('.react-flow')).toBeInTheDocument();
   });
 
   it('Cmd+Z undoes the most recent edit (toolbar-added node disappears)', async () => {
+    useFakeRoom();
     render(<BoardCanvas board={fixtureBoard()} readonly={false} slug="my-board" path={[]} />);
     fireEvent.click(screen.getByTitle('Text'));
     expect(screen.getByText('Label')).toBeInTheDocument();
@@ -428,20 +521,30 @@ describe('BoardCanvas', () => {
     expect(screen.queryByText('Label')).not.toBeInTheDocument();
   });
 
-  it('shows the save status indicator reflecting the real autosave hook (not a hardcoded default)', async () => {
-    const { container } = render(
-      <BoardCanvas board={fixtureBoard()} readonly={false} slug="my-board" path={[]} />,
-    );
+  it('Cmd+S is bound but harmless — no error, no saveBoard call (the server persists on its own debounce)', async () => {
+    useFakeRoom();
+    render(<BoardCanvas board={fixtureBoard()} readonly={false} slug="my-board" path={[]} />);
     fireEvent.click(screen.getByTitle('Text'));
+
     await act(async () => {
-      await vi.advanceTimersByTimeAsync(1500);
-      await Promise.resolve();
+      fireEvent.keyDown(window, { key: 's', metaKey: true });
     });
-    // SaveIndicator renders a status-bearing element; the important bit is
-    // that saveBoard was actually invoked (the render pipeline reached
-    // useAutosave rather than defaulting to 'idle') — the mount doesn't
-    // throw and the toolbar's save indicator is present at all.
-    expect(container.querySelector('.react-flow')).toBeTruthy();
-    expect(saveBoardMock).toHaveBeenCalled();
+
+    expect(saveBoardSpy).not.toHaveBeenCalled();
+    expect(screen.getByText('Label')).toBeInTheDocument();
+  });
+
+  it('shows the sync-status indicator reflecting the real provider (useSyncStatus), not a hardcoded default', () => {
+    const getRoom = useFakeRoom({ synced: false });
+    render(<BoardCanvas board={fixtureBoard()} readonly={false} slug="my-board" path={[]} />);
+
+    // Still connecting: the canvas (and its Toolbar) hasn't mounted yet.
+    expect(screen.getByText(/connecting/i)).toBeInTheDocument();
+
+    act(() => getRoom().setSynced(true));
+
+    // Now synced: the Toolbar's save-status dot reflects 'synced', not a
+    // hardcoded 'idle'/default value.
+    expect(screen.getByTestId('save-status-dot')).toHaveAttribute('title', 'All changes saved');
   });
 });

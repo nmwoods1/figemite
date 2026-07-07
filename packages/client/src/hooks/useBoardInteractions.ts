@@ -7,10 +7,12 @@
 // `commit()` reducer. Every mutation lands through a named store method, each
 // of which runs a shared `@easel/shared` CRDT op under `LOCAL_ORIGIN`
 // (crdt/ops.ts) — which is exactly what `useUndoRedo` (Y.UndoManager scoped to
-// `LOCAL_ORIGIN`) and `useAutosave` (the doc's `update` event) already observe.
-// So there is NO separate undo/autosave wiring needed here: every clipboard,
-// layer, and alt-drag-clone mutation is automatically undoable and triggers a
-// save, purely by virtue of going through the store.
+// `LOCAL_ORIGIN`) already observes, and (P5-T28) what the SERVER'S OWN
+// `doc.on('update', ...)` persistence listener observes on its side of the
+// same room. So there is NO separate undo/save wiring needed here: every
+// clipboard, layer, and alt-drag-clone mutation is automatically undoable and
+// automatically persisted (by the server, on its own debounce), purely by
+// virtue of going through the store.
 //
 // ── Clipboard (internal, not the system clipboard — matches the legacy) ──────
 // `clipboardRef` holds a plain `{ nodes, edges }` snapshot (structuredClone'd
@@ -85,6 +87,11 @@ export interface UseBoardInteractionsOptions {
   aiLocked?: boolean;
   undo(): void;
   redo(): void;
+  /** Called on Cmd/Ctrl+S. Caller-supplied — P5-T29's editable canvas passes
+   * a no-op (the server persists content on its own debounce; there is
+   * nothing left for the client to flush), kept purely so the shortcut stays
+   * bound-but-harmless rather than falling through to the browser's own
+   * save-page dialog. */
   flushNow(): void;
   /** Called on Escape (cancel edit/active mode). Optional no-op if omitted. */
   onEscape?(): void;

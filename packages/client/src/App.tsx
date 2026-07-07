@@ -5,14 +5,18 @@
 //     `slug` for the board view, not `board` as upstream — see that module's
 //     doc comment).
 //   - The `board` view resolves the route, fetches the full `BoardFile` via
-//     `lib/boards-api.ts`'s `getBoard()`, and renders a Breadcrumb +
-//     `canvas/BoardCanvas.tsx`. `slug`/`path` are threaded straight through to
-//     BoardCanvas (P4-T27) — it's what its EDITABLE pane needs to target
-//     `useAutosave` at the right board file; the READ-ONLY pane ignores them.
-//     `Breadcrumb`'s `isDirty` is still hardcoded `false`: the autosave hook
-//     (and its `isDirty`) is owned inside BoardCanvas's editable pane, not
-//     lifted up here — surfacing it on the Breadcrumb would need a callback
-//     seam this task didn't add; left as a follow-up.
+//     `lib/boards-api.ts`'s `getBoard()` (for metadata + existence/404), and
+//     renders a Breadcrumb + `canvas/BoardCanvas.tsx`. `slug`/`path` are
+//     threaded straight through to BoardCanvas — its EDITABLE pane uses them
+//     to join the server's realtime room (P5-T29: `lib/realtime.ts`'s
+//     `joinBoardRoom`, via `board-store.ts`'s `room` option) rather than
+//     seeding content from the fetched `BoardFile`; the READ-ONLY pane
+//     ignores them (it hydrates directly from the fetch, no room joined).
+//     `Breadcrumb`'s `isDirty` is still hardcoded `false`: there is no
+//     client-side "unsaved changes" concept anymore now that the server is
+//     the sole content writer — surfacing the realtime connection's own
+//     status on the Breadcrumb (rather than just the Toolbar) would need a
+//     callback seam this task didn't add; left as a follow-up.
 //   - Delete-sub-board is wired to `deleteSubBoard` from `lib/boards-api.ts`
 //     and only offered (via `Breadcrumb`'s optional `onDelete`) when not in
 //     READONLY mode and `path.length > 0`, matching the "every write

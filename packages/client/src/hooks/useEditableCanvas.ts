@@ -76,8 +76,9 @@ import type { SelectionParams } from './useSelection.js';
  * function is read through a ref (updated in its own effect, never during
  * render) so THIS bag's own `onOpenDescription` member keeps a stable
  * identity across re-renders even though the caller's closure isn't
- * necessarily stable itself — same technique `useAutosave.ts` uses for its
- * scheduleSave/performSave refs.
+ * necessarily stable itself — the same ref-indirection technique the
+ * (since-removed) content-autosave hook used for its scheduleSave/
+ * performSave refs.
  */
 function useNodeCallbacks(
   store: BoardStore,
