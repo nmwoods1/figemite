@@ -48,6 +48,9 @@ jobs:
       - name: Build static (read-only) bundle
         run: npm run build:static
 
+      - name: Build @figemite/mcp publish bundle
+        run: npm run -w @figemite/mcp build
+
       - name: License audit
         run: npm run license:audit
 

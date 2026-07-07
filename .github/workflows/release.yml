@@ -1,0 +1,66 @@
+name: Release
+
+# Triggered by pushing a `v*` tag, e.g. `v1.0.0`. Runs the full CI gate
+# (lint, typecheck, test, license audit, and — non-negotiably — the
+# prepublish reference audit) before publishing `@figemite/mcp` to npm and
+# cutting a GitHub Release. `@figemite/{server,client,shared}` are not
+# published; `@figemite/mcp` is the one public package (users run the others
+# from a clone — see CONTRIBUTING.md).
+on:
+  push:
+    tags:
+      - 'v*'
+
+concurrency:
+  group: '${{ github.workflow }}-${{ github.ref }}'
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    # Belt-and-suspenders alongside the tag-glob trigger above: refuse to run
+    # the publish/release steps unless this workflow run was itself triggered
+    # by a real `refs/tags/v*` push (never on a branch push, manual dispatch,
+    # or anything else that might slip in later).
+    if: startsWith(github.ref, 'refs/tags/v')
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          registry-url: 'https://registry.npmjs.org'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Test
+        run: npm test
+
+      - name: License audit
+        run: npm run license:audit
+
+      - name: Prepublish reference audit (BLOCKING — release fails on any forbidden ref)
+        run: npm run audit:refs
+
+      - name: Build @figemite/mcp publish bundle
+        run: npm run -w @figemite/mcp build
+
+      - name: Publish @figemite/mcp to npm
+        run: npm publish -w @figemite/mcp
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          generate_release_notes: true

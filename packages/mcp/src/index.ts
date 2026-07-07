@@ -15,9 +15,11 @@
 //   FIGEMITE_NAME       display name shown in the browser (default "AI")
 //   FIGEMITE_CLIENT     agent client tag, e.g. "cursor" / "claude-code"
 //
-// Scope note: this is the workspace-runnable entry only. Bundling a
-// standalone npm-publishable CLI (tsup, a `files` allowlist, `publishConfig`)
-// is a Phase-7 (release engineering) concern — TODO(phase-7): add the publish bundle.
+// This source file is also the bundle entry: `npm run build` (tsup, see
+// tsup.config.ts) inlines `@figemite/shared` and emits a self-contained
+// `dist/index.js` — the published `figemite-mcp` bin (`npx -y @figemite/mcp`).
+// Real third-party deps (the MCP SDK, ws, yjs, y-websocket, bonjour-service)
+// stay external and install normally from npm.
 
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { createFigemiteMcpServer } from './server.js';

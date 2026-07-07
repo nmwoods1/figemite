@@ -1,18 +1,30 @@
 {
   "name": "@figemite/mcp",
-  "version": "0.0.0",
-  "private": true,
+  "version": "1.0.0",
+  "description": "MCP server that lets AI agents join a Figemite board as a live multiplayer peer.",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/figemite/figemite.git",
+    "directory": "packages/mcp"
+  },
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "bin": {
     "figemite-mcp": "./dist/index.js"
   },
+  "files": [
+    "dist"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
   "scripts": {
+    "build": "tsup",
     "test": "vitest run"
   },
   "dependencies": {
-    "@figemite/shared": "*",
     "@modelcontextprotocol/sdk": "^1.29.0",
     "bonjour-service": "^1.4.2",
     "ws": "^8.21.0",
@@ -22,6 +34,8 @@
   },
   "devDependencies": {
     "@figemite/server": "*",
-    "@types/ws": "^8.18.1"
+    "@figemite/shared": "*",
+    "@types/ws": "^8.18.1",
+    "tsup": "^8.5.0"
   }
 }
