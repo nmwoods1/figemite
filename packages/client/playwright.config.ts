@@ -22,9 +22,10 @@
 //
 // Two projects, deliberately separated by which specs they run:
 //   - `chromium` (default, matches `render-parity.spec.ts`,
-//     `interaction.spec.ts`, AND `multiplayer.spec.ts`): the authoritative,
-//     deterministic Phase-3 + Phase-4 + Phase-5 gate. `npm run test:e2e` runs
-//     only this project — this is what CI treats as blocking.
+//     `interaction.spec.ts`, `multiplayer.spec.ts`, AND
+//     `overlays-history.spec.ts`): the authoritative, deterministic Phase-3 +
+//     Phase-4 + Phase-5 + Phase-6 gate. `npm run test:e2e` runs only this
+//     project — this is what CI treats as blocking.
 //     `interaction.spec.ts` (P4-T26) is the Phase-4 gate: real-browser
 //     single-user editing parity, asserting persistence to the same seeded
 //     `boards/` dir this config's `webServer` sets up (see that spec's module
@@ -33,7 +34,12 @@
 //     (P5-T33) is the Phase-5 gate: TWO real browser contexts on the same
 //     seeded `multiplayer` board, proving realtime sync, presence/cursors,
 //     follow-mode, and AI-lock SSE-drop recovery all work end-to-end against
-//     the real dev server.
+//     the real dev server. `overlays-history.spec.ts` (P6-T37) is the Phase-6
+//     gate: comments (placement/reply/resolve -> `comments.json`), pencil
+//     drawing (-> a persisted `DrawingNode` in `board.json`), annotation
+//     scribbles (ephemeral, two-context sync, proven NEVER to reach
+//     `board.json`), and history preview/restore, all against the real dev
+//     server + its own seeded `overlays-history` board.
 //   - `chromium-visual` (matches `visual-regression.spec.ts` only): the
 //     best-effort screenshot layer (see that file's module doc for why a
 //     mismatch here is never trustworthy across environments — the baseline
@@ -75,7 +81,12 @@ export default defineConfig({
   projects: [
     {
       name: 'chromium',
-      testMatch: ['render-parity.spec.ts', 'interaction.spec.ts', 'multiplayer.spec.ts'],
+      testMatch: [
+        'render-parity.spec.ts',
+        'interaction.spec.ts',
+        'multiplayer.spec.ts',
+        'overlays-history.spec.ts',
+      ],
       use: { ...devices['Desktop Chrome'] },
     },
     {

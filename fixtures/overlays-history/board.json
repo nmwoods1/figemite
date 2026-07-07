@@ -1,0 +1,17 @@
+{
+  "formatVersion": 1,
+  "boardLabel": "Overlays & History",
+  "viewport": { "x": 40, "y": 40, "zoom": 1 },
+  "nodes": [
+    {
+      "id": "sticky1",
+      "type": "sticky",
+      "pos": { "x": 40, "y": 40 },
+      "order": 0,
+      "size": { "width": 200, "height": 160 },
+      "text": "",
+      "color": "#fef3c7"
+    }
+  ],
+  "edges": []
+}
