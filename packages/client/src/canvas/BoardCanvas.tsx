@@ -73,13 +73,17 @@ import { MultiSelectResizer } from './MultiSelectResizer.js';
 import { nodeTypes } from '../nodes/index.js';
 import { edgeTypes } from '../edges/index.js';
 import { Toolbar } from '../components/Toolbar.js';
+import type { ToolbarMode } from '../components/Toolbar.js';
 import { DescriptionModal } from '../components/DescriptionModal.js';
 import { PresenceLayer } from '../components/PresenceLayer.js';
 import { ActiveUsersPanel } from '../components/ActiveUsersPanel.js';
 import { CommentLayer } from '../components/CommentLayer.js';
+import { PencilLayer } from '../components/PencilLayer.js';
+import { AnnotationLayer } from '../components/AnnotationLayer.js';
 import { nodeLabel } from './node-label.js';
 import { getFlowPointer } from './coords.js';
 import { getLocalUser } from '../lib/identity.js';
+import { ANNOTATIONS } from '@easel/shared';
 
 export interface BoardCanvasProps {
   board: BoardFile;
@@ -293,13 +297,42 @@ function EditableCanvas({ store, fitView, viewport, slug, path }: EditablePanePr
   // registration each, so a ref is the simplest way to compose "clear undo
   // AND reload comments" out of the one upstream signal.
   const reloadCommentsRef = useRef<() => void>(() => {});
-  const [commentMode, setCommentMode] = useState(false);
+  // ── P6-T35: single mutually-exclusive overlay mode ──────────────────────────
+  // Replaces the old bare `commentMode` boolean — at most one of
+  // comment-placement, pencil-drawing, or annotation-drawing is ever active
+  // (see Toolbar.tsx's `ToolbarMode` doc). `commentMode` below is derived so
+  // every existing comment-mode wiring (CommentLayer, useComments'
+  // post-submit exit) keeps working unchanged.
+  const [activeMode, setActiveMode] = useState<ToolbarMode>('none');
+  const commentMode = activeMode === 'comment';
   const comments = useComments(slug, {
     readonly: false,
     onExternalChange: (reload) => {
       reloadCommentsRef.current = reload;
     },
   });
+
+  // P6-T35: annotations live on the doc's shared `ANNOTATIONS` Y.Array (see
+  // AnnotationLayer's module doc for the ephemeral-vs-persisted contrast).
+  // Observed here (not inside AnnotationLayer) only so the Toolbar's Wipe
+  // button visibility (`hasAnnotations`) can be computed without AnnotationLayer
+  // reaching back up into the Toolbar.
+  const [hasAnnotations, setHasAnnotations] = useState(
+    () => store.doc.getArray(ANNOTATIONS).length > 0,
+  );
+  useEffect(() => {
+    const arr = store.doc.getArray(ANNOTATIONS);
+    const onChange = () => setHasAnnotations(arr.length > 0);
+    onChange();
+    arr.observe(onChange);
+    return () => arr.unobserve(onChange);
+  }, [store.doc]);
+  const handleWipeAnnotations = useCallback(() => {
+    const arr = store.doc.getArray(ANNOTATIONS);
+    store.doc.transact(() => {
+      arr.delete(0, arr.length);
+    });
+  }, [store.doc]);
 
   // ── P5-T31: AI-session lock (SSE + reconnect + status reconcile) ───────────
   // A UX-only affordance now that server-side doc persistence (P5-T28) + MCP
@@ -415,6 +448,12 @@ function EditableCanvas({ store, fitView, viewport, slug, path }: EditablePanePr
     return <ConnectingPlaceholder />;
   }
 
+  // Pencil/annotation mode suppresses normal RF interaction/selection for the
+  // duration (see Toolbar.tsx's `ToolbarMode` doc) — the overlay captures
+  // every pointer event instead, and letting RF's own drag/connect/select
+  // stay live underneath would fight the overlay for the same gesture.
+  const overlayModeActive = activeMode === 'pencil' || activeMode === 'annotation';
+
   return (
     <div ref={containerRef} style={{ width: '100%', height: '100%', position: 'relative' }}>
       <ReactFlow
@@ -432,9 +471,11 @@ function EditableCanvas({ store, fitView, viewport, slug, path }: EditablePanePr
         onMoveStart={followMode.notifyManualViewportChange}
         defaultViewport={fitView ? undefined : viewport}
         fitView={fitView}
-        nodesDraggable={!aiLocked}
-        nodesConnectable={!aiLocked}
-        elementsSelectable={!aiLocked}
+        nodesDraggable={!aiLocked && !overlayModeActive}
+        nodesConnectable={!aiLocked && !overlayModeActive}
+        elementsSelectable={!aiLocked && !overlayModeActive}
+        panOnDrag={!overlayModeActive}
+        zoomOnScroll={!overlayModeActive}
       >
         <Background />
         <Controls />
@@ -451,8 +492,10 @@ function EditableCanvas({ store, fitView, viewport, slug, path }: EditablePanePr
         selectedEdgeIds={editable.selectedEdgeIds}
         syncStatus={syncStatus}
         readonly={false}
-        commentMode={commentMode}
-        onToggleCommentMode={() => setCommentMode((m) => !m)}
+        activeMode={activeMode}
+        onSetActiveMode={setActiveMode}
+        hasAnnotations={hasAnnotations}
+        onWipeAnnotations={handleWipeAnnotations}
       />
       {slug && (
         <CommentLayer
@@ -463,13 +506,19 @@ function EditableCanvas({ store, fitView, viewport, slug, path }: EditablePanePr
           readonly={false}
           onAddComment={(target, text) => {
             comments.addComment(target, text);
-            setCommentMode(false);
+            setActiveMode('none');
           }}
           onReply={comments.addReply}
           onToggleResolved={comments.toggleResolved}
           onDelete={comments.deleteComment}
         />
       )}
+      <PencilLayer active={activeMode === 'pencil'} containerRef={containerRef} store={store} />
+      <AnnotationLayer
+        active={activeMode === 'annotation'}
+        containerRef={containerRef}
+        doc={store.doc}
+      />
       {aiLocked && <AiLockBanner />}
       {descNode && (
         <DescriptionModal

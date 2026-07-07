@@ -928,3 +928,127 @@ describe('BoardCanvas — comments (P6-T34)', () => {
     expect(screen.queryByTestId('comment-placement-overlay')).not.toBeInTheDocument();
   });
 });
+
+describe('BoardCanvas — pencil + annotation overlays, mode exclusivity (P6-T35)', () => {
+  it('activating pencil mode deactivates comment mode', async () => {
+    await act(async () => {
+      render(<BoardCanvas board={fixtureBoard()} readonly={false} slug="my-board" path={[]} />);
+    });
+    fireEvent.click(screen.getByRole('button', { name: /comment/i }));
+    expect(screen.queryByTestId('comment-placement-overlay')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: /pencil/i }));
+    expect(screen.queryByTestId('comment-placement-overlay')).not.toBeInTheDocument();
+    expect(screen.getByTestId('pencil-overlay')).toBeInTheDocument();
+  });
+
+  it('activating annotation mode deactivates pencil mode', async () => {
+    await act(async () => {
+      render(<BoardCanvas board={fixtureBoard()} readonly={false} slug="my-board" path={[]} />);
+    });
+    fireEvent.click(screen.getByRole('button', { name: /pencil/i }));
+    expect(screen.getByTestId('pencil-overlay')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: /annotat/i }));
+    expect(screen.queryByTestId('pencil-overlay')).not.toBeInTheDocument();
+    expect(screen.getByTestId('annotation-overlay')).toBeInTheDocument();
+  });
+
+  it('activating comment mode deactivates annotation mode', async () => {
+    await act(async () => {
+      render(<BoardCanvas board={fixtureBoard()} readonly={false} slug="my-board" path={[]} />);
+    });
+    fireEvent.click(screen.getByRole('button', { name: /annotat/i }));
+    expect(screen.getByTestId('annotation-overlay')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: /comment/i }));
+    expect(screen.queryByTestId('annotation-overlay')).not.toBeInTheDocument();
+    expect(screen.getByTestId('comment-placement-overlay')).toBeInTheDocument();
+  });
+
+  it('clicking pencil mode again toggles it back off', async () => {
+    await act(async () => {
+      render(<BoardCanvas board={fixtureBoard()} readonly={false} slug="my-board" path={[]} />);
+    });
+    fireEvent.click(screen.getByRole('button', { name: /pencil/i }));
+    expect(screen.getByTestId('pencil-overlay')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /pencil/i }));
+    expect(screen.queryByTestId('pencil-overlay')).not.toBeInTheDocument();
+  });
+
+  it('drawing a pencil stroke commits a persisted DrawingNode to the doc', async () => {
+    const getRoom = useFakeRoom();
+    await act(async () => {
+      render(<BoardCanvas board={fixtureBoard()} readonly={false} slug="my-board" path={[]} />);
+    });
+    fireEvent.click(screen.getByRole('button', { name: /pencil/i }));
+    const overlay = screen.getByTestId('pencil-overlay');
+    Object.defineProperty(overlay, 'getBoundingClientRect', {
+      configurable: true,
+      value: () => ({
+        left: 0,
+        top: 0,
+        right: 800,
+        bottom: 600,
+        width: 800,
+        height: 600,
+        x: 0,
+        y: 0,
+        toJSON() {},
+      }),
+    });
+
+    fireEvent.pointerDown(overlay, { pointerId: 1, button: 0, clientX: 10, clientY: 10 });
+    fireEvent.pointerMove(overlay, { pointerId: 1, clientX: 60, clientY: 60 });
+    fireEvent.pointerUp(overlay, { pointerId: 1, clientX: 60, clientY: 60 });
+
+    const doc = getRoom().doc;
+    const { getSnapshot } = await import('@easel/shared');
+    const { nodes } = getSnapshot(doc);
+    expect(nodes.some((n) => n.type === 'drawing')).toBe(true);
+  });
+
+  it('drawing an annotation stroke pushes onto the shared ANNOTATIONS array, not the doc snapshot', async () => {
+    const getRoom = useFakeRoom();
+    await act(async () => {
+      render(<BoardCanvas board={fixtureBoard()} readonly={false} slug="my-board" path={[]} />);
+    });
+    fireEvent.click(screen.getByRole('button', { name: /annotat/i }));
+    const overlay = screen.getByTestId('annotation-overlay');
+    Object.defineProperty(overlay, 'getBoundingClientRect', {
+      configurable: true,
+      value: () => ({
+        left: 0,
+        top: 0,
+        right: 800,
+        bottom: 600,
+        width: 800,
+        height: 600,
+        x: 0,
+        y: 0,
+        toJSON() {},
+      }),
+    });
+
+    fireEvent.pointerDown(overlay, { pointerId: 1, button: 0, clientX: 10, clientY: 10 });
+    fireEvent.pointerMove(overlay, { pointerId: 1, clientX: 60, clientY: 60 });
+    fireEvent.pointerUp(overlay, { pointerId: 1, clientX: 60, clientY: 60 });
+
+    const doc = getRoom().doc;
+    const { ANNOTATIONS, getSnapshot } = await import('@easel/shared');
+    expect(doc.getArray(ANNOTATIONS).length).toBe(1);
+    const { nodes } = getSnapshot(doc);
+    expect(nodes.some((n) => n.type === 'drawing')).toBe(false);
+  });
+
+  it('read-only mode never shows the pencil/annotation toggles or overlays', async () => {
+    fetchCommentsMock.mockResolvedValue({ comments: [] });
+    await act(async () => {
+      render(<BoardCanvas board={fixtureBoard()} readonly={true} slug="my-board" path={[]} />);
+    });
+    expect(screen.queryByRole('button', { name: /pencil/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /annotat/i })).not.toBeInTheDocument();
+    expect(screen.queryByTestId('pencil-overlay')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('annotation-overlay')).not.toBeInTheDocument();
+  });
+});

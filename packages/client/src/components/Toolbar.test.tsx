@@ -73,8 +73,10 @@ function renderToolbar(
     selectedEdgeIds: Set<string>;
     syncStatus: 'connecting' | 'synced' | 'offline';
     readonly: boolean;
-    commentMode: boolean;
-    onToggleCommentMode: () => void;
+    activeMode: 'none' | 'comment' | 'pencil' | 'annotation';
+    onSetActiveMode: (mode: 'none' | 'comment' | 'pencil' | 'annotation') => void;
+    hasAnnotations: boolean;
+    onWipeAnnotations: () => void;
   }> = {},
 ) {
   return render(
@@ -85,8 +87,10 @@ function renderToolbar(
         selectedEdgeIds={overrides.selectedEdgeIds ?? new Set()}
         syncStatus={overrides.syncStatus ?? 'connecting'}
         readonly={overrides.readonly ?? false}
-        commentMode={overrides.commentMode ?? false}
-        onToggleCommentMode={overrides.onToggleCommentMode ?? (() => {})}
+        activeMode={overrides.activeMode ?? 'none'}
+        onSetActiveMode={overrides.onSetActiveMode ?? (() => {})}
+        hasAnnotations={overrides.hasAnnotations ?? false}
+        onWipeAnnotations={overrides.onWipeAnnotations ?? (() => {})}
       />
     </ReactFlowProvider>,
   );
@@ -324,6 +328,18 @@ describe('Toolbar — READONLY', () => {
     renderToolbar(store, { readonly: true });
     expect(screen.queryByRole('button', { name: /comment/i })).not.toBeInTheDocument();
   });
+
+  it('hides the pencil and annotation toggles (and Wipe) when readonly', () => {
+    const store = createBoardStore(emptyBoard(), { readonly: true });
+    renderToolbar(store, {
+      readonly: true,
+      activeMode: 'annotation',
+      hasAnnotations: true,
+    });
+    expect(screen.queryByRole('button', { name: /pencil/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /annotat/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /wipe/i })).not.toBeInTheDocument();
+  });
 });
 
 describe('Toolbar — comment-mode toggle', () => {
@@ -333,21 +349,105 @@ describe('Toolbar — comment-mode toggle', () => {
     expect(screen.getByRole('button', { name: /comment/i })).toBeInTheDocument();
   });
 
-  it('calls onToggleCommentMode when clicked', () => {
+  it('calls onSetActiveMode("comment") when clicked from none', () => {
     const store = createBoardStore(emptyBoard(), { readonly: false });
-    const onToggleCommentMode = vi.fn();
-    renderToolbar(store, { onToggleCommentMode });
+    const onSetActiveMode = vi.fn();
+    renderToolbar(store, { onSetActiveMode });
     fireEvent.click(screen.getByRole('button', { name: /comment/i }));
-    expect(onToggleCommentMode).toHaveBeenCalled();
+    expect(onSetActiveMode).toHaveBeenCalledWith('comment');
   });
 
-  it('shows the toggle as active when commentMode is true', () => {
+  it('calls onSetActiveMode("none") when clicked while already active (toggle off)', () => {
     const store = createBoardStore(emptyBoard(), { readonly: false });
-    renderToolbar(store, { commentMode: true });
+    const onSetActiveMode = vi.fn();
+    renderToolbar(store, { activeMode: 'comment', onSetActiveMode });
+    fireEvent.click(screen.getByRole('button', { name: /comment/i }));
+    expect(onSetActiveMode).toHaveBeenCalledWith('none');
+  });
+
+  it('shows the toggle as active when activeMode is "comment"', () => {
+    const store = createBoardStore(emptyBoard(), { readonly: false });
+    renderToolbar(store, { activeMode: 'comment' });
     const btn = screen.getByRole('button', { name: /comment/i });
     // ICON_BTN_ACTIVE styling (see components/toolbar/styles.tsx) sets a dark
     // background — asserting the computed background is the simplest way to
     // check "looks active" without depending on a CSS class name.
     expect(btn.style.background).toBe('rgb(30, 41, 59)'); // #1e293b
+  });
+});
+
+describe('Toolbar — pencil-mode toggle', () => {
+  it('renders a pencil-mode toggle button', () => {
+    const store = createBoardStore(emptyBoard(), { readonly: false });
+    renderToolbar(store);
+    expect(screen.getByRole('button', { name: /pencil/i })).toBeInTheDocument();
+  });
+
+  it('calls onSetActiveMode("pencil") when clicked', () => {
+    const store = createBoardStore(emptyBoard(), { readonly: false });
+    const onSetActiveMode = vi.fn();
+    renderToolbar(store, { onSetActiveMode });
+    fireEvent.click(screen.getByRole('button', { name: /pencil/i }));
+    expect(onSetActiveMode).toHaveBeenCalledWith('pencil');
+  });
+
+  it('shows the toggle as active when activeMode is "pencil"', () => {
+    const store = createBoardStore(emptyBoard(), { readonly: false });
+    renderToolbar(store, { activeMode: 'pencil' });
+    const btn = screen.getByRole('button', { name: /pencil/i });
+    expect(btn.style.background).toBe('rgb(30, 41, 59)');
+  });
+});
+
+describe('Toolbar — annotation-mode toggle + Wipe', () => {
+  it('renders an annotation-mode toggle button', () => {
+    const store = createBoardStore(emptyBoard(), { readonly: false });
+    renderToolbar(store);
+    expect(screen.getByRole('button', { name: /annotat/i })).toBeInTheDocument();
+  });
+
+  it('calls onSetActiveMode("annotation") when clicked', () => {
+    const store = createBoardStore(emptyBoard(), { readonly: false });
+    const onSetActiveMode = vi.fn();
+    renderToolbar(store, { onSetActiveMode });
+    fireEvent.click(screen.getByRole('button', { name: /annotat/i }));
+    expect(onSetActiveMode).toHaveBeenCalledWith('annotation');
+  });
+
+  it('shows a Wipe button only when annotation mode is active and annotations exist', () => {
+    const store = createBoardStore(emptyBoard(), { readonly: false });
+    renderToolbar(store, { activeMode: 'annotation', hasAnnotations: true });
+    expect(screen.getByRole('button', { name: /wipe/i })).toBeInTheDocument();
+  });
+
+  it('hides the Wipe button when annotation mode is active but there are no annotations', () => {
+    const store = createBoardStore(emptyBoard(), { readonly: false });
+    renderToolbar(store, { activeMode: 'annotation', hasAnnotations: false });
+    expect(screen.queryByRole('button', { name: /wipe/i })).not.toBeInTheDocument();
+  });
+
+  it('hides the Wipe button when annotation mode is not active, even with annotations', () => {
+    const store = createBoardStore(emptyBoard(), { readonly: false });
+    renderToolbar(store, { activeMode: 'none', hasAnnotations: true });
+    expect(screen.queryByRole('button', { name: /wipe/i })).not.toBeInTheDocument();
+  });
+
+  it('calls onWipeAnnotations when Wipe is clicked', () => {
+    const store = createBoardStore(emptyBoard(), { readonly: false });
+    const onWipeAnnotations = vi.fn();
+    renderToolbar(store, { activeMode: 'annotation', hasAnnotations: true, onWipeAnnotations });
+    fireEvent.click(screen.getByRole('button', { name: /wipe/i }));
+    expect(onWipeAnnotations).toHaveBeenCalled();
+  });
+});
+
+describe('Toolbar — mode exclusivity', () => {
+  it('only one of comment/pencil/annotation appears active at a time', () => {
+    const store = createBoardStore(emptyBoard(), { readonly: false });
+    renderToolbar(store, { activeMode: 'pencil' });
+    const dark = 'rgb(30, 41, 59)';
+    expect(screen.getByRole('button', { name: /comment/i }).style.background).not.toBe(dark);
+    expect(screen.getByRole('button', { name: /pencil/i }).style.background).toBe(dark);
+    expect(screen.getByRole('button', { name: /annotat/i }).style.background).not.toBe(dark);
   });
 });

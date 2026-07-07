@@ -41,10 +41,21 @@
 //     other component in this codebase.
 //
 // Deliberately NOT ported here (out of this task's scope, per the plan):
-// pencil/annotation/comment modes, version history, copy/paste, layer
-// reordering, keyboard shortcuts — those are separate legacy features not
-// yet built in this rewrite (pencil/annotation/comments are later phases;
-// clipboard/keyboard/layers are the NEXT task, P4-T27).
+// version history, copy/paste, layer reordering, keyboard shortcuts — those
+// are separate legacy features not yet built in this rewrite (clipboard/
+// keyboard/layers are the NEXT task, P4-T27).
+//
+// P6-T35 adds the pencil (persisted DrawingNode via PencilLayer) and
+// annotation (ephemeral Y.Array strokes via AnnotationLayer) mode toggles,
+// replacing the previous bespoke `commentMode`/`onToggleCommentMode` pair
+// with a single `activeMode: 'none' | 'comment' | 'pencil' | 'annotation'` +
+// `onSetActiveMode` — the three modes are mutually exclusive (activating one
+// deactivates whichever else was active), and BoardCanvas owns the actual
+// state slot (mirroring how it already owned `commentMode`). Clicking the
+// already-active mode's button toggles it back to `'none'` (mirrors the
+// legacy's own toggle-off behaviour for each of its three independent
+// booleans). A Wipe button (annotation mode only, and only once at least one
+// annotation exists) clears the shared annotations array for every peer.
 
 import { useCallback, useState } from 'react';
 import { useRef } from 'react';
@@ -57,6 +68,9 @@ import {
   Sparkles,
   Palette,
   MessageCircle,
+  Pencil,
+  Eraser,
+  Trash2,
 } from 'lucide-react';
 import { useReactFlow } from '@xyflow/react';
 import {
@@ -96,18 +110,28 @@ import {
 import { SaveIndicator } from './toolbar/SaveIndicator.js';
 import { Divider } from './toolbar/styles.js';
 
+/** The single mutually-exclusive "active overlay mode" slot (P6-T35) — at
+ * most one of comment-placement, pencil-drawing, or annotation-drawing is
+ * ever active. `'none'` means normal RF interaction/selection. */
+export type ToolbarMode = 'none' | 'comment' | 'pencil' | 'annotation';
+
 export interface ToolbarProps {
   store: BoardStore;
   selectedNodeIds: Set<string>;
   selectedEdgeIds: Set<string>;
   syncStatus: SyncStatus;
   readonly: boolean;
-  /** True while the comment-placement mode (P6-T34) is active — mutually
-   * exclusive with any future annotation mode (pencil/etc.), which should
-   * plug into this same single "active mode" slot rather than adding its
-   * own independent boolean. */
-  commentMode: boolean;
-  onToggleCommentMode: () => void;
+  /** Which of comment/pencil/annotation mode (if any) is currently active. */
+  activeMode: ToolbarMode;
+  /** Set the active mode. BoardCanvas owns the actual state and is expected
+   * to toggle back to `'none'` when the caller re-selects the already-active
+   * mode's button (mirrored here as each toggle button's own onClick). */
+  onSetActiveMode: (mode: ToolbarMode) => void;
+  /** Whether the shared annotations array currently has any strokes — gates
+   * the Wipe button, which only appears alongside annotation mode. */
+  hasAnnotations: boolean;
+  /** Clear every annotation stroke for every peer (P6-T35). */
+  onWipeAnnotations: () => void;
 }
 
 type OpenPicker = null | 'sticky' | 'shape' | 'emoji' | 'icon';
@@ -118,8 +142,10 @@ export function Toolbar({
   selectedEdgeIds,
   syncStatus,
   readonly,
-  commentMode,
-  onToggleCommentMode,
+  activeMode,
+  onSetActiveMode,
+  hasAnnotations,
+  onWipeAnnotations,
 }: ToolbarProps) {
   const { nodes, edges } = useBoardStore(store);
   const { getViewport } = useReactFlow();
@@ -194,6 +220,13 @@ export function Toolbar({
       for (const id of selectedEdgeIds) store.setEdgeCardinality(id, cardinality);
     },
     [selectedEdgeIds, store],
+  );
+
+  // Clicking the already-active mode's button toggles it back off; clicking
+  // any other mode switches to it (mutually exclusive — see ToolbarMode's doc).
+  const toggleMode = useCallback(
+    (mode: ToolbarMode) => onSetActiveMode(activeMode === mode ? 'none' : mode),
+    [activeMode, onSetActiveMode],
   );
 
   if (readonly) return null;
@@ -306,9 +339,29 @@ export function Toolbar({
       <IconButton
         icon={MessageCircle}
         label="Comment"
-        active={commentMode}
-        onClick={onToggleCommentMode}
+        active={activeMode === 'comment'}
+        onClick={() => toggleMode('comment')}
       />
+
+      {/* ── Pencil (persisted freehand drawing) ──────────────────────────── */}
+      <IconButton
+        icon={Pencil}
+        label={activeMode === 'pencil' ? 'Exit pencil mode' : 'Pencil'}
+        active={activeMode === 'pencil'}
+        onClick={() => toggleMode('pencil')}
+      />
+
+      {/* ── Annotation (ephemeral discussion scribbles) ──────────────────── */}
+      <IconButton
+        icon={Eraser}
+        label={activeMode === 'annotation' ? 'Exit annotation mode' : 'Annotation'}
+        active={activeMode === 'annotation'}
+        onClick={() => toggleMode('annotation')}
+      />
+
+      {activeMode === 'annotation' && hasAnnotations && (
+        <IconButton icon={Trash2} label="Wipe all annotations" onClick={onWipeAnnotations} />
+      )}
 
       <Divider />
 
