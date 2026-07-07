@@ -51,6 +51,7 @@ interface PersistedNode {
   color?: string;
   shape?: string;
   rotation?: number;
+  description?: string;
 }
 interface PersistedEdge {
   id: string;
@@ -879,26 +880,10 @@ test.describe('single-user editing parity + persistence (Phase 4 gate)', () => {
   // else does.
   //
   // Opens the modal via `shape1`'s badge (the fixture seeds it WITH a
-  // description, see fixtures/interaction/board.json) rather than
-  // `sticky1`'s hover-revealed "Add description" affordance: hovering to
-  // reveal that badge is NOT reproducible with a real OS-level mouse move in
-  // a real browser — DescriptionBadge.tsx's hover-zone div is
-  // `pointer-events: none` (only the badge BUTTON inside gets
-  // `pointer-events: auto`, once rendered), so no real cursor position can
-  // ever land ON the pointer-events:none zone to fire its `onMouseEnter` in
-  // the first place; only jsdom's `fireEvent.mouseEnter()` (used by this
-  // codebase's own unit tests, e.g. BoardCanvas.test.tsx) can trigger it,
-  // because that synthetic dispatch bypasses CSS pointer-events entirely —
-  // an escape hatch a real browser has no equivalent for. Confirmed via
-  // manual reproduction during this spec's development: moving the mouse to
-  // every plausible point over a hover-revealed badge (including its exact
-  // documented position) never made the button appear. This is a REAL gap
-  // in the product's hover-to-discover UX for real users, not a test
-  // limitation — reported in this task's write-up rather than worked around
-  // by weakening this assertion; a description-having node's ALWAYS-visible
-  // badge is what real users would actually use to reach this modal anyway
-  // (and is what this test exercises), so the flow this test covers is
-  // itself fully real and unaffected by that gap.
+  // description, see fixtures/interaction/board.json) — a plain, always-
+  // visible badge click is sufficient to exercise Escape's own behavior;
+  // the hover-to-reveal path (for a node WITHOUT a description yet) has its
+  // own dedicated real-mouse-hover coverage below.
   test('Escape closes the description modal without committing a change', async ({ page }) => {
     const capture = attachConsoleCapture(page);
     await gotoBoard(page);
@@ -912,6 +897,75 @@ test.describe('single-user editing parity + persistence (Phase 4 gate)', () => {
 
     await page.keyboard.press('Escape');
     await expect(page.getByText('Edit description')).toHaveCount(0);
+
+    assertNoReactFlowErrors(capture);
+  });
+
+  // Real-mouse hover-reveal regression coverage (the Phase-4 interaction
+  // gate's finding): DescriptionBadge used to wrap its own hover zone in a
+  // `pointer-events: none` div, so a REAL browser mouse could never land on
+  // it to fire `onMouseEnter` — only jsdom's synthetic `fireEvent.mouseEnter`
+  // (which bypasses CSS pointer-events) made the old unit tests pass. A node
+  // WITHOUT a description (like `sticky1` here — the fixture seeds it with
+  // `text: ""` and no `description` field) could never reveal its "Add
+  // description" badge for a real user, so there was no way to add one via
+  // the mouse in a real browser. The fix moved hover tracking onto
+  // `BaseNode`'s rotation wrapper (`data-testid="base-node-rotation"`) — a
+  // real, pointer-events-auto element spanning the whole node body — so this
+  // test drives an ACTUAL Playwright mouse (not a synthetic event) over that
+  // element and asserts the badge appears, opens the modal, and a saved
+  // description round-trips to disk.
+  test('hovering an editable node with no description reveals the add-description badge, opens the modal, and persists a saved description', async ({
+    page,
+  }) => {
+    const capture = attachConsoleCapture(page);
+    await gotoBoard(page);
+
+    const sticky = nodeLocator(page, 'sticky1');
+    const badgeButton = sticky.locator('[data-testid="description-badge-hover-zone"] button');
+
+    // Before hover: no badge for a describable node with no description yet.
+    await expect(badgeButton).toHaveCount(0);
+
+    // A REAL mouse move over the node body (not a synthetic DOM event) —
+    // this is the whole point of this test. `hover()` drives Playwright's
+    // actual pointer, landing wherever the element resolves on screen.
+    await sticky.hover();
+    await expect(badgeButton).toBeVisible();
+    await expect(badgeButton).toHaveAttribute('title', 'Add description');
+
+    await badgeButton.click();
+    await expect(page.getByText('Edit description')).toBeVisible();
+
+    const editor = page.getByRole('textbox');
+    await editor.click();
+    await editor.fill('Pick up the dry cleaning');
+
+    await page.getByRole('button', { name: 'Save' }).click();
+    await expect(page.getByText('Edit description')).toHaveCount(0);
+
+    // On screen: the badge is now the ALWAYS-visible "has a description"
+    // variant, reachable without hovering at all.
+    const viewBadge = sticky.locator('[data-testid="description-badge-hover-zone"] button');
+    await expect(viewBadge).toBeVisible();
+    await expect(viewBadge).toHaveAttribute('title', 'View description');
+
+    // Persistence: the saved description round-tripped to board.json.
+    await flushSave(page);
+    await waitForSaved(page);
+    const persisted = await waitForPersisted(
+      (b) => findNode(b, 'sticky1').description === 'Pick up the dry cleaning',
+      'hover-revealed description was never persisted to board.json',
+    );
+    expect(findNode(persisted, 'sticky1').description).toBe('Pick up the dry cleaning');
+
+    // Re-opening (no hover needed now — the badge is always visible) shows
+    // the persisted text, proving the round-trip through the modal itself
+    // rather than just trusting the on-disk read above.
+    await viewBadge.click();
+    await expect(page.getByText('Edit description')).toBeVisible();
+    await expect(page.getByText('Pick up the dry cleaning')).toBeVisible();
+    await page.keyboard.press('Escape');
 
     assertNoReactFlowErrors(capture);
   });

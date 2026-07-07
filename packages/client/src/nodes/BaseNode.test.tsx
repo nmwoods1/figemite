@@ -60,6 +60,62 @@ describe('BaseNode', () => {
     expect(screen.queryByRole('button')).not.toBeInTheDocument();
   });
 
+  // ── Hover-reveal (real-pointer-events regression coverage) ────────────────
+  //
+  // The hover zone lives on the rotation wrapper (`base-node-rotation`) — a
+  // real, pointer-events-auto element spanning the whole node body — NOT on
+  // a `pointer-events: none` div inside DescriptionBadge. That distinction is
+  // the whole point: only an element that actually receives pointer events
+  // can fire a REAL browser mouse's `onMouseEnter` (see DescriptionBadge.tsx
+  // and this file's module doc). `fireEvent.mouseEnter` is jsdom's synthetic
+  // dispatch, which — unlike a real browser — doesn't respect CSS
+  // pointer-events at all; the guarantee this test protects is that the
+  // hover listener is on an element real pointer events can reach, which the
+  // e2e "reveal + add description on real hover" spec proves with an actual
+  // Playwright mouse move (this test alone can't prove that; see
+  // packages/client/e2e/interaction.spec.ts).
+
+  it('reveals the add-description badge on hover when onOpenDescription is present (editable)', () => {
+    const { container } = render(
+      <BaseNode nodeId="n1" onOpenDescription={vi.fn()}>
+        <div>content</div>
+      </BaseNode>,
+    );
+    expect(screen.queryByRole('button')).not.toBeInTheDocument();
+
+    const rotation = container.querySelector('[data-testid="base-node-rotation"]') as HTMLElement;
+    fireEvent.mouseEnter(rotation);
+    expect(screen.getByRole('button')).toBeInTheDocument();
+
+    fireEvent.mouseLeave(rotation);
+    expect(screen.queryByRole('button')).not.toBeInTheDocument();
+  });
+
+  it('does not reveal a badge on hover when there is no onOpenDescription (read-only)', () => {
+    const { container } = render(
+      <BaseNode nodeId="n1">
+        <div>content</div>
+      </BaseNode>,
+    );
+    const rotation = container.querySelector('[data-testid="base-node-rotation"]') as HTMLElement;
+    fireEvent.mouseEnter(rotation);
+    expect(screen.queryByRole('button')).not.toBeInTheDocument();
+  });
+
+  it('gates hover-reveal on onOpenDescription presence, not onDoubleClick (IconNode has no editable text)', () => {
+    // IconNode never passes `onDoubleClick` (no text to edit) but still
+    // wants hover-to-reveal governed by whether it's writable — matching the
+    // legacy's `showDescBtn = !!data.onOpenDescription && (...)` gate.
+    const { container } = render(
+      <BaseNode nodeId="n1" onOpenDescription={vi.fn()}>
+        <div>content</div>
+      </BaseNode>,
+    );
+    const rotation = container.querySelector('[data-testid="base-node-rotation"]') as HTMLElement;
+    fireEvent.mouseEnter(rotation);
+    expect(screen.getByRole('button')).toBeInTheDocument();
+  });
+
   it('invokes onOpenDescription with the node id when the badge is clicked', () => {
     const onOpenDescription = vi.fn();
     render(

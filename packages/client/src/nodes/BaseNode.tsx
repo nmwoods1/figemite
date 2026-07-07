@@ -19,7 +19,22 @@
 // ring themselves (each legacy node styled its own selection differently —
 // sticky uses a box-shadow ring, frame a solid-vs-dashed border, etc. — so
 // BaseNode doesn't impose one shared visual).
+//
+// Hover tracking for the description badge lives HERE, on the rotation
+// wrapper div, not inside `DescriptionBadge` itself: this div spans the
+// node's full body and actually receives pointer events (unlike a
+// `pointer-events: none` zone, which a real mouse can never trigger — see
+// DescriptionBadge.tsx's module doc for the bug this replaced). `editable`
+// (which gates hover-reveal for a node WITHOUT a description yet) is derived
+// from `onOpenDescription` being present — matching the legacy's
+// `showDescBtn = !!data.onOpenDescription && (...)` gate — rather than from
+// `onDoubleClick`, since IconNode has no editable text (no `onDoubleClick`)
+// but still wants hover-to-reveal governed by whether it's writable at all.
+// `rf-adapters.ts`'s `DESCRIBABLE_TYPES`/readonly gating means
+// `onOpenDescription` is only ever passed down for an editable board's
+// describable node types, so this is a safe, read-only-callback-free signal.
 
+import { useState } from 'react';
 import type { CSSProperties, ReactNode, RefObject } from 'react';
 import type { DescriptionBadgeProps } from './DescriptionBadge.js';
 import { DescriptionBadge } from './DescriptionBadge.js';
@@ -62,12 +77,14 @@ export function BaseNode({
   style,
   rotationRef,
 }: BaseNodeProps) {
-  const editable = !!onDoubleClick;
+  const editable = !!onOpenDescription;
+  const [hovered, setHovered] = useState(false);
 
   const descriptionBadgeProps: DescriptionBadgeProps = {
     nodeId,
     description,
     editable,
+    hovered,
     onOpenDescription,
     style: descriptionBadgeStyle,
   };
@@ -81,6 +98,8 @@ export function BaseNode({
         ref={rotationRef}
         data-testid="base-node-rotation"
         onDoubleClick={onDoubleClick}
+        onMouseEnter={() => setHovered(true)}
+        onMouseLeave={() => setHovered(false)}
         style={{
           width: '100%',
           height: '100%',

@@ -359,13 +359,17 @@ describe('BoardCanvas', () => {
   it('a node with no description opens the modal empty (Add description badge)', () => {
     render(<BoardCanvas board={fixtureBoard()} readonly={false} />);
     // The badge is hover-revealed for a describable node with no description
-    // — hover its DescriptionBadge hover-zone directly (mouseEnter doesn't
-    // bubble, matching DescriptionBadge.test.tsx's own pattern).
+    // — hover BaseNode's rotation wrapper (the real pointer-events-receiving
+    // element hover detection lives on; see BaseNode.tsx's module doc). This
+    // is the SAME element a real browser mouse would need to land on, unlike
+    // the old `pointer-events: none` hover-zone div this used to target
+    // directly (mouseEnter doesn't bubble, so targeting the wrong element
+    // silently no-ops — that's exactly the bug this fix closes).
     const stickyNode = document.querySelector('[data-id="s1"]') as HTMLElement;
-    const hoverZone = stickyNode.querySelector(
-      '[data-testid="description-badge-hover-zone"]',
+    const rotationWrapper = stickyNode.querySelector(
+      '[data-testid="base-node-rotation"]',
     ) as HTMLElement;
-    fireEvent.mouseEnter(hoverZone);
+    fireEvent.mouseEnter(rotationWrapper);
     fireEvent.click(screen.getByTitle('Add description'));
     // Opens in EDIT mode (not readonly) with an empty editor — the
     // placeholder itself is CSS-generated content (::before, see

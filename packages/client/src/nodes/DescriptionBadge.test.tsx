@@ -1,7 +1,17 @@
 // The description badge: shown when `data.description` exists (or, for an
-// editable node, on hover); clicking it calls `data.onOpenDescription?.(id)`.
-// No modal here — P3-T19 is render-only, the TipTap description modal is a
-// later task. This badge is just the seam.
+// editable node, when `hovered`); clicking it calls
+// `data.onOpenDescription?.(id)`. No modal here — P3-T19 is render-only, the
+// TipTap description modal is a later task. This badge is just the seam.
+//
+// `hovered` is a plain prop, not internal state: an earlier version tracked
+// hover itself via a `pointer-events: none` wrapper div + local state, which
+// only ever worked with jsdom's synthetic `fireEvent.mouseEnter` (which
+// bypasses CSS pointer-events) — a REAL browser mouse can never trigger
+// `onMouseEnter` on a `pointer-events: none` element, so that hover-reveal
+// was unreachable for real users. Hover detection now lives in the caller
+// (`BaseNode`, on its rotation wrapper, a real pointer-events-auto element)
+// and is passed in here — see BaseNode.test.tsx for the hover-reveal
+// coverage and BaseNode.tsx's module doc for the full rationale.
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, render, screen, fireEvent } from '@testing-library/react';
@@ -13,25 +23,32 @@ afterEach(() => {
 
 describe('DescriptionBadge', () => {
   it('renders when a description is present', () => {
-    render(<DescriptionBadge nodeId="n1" description="Some notes" editable={false} />);
+    render(
+      <DescriptionBadge nodeId="n1" description="Some notes" editable={false} hovered={false} />,
+    );
     expect(screen.getByRole('button')).toBeInTheDocument();
   });
 
   it('does not render when there is no description and the node is read-only', () => {
-    render(<DescriptionBadge nodeId="n1" description={undefined} editable={false} />);
+    render(
+      <DescriptionBadge nodeId="n1" description={undefined} editable={false} hovered={false} />,
+    );
     expect(screen.queryByRole('button')).not.toBeInTheDocument();
   });
 
   it('does not render without a description when editable but not hovered', () => {
-    render(<DescriptionBadge nodeId="n1" description={undefined} editable />);
+    render(<DescriptionBadge nodeId="n1" description={undefined} editable hovered={false} />);
     expect(screen.queryByRole('button')).not.toBeInTheDocument();
   });
 
   it('renders without a description when editable and hovered', () => {
-    const { container } = render(<DescriptionBadge nodeId="n1" description={undefined} editable />);
-    const wrapper = container.firstElementChild as HTMLElement;
-    fireEvent.mouseEnter(wrapper);
+    render(<DescriptionBadge nodeId="n1" description={undefined} editable hovered />);
     expect(screen.getByRole('button')).toBeInTheDocument();
+  });
+
+  it('does not render without a description when hovered but not editable (read-only)', () => {
+    render(<DescriptionBadge nodeId="n1" description={undefined} editable={false} hovered />);
+    expect(screen.queryByRole('button')).not.toBeInTheDocument();
   });
 
   it('calls onOpenDescription with the node id when clicked', () => {
@@ -41,6 +58,7 @@ describe('DescriptionBadge', () => {
         nodeId="n42"
         description="notes"
         editable={false}
+        hovered={false}
         onOpenDescription={onOpenDescription}
       />,
     );

@@ -7,11 +7,21 @@
 // description already exists (no hover-to-discover, since there's nothing
 // to add).
 //
+// Hover tracking is NOT owned here (see history: an earlier version wrapped
+// its own `pointer-events: none` hover-zone div and tracked `hovered` via
+// local state — but a `pointer-events: none` element can never receive a
+// REAL browser mouse's `onMouseEnter`, only jsdom's synthetic
+// `fireEvent.mouseEnter`, which bypasses CSS pointer-events entirely. That
+// made a node WITHOUT a description permanently unable to reveal its "add"
+// affordance for any real user, even though unit tests passed). The caller
+// (`BaseNode`) owns hover state instead, tracked on its rotation wrapper —
+// a real, pointer-events-auto element that already covers the whole node
+// body — and passes it down as the `hovered` prop.
+//
 // Scope note (P3-T19): clicking calls `onOpenDescription?.(nodeId)` — a seam
 // only. The TipTap description modal that this eventually opens is a later
 // task; nothing here renders modal content.
 
-import { useState } from 'react';
 import type { CSSProperties } from 'react';
 
 export interface DescriptionBadgeProps {
@@ -19,6 +29,9 @@ export interface DescriptionBadgeProps {
   description: string | undefined;
   /** Whether this node is editable (has write callbacks). Gates hover-reveal. */
   editable: boolean;
+  /** Whether the node is currently hovered — owned by the caller (BaseNode),
+   * which tracks it on an element that actually receives pointer events. */
+  hovered: boolean;
   onOpenDescription?: (nodeId: string) => void;
   /** Positioning override — callers (e.g. ShapeNode's diamond) may need a
    * different anchor than the default top-right corner. */
@@ -46,27 +59,29 @@ const BASE_STYLE: CSSProperties = {
 
 /**
  * A small badge indicating (and, when editable, offering to add) a
- * description. Wraps its own hover tracking so callers just render it inside
- * a `position: relative` container — no need to lift hover state up.
+ * description. Renders nothing when not visible, so it never shadows the
+ * node body underneath it — hover detection is the caller's (`BaseNode`'s)
+ * job, passed in as `hovered`.
+ *
+ * The outer `data-testid="description-badge-hover-zone"` div is kept as a
+ * STABLE LOCATOR ANCHOR only (existing e2e/unit tests scope the badge button
+ * via `[data-testid="description-badge-hover-zone"] button`) — it carries no
+ * `pointer-events: none` trick and no hover listeners of its own; it's a
+ * plain, unstyled (non-positioned) wrapper that doesn't affect the button's
+ * own `position: absolute` placement.
  */
 export function DescriptionBadge({
   nodeId,
   description,
   editable,
+  hovered,
   onOpenDescription,
   style,
 }: DescriptionBadgeProps) {
-  const [hovered, setHovered] = useState(false);
-
   const visible = !!description || (editable && hovered);
 
   return (
-    <div
-      data-testid="description-badge-hover-zone"
-      style={{ position: 'absolute', inset: 0, pointerEvents: 'none' }}
-      onMouseEnter={() => setHovered(true)}
-      onMouseLeave={() => setHovered(false)}
-    >
+    <div data-testid="description-badge-hover-zone">
       {visible && (
         <button
           type="button"
