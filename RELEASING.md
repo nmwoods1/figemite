@@ -7,29 +7,30 @@ intentionally deferred past v1.0.
 
 ## Release steps
 
-1. **Merge to `main`.** Releases are cut from `main`, not a phase branch.
-   The `v1.0.0` tag was created on `phase-7`'s HEAD as part of the v1.0
-   gate (see below) — merge that branch to `main` before pushing the tag,
-   so `main` and the tag point at the same commit.
+1. **Push `main`.** Releases are cut from `main`. Every phase branch is
+   already merged and `main` is tagged `v1.0.0`, so just `git push origin main`.
 2. **Push the tag.** `git push origin v1.0.0` (annotated tags aren't
    pushed by a plain `git push`). This is the only trigger for
    `.github/workflows/release.yml` — it runs on `push: tags: 'v*'`.
-3. **`release.yml` runs the gate, then publishes.** On a tag push it:
+3. **`release.yml` runs the gate, then cuts a GitHub Release.** On a tag push it:
    - installs (`npm ci`), lints, typechecks, tests, and runs the license
      audit and the prepublish reference audit (`npm run audit:refs`) —
      the same non-negotiable gate as CI, run again on the tag itself;
-   - builds the `@figemite/mcp` publish bundle
-     (`npm run -w @figemite/mcp build`);
-   - publishes `@figemite/mcp` to npm (`npm publish -w @figemite/mcp`,
-     using the `NPM_TOKEN` secret);
+   - builds the `@figemite/mcp` bundle (`npm run -w @figemite/mcp build`);
    - cuts a GitHub Release from the tag with auto-generated release notes.
-4. **Verify the publish.** Confirm `@figemite/mcp` shows up on npm at the
-   tagged version and that `npx -y @figemite/mcp` works from a clean
-   environment.
 
-Only `@figemite/mcp` is published to npm — `@figemite/{shared,server,client}`
-are `"private": true` and stay workspace-internal; users run them from a
-clone (see `CONTRIBUTING.md`).
+   **npm publishing is deferred:** the `npm publish` step in `release.yml`
+   is commented out, so a tag push does NOT publish to npm. To enable it
+   later, create the `@figemite` npm org, add an `NPM_TOKEN` GitHub Actions
+   secret, and uncomment the "Publish @figemite/mcp to npm" step.
+
+4. **Verify the release.** Confirm the GitHub Release was cut from the tag.
+   (Once npm publishing is enabled, also confirm `@figemite/mcp` shows up on
+   npm and that `npx -y @figemite/mcp` works from a clean environment.)
+
+`@figemite/mcp` is the only package intended for npm — `@figemite/{shared,
+server,client}` are `"private": true` and stay workspace-internal; users run
+them from a clone (see `CONTRIBUTING.md`).
 
 ## Manual prerequisites (one-time, before the first real release)
 
