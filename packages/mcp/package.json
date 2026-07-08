@@ -5,7 +5,7 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/figemite/figemite.git",
+    "url": "git+https://github.com/nmwoods1/figemite.git",
     "directory": "packages/mcp"
   },
   "type": "module",

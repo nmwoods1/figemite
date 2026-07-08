@@ -18,7 +18,7 @@ lock-in.
 Requires Node 20+ (see `.nvmrc`).
 
 ```bash
-git clone <repo> && cd figemite
+git clone https://github.com/nmwoods1/figemite.git && cd figemite
 nvm use          # if you use nvm — picks up Node 20 from .nvmrc
 npm ci
 npm run dev

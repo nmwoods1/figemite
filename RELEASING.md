@@ -36,13 +36,11 @@ clone (see `CONTRIBUTING.md`).
 These are outside this repo and must be done by a human with the right
 account access before step 2 above can succeed:
 
-- **Create the GitHub repository** the codebase will actually live in, and
-  push `main` to it. `git remote -v` is currently empty in this checkout —
-  there is no remote configured yet.
-- **Confirm the `repository` URL.** `packages/mcp/package.json` currently
-  points at `git+https://github.com/figemite/figemite.git`. Update it (and
-  any other repo-URL references) to match wherever the repo actually ends
-  up if that placeholder isn't the real destination.
+- **Push `main` to GitHub.** The `origin` remote is configured to
+  `https://github.com/nmwoods1/figemite.git`; `git push -u origin main`, then
+  push the `v1.0.0` tag when ready to cut the release.
+- **Repository URL is set.** `packages/mcp/package.json` and the READMEs point
+  at `https://github.com/nmwoods1/figemite`.
 - **Create the npm org/account** that will own the `@figemite` scope, and
   generate an `NPM_TOKEN` with publish rights to it.
 - **Add `NPM_TOKEN` as a GitHub Actions secret** on the repository (Settings

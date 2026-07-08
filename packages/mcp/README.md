@@ -1,6 +1,6 @@
 # @figemite/mcp
 
-MCP server that lets AI agents join a [Figemite](https://github.com/figemite/figemite)
+MCP server that lets AI agents join a [Figemite](https://github.com/nmwoods1/figemite)
 board as a live multiplayer peer — the AI gets its own visible cursor and name
 pill, and its edits sync live and persist just like a human's.
 
@@ -42,7 +42,7 @@ and add a sticky note next to the Q3 numbers summarizing the variance."
 `add_node`, `add_drawing`, `update_node`, `move_node`, `delete_node`,
 `set_node_text`, `set_description`, `add_edge`, `update_edge`, `delete_edge`.
 
-See the [main repository](https://github.com/figemite/figemite) for the full
+See the [main repository](https://github.com/nmwoods1/figemite) for the full
 tool contract, board data model, and how to run your own Figemite server.
 
 ## License

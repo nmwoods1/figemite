@@ -52,7 +52,10 @@ const FORBIDDEN = [
   'airjam',
   'nick.woods',
   'n.m.woods',
-  'nmwoods',
+  // NOTE: the bare handle `nmwoods` is intentionally NOT forbidden — the public
+  // repository is github.com/nmwoods1/figemite, so that substring legitimately
+  // appears in repo URLs. The employer/personal EMAIL forms above
+  // (nick.woods@…, n.m.woods1@…) remain guarded, as does `airwallex` itself.
   // Leftover easel -> figemite rename markers. Matching is case-insensitive
   // (see findHits below), so `EASEL_`'s casing here is for readability only.
   '@easel',
