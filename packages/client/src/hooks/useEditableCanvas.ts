@@ -42,6 +42,7 @@ import type {
   OnNodeDrag,
   OnNodesChange,
   OnNodesDelete,
+  OnReconnect,
 } from '@xyflow/react';
 import { generateId, makeEdge } from '@figemite/shared';
 import type { BoardEdge } from '@figemite/shared';
@@ -53,6 +54,7 @@ import type {
   BoardRfNode,
   EdgeCallbacks,
   NodeCallbacks,
+  SubBoardAdapter,
 } from '../canvas/rf-adapters.js';
 import { reconcileEdges, reconcileNodes } from '../canvas/reconcile.js';
 import { useSelection } from './useSelection.js';
@@ -122,6 +124,39 @@ function useEdgeCallbacks(store: BoardStore): EdgeCallbacks {
   );
 }
 
+/**
+ * Return a `SubBoardAdapter` (or `undefined`) whose IDENTITY is stable across
+ * re-renders as long as its `childIds` set and `canCreate` flag are unchanged
+ * — the `onDrillIn` handler is read through a ref (updated in an effect, never
+ * during render) so a fresh caller closure each render doesn't churn the
+ * memo. This mirrors {@link useNodeCallbacks}'s `onOpenDescription` handling:
+ * a stable adapter keeps `boardToRf`'s per-node `data` reference-stable, so
+ * `reconcile.ts`'s shallow diff only re-renders a drillable node when its
+ * `hasSubBoard`/`canCreateSubBoard` value actually changes.
+ */
+function useStableSubBoard(subBoard?: SubBoardAdapter): SubBoardAdapter | undefined {
+  const onDrillInRef = useRef(subBoard?.onDrillIn);
+  useEffect(() => {
+    onDrillInRef.current = subBoard?.onDrillIn;
+  }, [subBoard?.onDrillIn]);
+
+  const childIds = subBoard?.childIds;
+  const canCreate = subBoard?.canCreate ?? false;
+  const present = !!subBoard;
+
+  return useMemo<SubBoardAdapter | undefined>(
+    () =>
+      present
+        ? {
+            childIds: childIds ?? new Set<string>(),
+            canCreate,
+            onDrillIn: (id: string) => onDrillInRef.current?.(id),
+          }
+        : undefined,
+    [present, childIds, canCreate],
+  );
+}
+
 export interface EditableCanvasProps {
   nodes: BoardRfNode[];
   edges: BoardRfEdge[];
@@ -131,6 +166,7 @@ export interface EditableCanvasProps {
   onNodesDelete: OnNodesDelete<BoardRfNode>;
   onConnect: OnConnect;
   onEdgesDelete: OnEdgesDelete<BoardRfEdge>;
+  onReconnect: OnReconnect<BoardRfEdge>;
   onSelectionChange(params: SelectionParams): void;
   /** Exposed for tests/consumers that want to read selection state. */
   selectedNodeIds: Set<string>;
@@ -143,6 +179,12 @@ export interface UseEditableCanvasOptions {
    * description is open" state and renders the DescriptionModal; omitting
    * this leaves the seam a harmless no-op, matching P4-T24's stub. */
   onOpenDescription?: (id: string) => void;
+  /** The drill-in (sub-board) adapter: which drillable nodes already have a
+   * sub-board, and the handler to open/create one. Omitting it leaves every
+   * node's drill badge absent. Its `onDrillIn` is ref-indirected below so the
+   * `boardToRf` result stays reference-stable across re-renders even if the
+   * caller's handler closure isn't (same technique as `onOpenDescription`). */
+  subBoard?: SubBoardAdapter;
 }
 
 export function useEditableCanvas(
@@ -153,6 +195,7 @@ export function useEditableCanvas(
   const selection = useSelection();
   const nodeCallbacks = useNodeCallbacks(store, options.onOpenDescription);
   const edgeCallbacks = useEdgeCallbacks(store);
+  const subBoard = useStableSubBoard(options.subBoard);
 
   // Doc-derived RF shape (rebuilt only when the doc snapshot OR the (stable)
   // callbacks bag changes). BoardCanvas only ever calls this hook for the
@@ -170,8 +213,9 @@ export function useEditableCanvas(
         false,
         store.readonly ? undefined : nodeCallbacks,
         store.readonly ? undefined : edgeCallbacks,
+        subBoard,
       ),
-    [snapshot, nodeCallbacks, edgeCallbacks, store.readonly],
+    [snapshot, nodeCallbacks, edgeCallbacks, store.readonly, subBoard],
   );
 
   const [nodes, setNodes, onNodesChange] = useNodesState<BoardRfNode>(docRf.nodes);
@@ -256,6 +300,23 @@ export function useEditableCanvas(
     [store],
   );
 
+  // Drag an existing edge's endpoint onto a different node/handle. Commits the
+  // moved endpoints in place (same edge id), so the edge keeps its label/
+  // style/arrow. RF hands back `null` handles when the drop lands on a node's
+  // default target rather than a specific handle — the store normalises those.
+  const onReconnect = useCallback<OnReconnect<BoardRfEdge>>(
+    (oldEdge, newConnection) => {
+      if (!newConnection.source || !newConnection.target) return;
+      store.reconnectEdge(oldEdge.id, {
+        source: newConnection.source,
+        target: newConnection.target,
+        sourceHandle: newConnection.sourceHandle,
+        targetHandle: newConnection.targetHandle,
+      });
+    },
+    [store],
+  );
+
   const onSelectionChange = useCallback(
     (params: SelectionParams) => {
       setSelection(params);
@@ -272,6 +333,7 @@ export function useEditableCanvas(
     onNodesDelete,
     onConnect,
     onEdgesDelete,
+    onReconnect,
     onSelectionChange,
     selectedNodeIds,
     selectedEdgeIds,

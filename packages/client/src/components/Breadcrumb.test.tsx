@@ -51,6 +51,22 @@ describe('Breadcrumb', () => {
     expect(onNavigate).toHaveBeenCalledWith(['nodeA']);
   });
 
+  it('the "← Back" button goes up exactly one level (not straight to the root)', () => {
+    const onNavigate = vi.fn();
+    render(
+      <Breadcrumb
+        boardLabel="Spend"
+        pathLabels={['Node A', 'Sub B']}
+        path={['nodeA', 'subB']}
+        onNavigate={onNavigate}
+        onGoHome={vi.fn()}
+        isDirty={false}
+      />,
+    );
+    fireEvent.click(screen.getByRole('button', { name: /← back/i }));
+    expect(onNavigate).toHaveBeenCalledWith(['nodeA']);
+  });
+
   it('clicking "Boards" calls onGoHome', () => {
     const onGoHome = vi.fn();
     render(

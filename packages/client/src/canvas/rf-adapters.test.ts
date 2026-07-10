@@ -534,3 +534,90 @@ describe('boardToRf', () => {
     expect(rfNodes[0].selectable).toBe(false);
   });
 });
+
+describe('sub-board (drill-in) injection', () => {
+  const shapeNode = (overrides: Partial<BoardNode> = {}): BoardNode =>
+    ({
+      id: 'sh1',
+      type: 'shape',
+      pos: { x: 0, y: 0 },
+      order: 0,
+      size: { width: 160, height: 100 },
+      shape: 'rect',
+      color: '#fef3c7',
+      ...overrides,
+    }) as BoardNode;
+
+  const textNode = (): BoardNode => ({
+    id: 't1',
+    type: 'text',
+    pos: { x: 0, y: 0 },
+    order: 0,
+    text: 'label',
+  });
+
+  const adapter = (childIds: string[], canCreate: boolean) => ({
+    childIds: new Set(childIds),
+    canCreate,
+    onDrillIn: vi.fn(),
+  });
+
+  it('attaches drill-in data to a sticky node that has a sub-board', () => {
+    const sub = adapter(['s1'], true);
+    const rf = boardNodeToRf(sticky({ id: 's1' }), false, undefined, sub);
+    expect(rf.data.hasSubBoard).toBe(true);
+    expect(rf.data.canCreateSubBoard).toBe(true);
+    expect(rf.data.onDrillIn).toBe(sub.onDrillIn);
+  });
+
+  it('attaches drill-in data to a shape node', () => {
+    const sub = adapter([], true);
+    const rf = boardNodeToRf(shapeNode({ id: 'sh1' }), false, undefined, sub);
+    expect(rf.data.hasSubBoard).toBe(false);
+    expect(rf.data.canCreateSubBoard).toBe(true);
+    expect(rf.data.onDrillIn).toBe(sub.onDrillIn);
+  });
+
+  it('marks hasSubBoard false for a drillable node not in childIds', () => {
+    const sub = adapter(['other'], true);
+    const rf = boardNodeToRf(sticky({ id: 's1' }), false, undefined, sub);
+    expect(rf.data.hasSubBoard).toBe(false);
+  });
+
+  it('injects drill-in data even in read-only mode (navigate-in must work in static builds)', () => {
+    const sub = adapter(['s1'], false);
+    const rf = boardNodeToRf(sticky({ id: 's1' }), true, undefined, sub);
+    expect(rf.data.hasSubBoard).toBe(true);
+    expect(rf.data.canCreateSubBoard).toBe(false);
+    expect(rf.data.onDrillIn).toBe(sub.onDrillIn);
+  });
+
+  it('does NOT attach drill-in data to non-drillable node types (text)', () => {
+    const sub = adapter(['t1'], true);
+    const rf = boardNodeToRf(textNode(), false, undefined, sub);
+    expect(rf.data.hasSubBoard).toBeUndefined();
+    expect(rf.data.canCreateSubBoard).toBeUndefined();
+    expect(rf.data.onDrillIn).toBeUndefined();
+  });
+
+  it('attaches nothing when no sub-board adapter is supplied', () => {
+    const rf = boardNodeToRf(sticky({ id: 's1' }), false);
+    expect(rf.data.hasSubBoard).toBeUndefined();
+    expect(rf.data.onDrillIn).toBeUndefined();
+  });
+
+  it('threads the adapter through boardToRf to each drillable node', () => {
+    const sub = adapter(['s1'], true);
+    const { nodes } = boardToRf(
+      { nodes: [sticky({ id: 's1' }), textNode()], edges: [] },
+      false,
+      undefined,
+      undefined,
+      sub,
+    );
+    const rfSticky = nodes.find((n) => n.id === 's1');
+    const rfText = nodes.find((n) => n.id === 't1');
+    expect(rfSticky?.data.hasSubBoard).toBe(true);
+    expect(rfText?.data.hasSubBoard).toBeUndefined();
+  });
+});

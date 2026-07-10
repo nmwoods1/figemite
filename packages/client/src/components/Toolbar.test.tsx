@@ -264,6 +264,18 @@ describe('Toolbar — edge-style controls', () => {
     expect(edges[0]).toMatchObject({ arrow: 'both' });
   });
 
+  it('offers a "Back" arrow direction and sets it on the selected edge', () => {
+    const store = createBoardStore(boardWithEdge(), { readonly: false });
+    renderToolbar(store, { selectedEdgeIds: new Set(['e1']) });
+
+    const select = screen.getByTitle(/arrow direction/i);
+    expect(screen.getByRole('option', { name: /back/i })).toBeInTheDocument();
+    fireEvent.change(select, { target: { value: 'start' } });
+
+    const { edges } = store.getSnapshot();
+    expect(edges[0]).toMatchObject({ arrow: 'start' });
+  });
+
   it('sets the line style (dashed) on the selected edge', () => {
     const store = createBoardStore(boardWithEdge(), { readonly: false });
     renderToolbar(store, { selectedEdgeIds: new Set(['e1']) });

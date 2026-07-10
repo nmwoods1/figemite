@@ -170,9 +170,26 @@ export interface BoardStore {
    * a default arrow ('end') and clears `cardinality`. No-op if read-only.
    */
   setEdgeKind(id: string, kind: EdgeKind): void;
+  /**
+   * Move an existing edge's endpoints to a new source/target (and handles) —
+   * the ReactFlow drag-to-reconnect gesture. Preserves the edge id, so its
+   * label/style/arrow/kind/cardinality all carry over. No-op if read-only or
+   * the edge is absent (see `@figemite/shared`'s `updateEdge`).
+   */
+  reconnectEdge(id: string, endpoints: EdgeEndpoints): void;
 
   /** Detach all observers and destroy the underlying Y.Doc. */
   destroy(): void;
+}
+
+/** New endpoints for {@link BoardStore.reconnectEdge}. `null` handles (what
+ * ReactFlow hands back when an edge lands on a node's default drop target
+ * rather than a specific handle) are normalised to "no handle". */
+export interface EdgeEndpoints {
+  source: string;
+  target: string;
+  sourceHandle?: string | null;
+  targetHandle?: string | null;
 }
 
 export function createBoardStore(initialBoard: BoardFile, opts: BoardStoreOptions): BoardStore {
@@ -324,6 +341,16 @@ export function createBoardStore(initialBoard: BoardFile, opts: BoardStoreOption
         const existing = snapshot.edges.find((e) => e.id === id);
         updateEdgeOp(doc, id, { kind, arrow: existing?.arrow ?? 'end', cardinality: undefined });
       }
+    },
+
+    reconnectEdge(id, endpoints) {
+      if (opts.readonly) return;
+      updateEdgeOp(doc, id, {
+        source: endpoints.source,
+        target: endpoints.target,
+        sourceHandle: endpoints.sourceHandle ?? undefined,
+        targetHandle: endpoints.targetHandle ?? undefined,
+      });
     },
 
     destroy() {

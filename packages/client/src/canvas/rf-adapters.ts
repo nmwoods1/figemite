@@ -118,9 +118,44 @@ export interface NodeCallbacks {
 
 const DESCRIBABLE_TYPES = new Set<BoardNode['type']>(['sticky', 'text', 'shape', 'emoji', 'icon']);
 
+/** Node types that carry the drill-in (sub-board) badge. Exact legacy parity:
+ * the original prototype drew the "›" drill button on sticky and shape nodes
+ * only. Kept separate from `DESCRIBABLE_TYPES` so the two affordances can
+ * diverge without entangling. */
+const DRILLABLE_TYPES = new Set<BoardNode['type']>(['sticky', 'shape']);
+
 const WH_RESIZABLE_TYPES = new Set<BoardNode['type']>(['sticky', 'shape', 'frame', 'drawing']);
 const SQUARE_RESIZABLE_TYPES = new Set<BoardNode['type']>(['emoji', 'icon']);
 const ROTATABLE_TYPES = new Set<BoardNode['type']>(['shape', 'emoji', 'icon']);
+
+// ── Drill-in (sub-board) injection — applies in BOTH read-only and editable ──
+//
+// Unlike the editing callbacks above (which are withheld from a read-only
+// render — see `boardNodeToRf`'s `readonly` gate), the drill-in affordance is
+// deliberately orthogonal to that gate: navigating INTO an existing sub-board
+// must work in the published/static read-only build too, not just in the
+// editable dev app. Only CREATING one is editable-only, which the badge itself
+// gates via `canCreate` (false in read-only mode). So this bag is passed
+// straight through `boardToRf` and attached regardless of `readonly`.
+export interface SubBoardAdapter {
+  /** Ids of nodes at THIS board level that already have a sub-board. */
+  childIds: Set<string>;
+  /** Opens (creating first if allowed) a node's sub-board. */
+  onDrillIn: (nodeId: string) => void;
+  /** Whether a sub-board may be created here (editable mode) — false in read-only. */
+  canCreate: boolean;
+}
+
+/** The drill-in `data` a given node TYPE should receive. Returns `{}` (no keys)
+ * for non-drillable types or when no `subBoard` adapter is supplied. */
+function drillDataForNode(node: BoardNode, subBoard?: SubBoardAdapter): RfNodeData {
+  if (!subBoard || !DRILLABLE_TYPES.has(node.type)) return {};
+  return {
+    hasSubBoard: subBoard.childIds.has(node.id),
+    canCreateSubBoard: subBoard.canCreate,
+    onDrillIn: subBoard.onDrillIn,
+  };
+}
 
 /** The editing callbacks a given node TYPE should receive, per the module doc's
  * type→callback mapping. Returns `{}` (no keys) for a read-only render. */
@@ -169,12 +204,16 @@ function callbacksForNode(node: BoardNode, callbacks?: NodeCallbacks): RfNodeDat
  * editing callbacks this node's type needs (see the module doc above) — the
  * seams in BaseNode/useEditableText/ConnectionHandles/DescriptionBadge go
  * live only when their gating callback is present, so a read-only render
- * (or omitting `callbacks`) leaves every seam inert.
+ * (or omitting `callbacks`) leaves every seam inert. `subBoard`, when given,
+ * augments a drillable node's `data` with the drill-in affordance REGARDLESS
+ * of `readonly` (navigate-in works in read-only; create is gated by the
+ * adapter's own `canCreate` — see {@link SubBoardAdapter}).
  */
 export function boardNodeToRf(
   node: BoardNode,
   readonly: boolean,
   callbacks?: NodeCallbacks,
+  subBoard?: SubBoardAdapter,
 ): BoardRfNode {
   const { width, height } = nodeSize(node);
   const zIndex =
@@ -184,7 +223,11 @@ export function boardNodeToRf(
     id: node.id,
     type: node.type,
     position: { x: node.pos.x, y: node.pos.y },
-    data: { ...nodeData(node), ...(readonly ? {} : callbacksForNode(node, callbacks)) },
+    data: {
+      ...nodeData(node),
+      ...(readonly ? {} : callbacksForNode(node, callbacks)),
+      ...drillDataForNode(node, subBoard),
+    },
     ...(width !== undefined ? { width } : {}),
     ...(height !== undefined ? { height } : {}),
     zIndex,
@@ -258,11 +301,14 @@ export function boardToRf(
   readonly: boolean,
   nodeCallbacks?: NodeCallbacks,
   edgeCallbacks?: EdgeCallbacks,
+  subBoard?: SubBoardAdapter,
 ): { nodes: BoardRfNode[]; edges: BoardRfEdge[] } {
   const frames = board.nodes.filter((n) => n.type === 'frame').sort((a, b) => a.order - b.order);
   const nonFrames = board.nodes.filter((n) => n.type !== 'frame').sort((a, b) => a.order - b.order);
 
-  const nodes = [...frames, ...nonFrames].map((n) => boardNodeToRf(n, readonly, nodeCallbacks));
+  const nodes = [...frames, ...nonFrames].map((n) =>
+    boardNodeToRf(n, readonly, nodeCallbacks, subBoard),
+  );
   const edges = board.edges.map((e) => boardEdgeToRf(e, readonly ? undefined : edgeCallbacks));
 
   return { nodes, edges };

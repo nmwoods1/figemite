@@ -212,6 +212,7 @@ export function CardinalityEdge({
           >
             {editing ? (
               <input
+                autoFocus
                 value={draft}
                 onChange={(e) => onChange(e.target.value)}
                 onBlur={commit}

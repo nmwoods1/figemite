@@ -70,6 +70,7 @@ import { useEditingNodeTracker } from '../hooks/useEditingNodeTracker.js';
 import { useComments } from '../hooks/useComments.js';
 import { useHistory } from '../hooks/useHistory.js';
 import { boardToRf } from './rf-adapters.js';
+import type { SubBoardAdapter } from './rf-adapters.js';
 import { MultiSelectResizer } from './MultiSelectResizer.js';
 import { nodeTypes } from '../nodes/index.js';
 import { edgeTypes } from '../edges/index.js';
@@ -90,7 +91,14 @@ import { ANNOTATIONS } from '@figemite/shared';
 export interface BoardCanvasProps {
   board: BoardFile;
   readonly: boolean;
-  onNavigate?: (nodeId: string) => void;
+  /** Opens (creating first, in editable mode) the sub-board of the drillable
+   * node with this id. Owned by the route (App.tsx's `BoardRoute`), which holds
+   * navigation + the loaded board's labels. Omitting it hides every drill
+   * badge. Navigate-in works in read-only mode; only CREATE is editable-only. */
+  onDrillIn?: (nodeId: string) => void;
+  /** Ids of nodes at THIS board level that already have a sub-board (from
+   * `listBoards()`'s `subBoardPaths`). Drives the always-visible drill badge. */
+  subBoardChildIds?: Set<string>;
   /** The board's slug + sub-board path. In editable mode, GIVEN a `slug` means
    * "join the server's realtime room for this board" (P5-T29) — content
    * syncs from the room instead of being seeded from `board`/POSTed back.
@@ -137,9 +145,18 @@ const commonReactFlowProps = {
  * placement never does. A `containerRef` div now wraps `<ReactFlow>` (it
  * didn't need one before this task) so `CommentLayer` has a measured element
  * to project screen coordinates against, mirroring the editable pane below. */
-function ReadOnlyCanvas({ store, fitView, viewport, slug }: PaneProps & { slug?: string }) {
+function ReadOnlyCanvas({
+  store,
+  fitView,
+  viewport,
+  slug,
+  subBoard,
+}: PaneProps & { slug?: string; subBoard?: SubBoardAdapter }) {
   const { nodes, edges } = useBoardStore(store);
-  const rf = useMemo(() => boardToRf({ nodes, edges }, true), [nodes, edges]);
+  const rf = useMemo(
+    () => boardToRf({ nodes, edges }, true, undefined, undefined, subBoard),
+    [nodes, edges, subBoard],
+  );
   const containerRef = useRef<HTMLDivElement>(null);
   const comments = useComments(slug, { readonly: true });
 
@@ -156,7 +173,7 @@ function ReadOnlyCanvas({ store, fitView, viewport, slug }: PaneProps & { slug?:
         elementsSelectable={false}
       >
         <Background />
-        <Controls />
+        <Controls showInteractive={false} />
       </ReactFlow>
       {slug && (
         <CommentLayer
@@ -400,10 +417,10 @@ function AiLockBanner() {
  * imperative viewport setter (`useReactFlow()`), and `onMoveStart` reports
  * every viewport change (including follow's own) to `useFollowMode`, which
  * tells its own programmatic moves apart from a real manual pan/zoom. */
-function EditableCanvas({ store, fitView, viewport, slug, path }: EditablePaneProps) {
+function EditableCanvas({ store, fitView, viewport, slug, path, subBoard }: EditablePaneProps) {
   const [descNodeId, setDescNodeId] = useState<string | null>(null);
   const openDescription = useCallback((id: string) => setDescNodeId(id), []);
-  const editable = useEditableCanvas(store, { onOpenDescription: openDescription });
+  const editable = useEditableCanvas(store, { onOpenDescription: openDescription, subBoard });
   const multiSelect = useMultiSelectResize(store, editable.selectedNodeIds);
   const containerRef = useRef<HTMLDivElement>(null);
   const { nodes } = useBoardStore(store);
@@ -620,6 +637,8 @@ function EditableCanvas({ store, fitView, viewport, slug, path }: EditablePanePr
         onNodesDelete={editable.onNodesDelete}
         onConnect={editable.onConnect}
         onEdgesDelete={editable.onEdgesDelete}
+        onReconnect={editable.onReconnect}
+        edgesReconnectable={!aiLocked && !overlayModeActive}
         onSelectionChange={editable.onSelectionChange}
         onMoveStart={followMode.notifyManualViewportChange}
         defaultViewport={fitView ? undefined : viewport}
@@ -631,7 +650,7 @@ function EditableCanvas({ store, fitView, viewport, slug, path }: EditablePanePr
         zoomOnScroll={!overlayModeActive}
       >
         <Background />
-        <Controls />
+        <Controls showInteractive={false} />
       </ReactFlow>
       <MultiSelectResizer
         selectedNodes={multiSelect.selectedNodes}
@@ -720,6 +739,8 @@ interface EditablePaneProps extends PaneProps {
    * convenience path, which never opens an AI-lock SSE connection either. */
   slug?: string;
   path?: string[];
+  /** Drill-in (sub-board) adapter — see BoardCanvasProps.onDrillIn's doc. */
+  subBoard?: SubBoardAdapter;
 }
 
 /**
@@ -953,17 +974,43 @@ function useBoardStoreLifecycle(
   return store;
 }
 
-export function BoardCanvas({ board, readonly, slug, path }: BoardCanvasProps) {
+export function BoardCanvas({
+  board,
+  readonly,
+  slug,
+  path,
+  onDrillIn,
+  subBoardChildIds,
+}: BoardCanvasProps) {
   const room = !readonly && slug ? { slug, path: path ?? [] } : undefined;
   const store = useBoardStoreLifecycle(board, readonly, room);
 
   const fitView = isDefaultViewport(board.viewport);
 
+  // Drill-in adapter, orthogonal to the read-only/editable store split:
+  // navigate-in works in both modes; only CREATE is editable-only (`canCreate:
+  // !readonly`). Memoized on its inputs so the two panes' `boardToRf` results
+  // stay reference-stable (the child-ids Set is itself stable per BoardRoute
+  // mount — see App.tsx). Absent when the route supplies no `onDrillIn`.
+  const subBoard = useMemo<SubBoardAdapter | undefined>(
+    () =>
+      onDrillIn
+        ? { childIds: subBoardChildIds ?? new Set<string>(), onDrillIn, canCreate: !readonly }
+        : undefined,
+    [onDrillIn, subBoardChildIds, readonly],
+  );
+
   return (
     <div style={{ width: '100%', height: '100%' }}>
       <ReactFlowProvider>
         {readonly ? (
-          <ReadOnlyCanvas store={store} fitView={fitView} viewport={board.viewport} slug={slug} />
+          <ReadOnlyCanvas
+            store={store}
+            fitView={fitView}
+            viewport={board.viewport}
+            slug={slug}
+            subBoard={subBoard}
+          />
         ) : (
           <EditableCanvas
             store={store}
@@ -971,6 +1018,7 @@ export function BoardCanvas({ board, readonly, slug, path }: BoardCanvasProps) {
             viewport={board.viewport}
             slug={slug}
             path={path}
+            subBoard={subBoard}
           />
         )}
       </ReactFlowProvider>

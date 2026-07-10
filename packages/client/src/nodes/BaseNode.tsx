@@ -38,6 +38,7 @@ import { useState } from 'react';
 import type { CSSProperties, ReactNode, RefObject } from 'react';
 import type { DescriptionBadgeProps } from './DescriptionBadge.js';
 import { DescriptionBadge } from './DescriptionBadge.js';
+import { DrillInBadge } from './DrillInBadge.js';
 
 export interface BaseNodeProps {
   nodeId: string;
@@ -55,6 +56,19 @@ export interface BaseNodeProps {
   /** Position override for the description badge (ShapeNode's diamond needs
    * a center-top anchor instead of the default top-right corner). */
   descriptionBadgeStyle?: CSSProperties;
+  /** Whether the node already has a sub-board (drives the always-visible,
+   * navigate-in drill badge). Absent/false hides it unless a create-affordance
+   * is offered (see `onDrillIn`/`canCreateSubBoard`). */
+  hasSubBoard?: boolean;
+  /** Whether a sub-board may be CREATED from this node (editable mode only) —
+   * gates the hover-to-create drill affordance for a node without one yet. */
+  canCreateSubBoard?: boolean;
+  /** Opens (creating first if needed) the node's sub-board. Absent means no
+   * drill badge renders at all (the read-only/no-op seam). */
+  onDrillIn?: (nodeId: string) => void;
+  /** Position override for the drill-in badge (ShapeNode's diamond anchors it
+   * to the left of the center-top description badge). */
+  drillInBadgeStyle?: CSSProperties;
   style?: CSSProperties;
   /** Forwarded onto the rotation wrapper div (P4-T24) — `RotationHandle`
    * measures this element's `getBoundingClientRect()` to compute the drag
@@ -74,6 +88,10 @@ export function BaseNode({
   onOpenDescription,
   onDoubleClick,
   descriptionBadgeStyle,
+  hasSubBoard,
+  canCreateSubBoard,
+  onDrillIn,
+  drillInBadgeStyle,
   style,
   rotationRef,
 }: BaseNodeProps) {
@@ -110,6 +128,16 @@ export function BaseNode({
       >
         {children}
         <DescriptionBadge {...descriptionBadgeProps} />
+        {onDrillIn && (
+          <DrillInBadge
+            nodeId={nodeId}
+            hasSubBoard={!!hasSubBoard}
+            canCreate={!!canCreateSubBoard}
+            hovered={hovered}
+            onDrillIn={onDrillIn}
+            style={drillInBadgeStyle}
+          />
+        )}
       </div>
     </div>
   );

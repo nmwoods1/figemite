@@ -86,7 +86,7 @@ export const WHSchema = z.object({
 
 // ── Enums ────────────────────────────────────────────────────────────────────
 
-export const ArrowStyleSchema = z.enum(['none', 'end', 'both']);
+export const ArrowStyleSchema = z.enum(['none', 'end', 'start', 'both']);
 export const LineStyleSchema = z.enum(['solid', 'dashed']);
 export const EdgeKindSchema = z.enum(['arrow', 'cardinality']);
 export const CardinalitySchema = z.enum(['1:1', '1:N', 'N:1', 'N:N']);

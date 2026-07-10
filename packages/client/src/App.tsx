@@ -21,7 +21,7 @@
 //     and only offered (via `Breadcrumb`'s optional `onDelete`) when not in
 //     READONLY mode and `path.length > 0`, matching the "every write
 //     affordance hidden in READONLY" requirement.
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import type { BoardFile } from '@figemite/shared';
 import TagList from './components/TagList.js';
 import Dashboard from './components/Dashboard.js';
@@ -30,7 +30,8 @@ import IdentityPrompt from './components/IdentityPrompt.js';
 import { BoardCanvas } from './canvas/BoardCanvas.js';
 import { useAppView } from './app/router.js';
 import { READONLY } from './app/mode.js';
-import { getBoard, deleteSubBoard } from './lib/boards-api.js';
+import { getBoard, deleteSubBoard, createSubBoard, listBoards } from './lib/boards-api.js';
+import { nodeLabel } from './canvas/node-label.js';
 import { hasStoredUser } from './lib/identity.js';
 
 export default function App() {
@@ -128,6 +129,17 @@ interface BoardRouteProps {
 
 function BoardRoute({ slug, path, onGoHome, onNavigate }: BoardRouteProps) {
   const [state, setState] = useState<LoadState>({ status: 'loading' });
+  // Ids of nodes at THIS board level that already have a sub-board — derived
+  // from `listBoards()`'s `subBoardPaths` (available in dev AND the static
+  // read-only build via boards/index.json). Drives the always-visible drill
+  // badge; empty until the list resolves (and on any fetch failure), which
+  // only means "no existing-sub-board badges yet", never blocks drilling in.
+  const [subBoardChildIds, setSubBoardChildIds] = useState<Set<string>>(() => new Set());
+  // The ROOT board's label (from the board list). On a sub-board route
+  // `getBoard`/`state.board` is the SUB-board — its `boardLabel` is the leaf
+  // segment's name, not the root's — so the breadcrumb's root crumb needs the
+  // root label from elsewhere. `listBoards()` already carries it per slug.
+  const [rootLabel, setRootLabel] = useState<string | undefined>(undefined);
 
   useEffect(() => {
     let cancelled = false;
@@ -145,6 +157,33 @@ function BoardRoute({ slug, path, onGoHome, onNavigate }: BoardRouteProps) {
     // eslint-disable-next-line react-hooks/exhaustive-deps -- `path` is a fresh array each render; the component is remounted via `key` (slug+path) on navigation instead.
   }, [slug]);
 
+  useEffect(() => {
+    let cancelled = false;
+    listBoards()
+      .then((boards) => {
+        if (cancelled) return;
+        const entry = boards.find((b) => b.slug === slug);
+        setRootLabel(entry?.label);
+        const ids = new Set<string>();
+        // Keep only sub-board paths that are DIRECT children of the current
+        // level: one segment longer than `path`, sharing `path` as a prefix.
+        // That extra segment is a node id at this level that has a sub-board.
+        for (const p of entry?.subBoardPaths ?? []) {
+          if (p.length === path.length + 1 && path.every((seg, i) => p[i] === seg)) {
+            ids.add(p[path.length]);
+          }
+        }
+        setSubBoardChildIds(ids);
+      })
+      .catch(() => {
+        if (!cancelled) setSubBoardChildIds(new Set());
+      });
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- keyed remount on slug+path (see the getBoard effect above); `path` is captured per mount.
+  }, [slug]);
+
   const handleDelete = async () => {
     try {
       await deleteSubBoard(slug, path);
@@ -153,10 +192,41 @@ function BoardRoute({ slug, path, onGoHome, onNavigate }: BoardRouteProps) {
     }
   };
 
+  const handleDrillIn = useCallback(
+    async (nodeId: string) => {
+      const nextPath = [...path, nodeId];
+      // Editable mode: auto-create an empty sub-board on first drill-in
+      // (POST /api/create is idempotent server-side and labels it from the
+      // node's own text). Skipped when one already exists, and in READONLY
+      // mode (where the badge only ever appears for existing sub-boards).
+      if (!READONLY && !subBoardChildIds.has(nodeId)) {
+        const board = state.status === 'ready' ? state.board : undefined;
+        const label = nodeLabel(board?.nodes.find((n) => n.id === nodeId));
+        try {
+          await createSubBoard(slug, nextPath, label || undefined);
+        } catch {
+          // Navigate anyway — the sub-board route's own getBoard surfaces any
+          // real error there rather than swallowing the drill-in silently.
+        }
+      }
+      onNavigate(nextPath);
+    },
+    [slug, path, subBoardChildIds, state, onNavigate],
+  );
+
+  // Breadcrumb label polish: show the current sub-board's own label (set from
+  // the node's text at creation) for the LAST crumb; ancestors fall back to
+  // their node id (Breadcrumb does `pathLabels[i] || seg`).
+  const pathLabels =
+    state.status === 'ready' && path.length > 0
+      ? path.map((seg, i) => (i === path.length - 1 ? state.board.boardLabel : seg))
+      : undefined;
+
   return (
     <div style={{ position: 'relative', width: '100%', height: '100%', background: '#f8fafc' }}>
       <Breadcrumb
-        boardLabel={state.status === 'ready' ? state.board.boardLabel : slug}
+        boardLabel={rootLabel ?? (state.status === 'ready' ? state.board.boardLabel : slug)}
+        pathLabels={pathLabels}
         path={path}
         onNavigate={onNavigate}
         onGoHome={onGoHome}
@@ -192,7 +262,14 @@ function BoardRoute({ slug, path, onGoHome, onNavigate }: BoardRouteProps) {
         </div>
       )}
       {state.status === 'ready' && (
-        <BoardCanvas board={state.board} readonly={READONLY} slug={slug} path={path} />
+        <BoardCanvas
+          board={state.board}
+          readonly={READONLY}
+          slug={slug}
+          path={path}
+          onDrillIn={handleDrillIn}
+          subBoardChildIds={subBoardChildIds}
+        />
       )}
     </div>
   );
