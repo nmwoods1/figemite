@@ -77,7 +77,7 @@ import {
   Palette,
   MessageCircle,
   Pencil,
-  Eraser,
+  Highlighter,
   Trash2,
   History,
 } from 'lucide-react';
@@ -252,7 +252,11 @@ export function Toolbar({
         bottom: 12,
         left: '50%',
         transform: 'translateX(-50%)',
-        zIndex: 10,
+        // Above the pencil (z15) and annotation (z16) full-pane drawing
+        // overlays, so the toolbar stays clickable WHILE a drawing mode is
+        // active — otherwise the overlay swallows every toolbar click and you
+        // can't switch tools or exit the mode.
+        zIndex: 20,
         display: 'flex',
         alignItems: 'center',
         gap: 8,
@@ -367,7 +371,7 @@ export function Toolbar({
 
       {/* ── Annotation (ephemeral discussion scribbles) ──────────────────── */}
       <IconButton
-        icon={Eraser}
+        icon={Highlighter}
         label={activeMode === 'annotation' ? 'Exit annotation mode' : 'Annotation'}
         active={activeMode === 'annotation'}
         onClick={() => toggleMode('annotation')}

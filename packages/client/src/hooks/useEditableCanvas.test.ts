@@ -150,6 +150,41 @@ describe('useEditableCanvas', () => {
     store.destroy();
   });
 
+  it('onReconnect moves an edge endpoint in place, preserving the edge id and styling', () => {
+    const store = createBoardStore(fixtureBoard(), { readonly: false });
+    store.addNode({ id: 's3', type: 'text', pos: { x: 600, y: 20 }, order: 2, text: 'third' });
+    const { result } = renderHook(() => useEditableCanvas(store));
+    act(() => {
+      result.current.onReconnect(rfEdge('e1'), {
+        source: 's1',
+        target: 's3',
+        sourceHandle: null,
+        targetHandle: null,
+      });
+    });
+    const e1 = store.getSnapshot().edges.find((e) => e.id === 'e1');
+    expect(e1).toMatchObject({ id: 'e1', source: 's1', target: 's3', arrow: 'end' });
+    store.destroy();
+  });
+
+  it('onReconnect ignores a connection missing a source or target', () => {
+    const store = createBoardStore(fixtureBoard(), { readonly: false });
+    const { result } = renderHook(() => useEditableCanvas(store));
+    act(() => {
+      // RF types `Connection.target` as a (non-null) string; an empty string is
+      // the falsy value the handler guards against (a drop into empty space).
+      result.current.onReconnect(rfEdge('e1'), {
+        source: 's1',
+        target: '',
+        sourceHandle: null,
+        targetHandle: null,
+      });
+    });
+    // Unchanged — still points at the original target.
+    expect(store.getSnapshot().edges.find((e) => e.id === 'e1')).toMatchObject({ target: 's2' });
+    store.destroy();
+  });
+
   it('a doc update (op applied elsewhere) flows into RF nodes via reconcile', () => {
     const store = createBoardStore(fixtureBoard(), { readonly: false });
     const { result } = renderHook(() => useEditableCanvas(store));

@@ -45,8 +45,11 @@ export interface ShapeNodeData extends Record<string, unknown> {
   height: number;
   description?: string;
   rotation?: number;
+  hasSubBoard?: boolean;
+  canCreateSubBoard?: boolean;
   onTextChange?: (id: string, newText: string) => void;
   onOpenDescription?: (id: string) => void;
+  onDrillIn?: (id: string) => void;
   onResizeEnd?: (id: string, size: { width: number; height: number }) => void;
   onRotate?: (id: string, rotation: number) => void;
 }
@@ -348,10 +351,18 @@ export function ShapeNode({ id, data, selected }: NodeProps<Node<ShapeNodeData, 
         description={data.description}
         onOpenDescription={data.onOpenDescription}
         onDoubleClick={editable ? startEdit : undefined}
+        hasSubBoard={data.hasSubBoard}
+        canCreateSubBoard={data.canCreateSubBoard}
+        onDrillIn={data.onDrillIn}
         rotationRef={wrapperRef}
         descriptionBadgeStyle={
           isDiamond
             ? { top: Math.round(h * 0.14), right: 'auto', left: 'calc(50% - 8px)' }
+            : undefined
+        }
+        drillInBadgeStyle={
+          isDiamond
+            ? { top: Math.round(h * 0.14), right: 'auto', left: 'calc(50% - 28px)' }
             : undefined
         }
       >

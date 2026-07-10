@@ -9,6 +9,7 @@ const boardsApiMock = vi.hoisted(() => ({
   getBoard: vi.fn(),
   saveBoard: vi.fn(),
   createBoard: vi.fn(),
+  createSubBoard: vi.fn(),
   deleteSubBoard: vi.fn(),
   saveTags: vi.fn(),
   // P6-T34: BoardCanvas's comments layer (hooks/useComments.ts) fetches/saves
@@ -73,6 +74,7 @@ describe('App view switch', () => {
     });
     boardsApiMock.saveBoard.mockReset().mockResolvedValue(undefined);
     boardsApiMock.createBoard.mockReset().mockResolvedValue(undefined);
+    boardsApiMock.createSubBoard.mockReset().mockResolvedValue(undefined);
     boardsApiMock.deleteSubBoard.mockReset().mockResolvedValue(undefined);
     boardsApiMock.fetchComments.mockReset().mockResolvedValue({ comments: [] });
     boardsApiMock.saveComments.mockReset().mockResolvedValue(undefined);
@@ -202,6 +204,98 @@ describe('App view switch', () => {
     render(<App />);
     await waitFor(() => expect(document.querySelector('.react-flow')).toBeInTheDocument());
     expect(screen.getByRole('button', { name: /delete sub-board/i })).toBeInTheDocument();
+  });
+
+  // ── Sub-board drill-in wiring ────────────────────────────────────────────
+  // The editable board route joins a (mocked) realtime room and does NOT seed
+  // rendered nodes from the fetched BoardFile (P5-T29), so a node's drill badge
+  // can only be exercised end-to-end in READONLY mode, which DOES seed content
+  // from `getBoard`. That's also the mode whose navigate-in-but-never-create
+  // contract most needs an integration guard. The editable create-then-navigate
+  // wiring itself is unit-covered (rf-adapters, DrillInBadge, useEditableCanvas).
+  describe('sub-board drill-in', () => {
+    const stickyBoard = {
+      formatVersion: 1,
+      boardLabel: 'Spend Tracker',
+      nodes: [
+        {
+          id: 's1',
+          type: 'sticky',
+          pos: { x: 0, y: 0 },
+          order: 0,
+          size: { width: 200, height: 160 },
+          text: 'Groceries',
+          color: '#fef3c7',
+        },
+      ],
+      edges: [],
+      viewport: { x: 0, y: 0, zoom: 1 },
+    };
+
+    it('shows a navigate-in badge on a node with a sub-board and drills in on click (READONLY)', async () => {
+      modeMock.READONLY = true;
+      boardsApiMock.getBoard.mockResolvedValue(stickyBoard);
+      boardsApiMock.listBoards.mockResolvedValue([
+        {
+          slug: 'spend',
+          label: 'Spend Tracker',
+          tags: [],
+          subBoardPaths: [['s1']],
+          lastModifiedMs: Date.now(),
+        },
+      ]);
+      setHash('#/spend');
+      render(<App />);
+
+      // The badge's accessible name is its `›` glyph; identify it by title.
+      const drillBtn = await screen.findByTitle('Open sub-board');
+      fireEvent.click(drillBtn);
+
+      await waitFor(() => expect(window.location.hash).toBe('#/spend/s1'));
+      // READONLY never creates.
+      expect(boardsApiMock.createSubBoard).not.toHaveBeenCalled();
+    });
+
+    it('shows no drill badge for a node without a sub-board (READONLY, no create affordance)', async () => {
+      modeMock.READONLY = true;
+      boardsApiMock.getBoard.mockResolvedValue(stickyBoard);
+      boardsApiMock.listBoards.mockResolvedValue([
+        {
+          slug: 'spend',
+          label: 'Spend Tracker',
+          tags: [],
+          subBoardPaths: [],
+          lastModifiedMs: Date.now(),
+        },
+      ]);
+      setHash('#/spend');
+      render(<App />);
+
+      await waitFor(() => expect(screen.getByText('Groceries')).toBeInTheDocument());
+      expect(screen.queryByTitle('Open sub-board')).not.toBeInTheDocument();
+      expect(screen.queryByTitle('Create sub-board')).not.toBeInTheDocument();
+    });
+
+    it('derives child ids for the current level only, ignoring deeper/sibling paths (READONLY)', async () => {
+      modeMock.READONLY = true;
+      boardsApiMock.getBoard.mockResolvedValue(stickyBoard);
+      boardsApiMock.listBoards.mockResolvedValue([
+        {
+          slug: 'spend',
+          label: 'Spend Tracker',
+          tags: [],
+          // Only ['s1'] is a direct child of the root; ['s1','deep'] is a
+          // grandchild and ['other'] targets a node not on this board.
+          subBoardPaths: [['s1'], ['s1', 'deep'], ['other']],
+          lastModifiedMs: Date.now(),
+        },
+      ]);
+      setHash('#/spend');
+      render(<App />);
+
+      // The one drillable node present (s1) is a direct child → badge shows.
+      expect(await screen.findByTitle('Open sub-board')).toBeInTheDocument();
+    });
   });
 
   describe('READONLY mode', () => {

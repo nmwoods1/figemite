@@ -270,6 +270,13 @@ describe('BoardCanvas', () => {
     expect(container.querySelector('.react-flow__controls')).toBeTruthy();
   });
 
+  it('hides the "toggle interactivity" control (zoom/fit-view remain)', () => {
+    const { container } = render(<BoardCanvas board={fixtureBoard()} readonly={false} />);
+    expect(container.querySelector('.react-flow__controls-interactive')).toBeFalsy();
+    expect(container.querySelector('.react-flow__controls-zoomin')).toBeTruthy();
+    expect(container.querySelector('.react-flow__controls-fitview')).toBeTruthy();
+  });
+
   // ── Editable path (P4-T22) ──────────────────────────────────────────────────
   // jsdom can't do a real pointer drag/connect (no layout engine — see module
   // doc), so the deep interaction→doc commit behaviour is unit-tested in

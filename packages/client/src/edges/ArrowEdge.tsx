@@ -63,7 +63,7 @@ export function ArrowEdge({
   const strokeWidth = selected ? 2 : 1.5;
 
   const showEnd = data?.arrow === 'end' || data?.arrow === 'both';
-  const showStart = data?.arrow === 'both';
+  const showStart = data?.arrow === 'start' || data?.arrow === 'both';
 
   return (
     <>
@@ -113,6 +113,7 @@ export function ArrowEdge({
           >
             {editing ? (
               <input
+                autoFocus
                 value={draft}
                 onChange={(e) => onChange(e.target.value)}
                 onBlur={commit}

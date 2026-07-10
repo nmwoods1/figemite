@@ -41,6 +41,12 @@ describe('ArrowEdge', () => {
     expect(container.querySelector('marker[id^="arrow-start-"]')).toBeTruthy();
   });
 
+  it('renders only a start-arrowhead marker when data.arrow is "start" (Back)', () => {
+    const { container } = renderArrow({ arrow: 'start' });
+    expect(container.querySelector('marker[id^="arrow-start-"]')).toBeTruthy();
+    expect(container.querySelector('marker[id^="arrow-end-"]')).toBeFalsy();
+  });
+
   it('renders no arrowhead markers when data.arrow is "none"', () => {
     const { container } = renderArrow({ arrow: 'none' });
     expect(container.querySelector('marker[id^="arrow-end-"]')).toBeFalsy();

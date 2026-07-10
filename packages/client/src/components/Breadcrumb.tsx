@@ -130,8 +130,8 @@ export default function Breadcrumb({
             borderRadius: 6,
             background: '#fff',
           }}
-          onClick={() => onNavigate([])}
-          title="Go back to root board"
+          onClick={() => onNavigate(path.slice(0, -1))}
+          title="Go up one level"
         >
           ← Back
         </button>

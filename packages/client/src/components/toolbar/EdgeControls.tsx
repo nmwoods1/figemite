@@ -10,6 +10,7 @@ import { LINE_BTN_BASE, SELECT } from './styles.js';
 const ARROW_OPTIONS: { value: ArrowStyle; label: string }[] = [
   { value: 'none', label: 'No arrows' },
   { value: 'end', label: '→ Forward' },
+  { value: 'start', label: '← Back' },
   { value: 'both', label: '↔ Both' },
 ];
 

@@ -179,6 +179,65 @@ describe('createBoardStore', () => {
     store.destroy();
   });
 
+  describe('reconnectEdge', () => {
+    it('moves an edge to a new endpoint in place, preserving id and styling', () => {
+      const store = createBoardStore(fixtureBoard(), { readonly: false });
+      store.addNode({ id: 's2', type: 'text', pos: { x: 300, y: 300 }, order: 2, text: 'other' });
+      store.setEdgeLabel('e1', 'depends on');
+      store.setEdgeArrow('e1', 'both');
+
+      store.reconnectEdge('e1', {
+        source: 's1',
+        target: 's2',
+        sourceHandle: 'r',
+        targetHandle: 'l',
+      });
+
+      const edge = store.getSnapshot().edges.find((e) => e.id === 'e1');
+      expect(edge).toMatchObject({
+        id: 'e1',
+        source: 's1',
+        target: 's2',
+        sourceHandle: 'r',
+        targetHandle: 'l',
+        label: 'depends on',
+        arrow: 'both',
+        style: 'solid',
+      });
+      store.destroy();
+    });
+
+    it('normalises null handles by removing any prior handle', () => {
+      const store = createBoardStore(fixtureBoard(), { readonly: false });
+      store.addNode({ id: 's2', type: 'text', pos: { x: 300, y: 300 }, order: 2, text: 'other' });
+      store.reconnectEdge('e1', {
+        source: 's1',
+        target: 's2',
+        sourceHandle: 'r',
+        targetHandle: 'l',
+      });
+      store.reconnectEdge('e1', {
+        source: 's1',
+        target: 's2',
+        sourceHandle: null,
+        targetHandle: null,
+      });
+
+      const edge = store.getSnapshot().edges.find((e) => e.id === 'e1')!;
+      expect('sourceHandle' in edge).toBe(false);
+      expect('targetHandle' in edge).toBe(false);
+      store.destroy();
+    });
+
+    it('is a no-op on a read-only store', () => {
+      const store = createBoardStore(fixtureBoard(), { readonly: true });
+      store.reconnectEdge('e1', { source: 'f1', target: 's1' });
+      const edge = store.getSnapshot().edges.find((e) => e.id === 'e1');
+      expect(edge).toMatchObject({ source: 's1', target: 'f1' });
+      store.destroy();
+    });
+  });
+
   describe('viewport', () => {
     it('getViewport returns the initial board viewport', () => {
       const store = createBoardStore(fixtureBoard(), { readonly: false });

@@ -4,7 +4,11 @@
 // The BoardNode union is the extension seam — future views (object-model entities,
 // user-journey steps) will add new `type` discriminants here.
 
-export type ArrowStyle = 'none' | 'end' | 'both';
+// Arrowhead placement: 'none' (plain line), 'end' (Forward — arrowhead at the
+// target), 'start' (Back — arrowhead at the source), 'both' (arrowheads at both
+// ends). Older boards only ever stored none/end/both; 'start' is additive and
+// needs no migration.
+export type ArrowStyle = 'none' | 'end' | 'start' | 'both';
 export type LineStyle = 'solid' | 'dashed';
 
 // Edge kind: 'arrow' = directional arrows (existing behaviour); 'cardinality' =

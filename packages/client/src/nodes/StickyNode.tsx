@@ -28,8 +28,11 @@ export interface StickyNodeData extends Record<string, unknown> {
   width: number;
   height: number;
   description?: string;
+  hasSubBoard?: boolean;
+  canCreateSubBoard?: boolean;
   onTextChange?: (id: string, newText: string) => void;
   onOpenDescription?: (id: string) => void;
+  onDrillIn?: (id: string) => void;
   onResizeEnd?: (id: string, size: { width: number; height: number }) => void;
 }
 
@@ -73,6 +76,9 @@ export function StickyNode({ id, data, selected }: NodeProps<Node<StickyNodeData
         description={data.description}
         onOpenDescription={data.onOpenDescription}
         onDoubleClick={editable ? startEdit : undefined}
+        hasSubBoard={data.hasSubBoard}
+        canCreateSubBoard={data.canCreateSubBoard}
+        onDrillIn={data.onDrillIn}
       >
         <ConnectionHandles interactive={editable} />
         <div
