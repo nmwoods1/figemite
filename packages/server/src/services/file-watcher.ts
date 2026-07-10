@@ -97,10 +97,14 @@ export interface FileWatcherOptions {
   suppressMs?: number;
   /** Debounce/coalesce window in ms. Defaults to 10000, matching legacy AI_WATCHER_DEBOUNCE_MS. */
   debounceMs?: number;
+  /** Delay before re-establishing the watch after the FSWatcher emits an
+   * error (see {@link FileWatcher.handleWatcherError}). Defaults to 1000. */
+  restartDelayMs?: number;
 }
 
 const DEFAULT_SUPPRESS_MS = 2_000;
 const DEFAULT_DEBOUNCE_MS = 10_000;
+const DEFAULT_RESTART_DELAY_MS = 1_000;
 
 export class FileWatcher {
   private readonly boardsRoot: string;
@@ -108,10 +112,13 @@ export class FileWatcher {
   private readonly onExternalChange: (slug: string, subPath: string[]) => void;
   private readonly suppressMs: number;
   private readonly debounceMs: number;
+  private readonly restartDelayMs: number;
 
   private readonly suppressedUntil = new Map<string, number>();
   private readonly debounceTimers = new Map<string, ReturnType<typeof setTimeout>>();
   private watcher: fs.FSWatcher | null = null;
+  private restartTimer: ReturnType<typeof setTimeout> | null = null;
+  private disposed = false;
 
   constructor(options: FileWatcherOptions) {
     this.boardsRoot = options.boardsRoot;
@@ -119,6 +126,7 @@ export class FileWatcher {
     this.onExternalChange = options.onExternalChange;
     this.suppressMs = options.suppressMs ?? DEFAULT_SUPPRESS_MS;
     this.debounceMs = options.debounceMs ?? DEFAULT_DEBOUNCE_MS;
+    this.restartDelayMs = options.restartDelayMs ?? DEFAULT_RESTART_DELAY_MS;
   }
 
   /** Marks `slug`/`subPath` as self-written; fs events for it are ignored for `suppressMs`. */
@@ -174,14 +182,63 @@ export class FileWatcher {
 
   /** Starts watching `boardsRoot` recursively for board file changes. */
   start(): void {
-    if (this.watcher) return;
-    this.watcher = fs.watch(this.boardsRoot, { recursive: true }, (eventType, filename) => {
-      this.handleFsEvent(eventType, filename);
-    });
+    if (this.disposed || this.watcher) return;
+    let watcher: fs.FSWatcher;
+    try {
+      watcher = fs.watch(this.boardsRoot, { recursive: true }, (eventType, filename) => {
+        this.handleFsEvent(eventType, filename);
+      });
+    } catch (err) {
+      // `fs.watch` throws synchronously if `boardsRoot` is missing/unwatchable.
+      // Log and leave external-change detection off rather than crash — the
+      // server itself keeps running. (The common case is that the root always
+      // exists; this only guards a genuine race/misconfiguration.)
+      console.error('FileWatcher: failed to start watching board files', err);
+      return;
+    }
+    // CRITICAL: an `fs.watch` FSWatcher is an EventEmitter, and a recursive
+    // watch can emit an 'error' event (notably Linux ENOENT `scandir` when a
+    // watched board sub-directory churns — sub-board delete, .history writes,
+    // atomic renames). An 'error' event with NO listener is thrown by Node,
+    // crashing the entire process — which is exactly what took down the e2e
+    // web server. Handle it: log, tear down the (now-dead) watcher, and
+    // best-effort re-establish the watch.
+    watcher.on('error', (err) => this.handleWatcherError(err));
+    this.watcher = watcher;
   }
 
-  /** Closes the fs watcher and clears all pending debounce timers. */
+  /**
+   * Handles an FSWatcher 'error' event without crashing the process. A watcher
+   * that has emitted 'error' is effectively dead, so this closes it and
+   * schedules ONE best-effort restart (after `restartDelayMs`) so external-
+   * change detection recovers. The delay + single-pending-restart guard keeps
+   * a persistently-erroring watch from becoming a tight restart loop. Exposed
+   * directly (like {@link handleFsEvent}) so tests can drive it deterministically.
+   */
+  handleWatcherError(err: unknown): void {
+    console.error('FileWatcher: board file watcher error (recovering)', err);
+    if (this.watcher) {
+      try {
+        this.watcher.close();
+      } catch {
+        /* already closed by the error — fine */
+      }
+      this.watcher = null;
+    }
+    if (this.disposed || this.restartTimer) return;
+    this.restartTimer = setTimeout(() => {
+      this.restartTimer = null;
+      this.start();
+    }, this.restartDelayMs);
+  }
+
+  /** Closes the fs watcher and clears all pending timers. Idempotent. */
   dispose(): void {
+    this.disposed = true;
+    if (this.restartTimer) {
+      clearTimeout(this.restartTimer);
+      this.restartTimer = null;
+    }
     if (this.watcher) {
       this.watcher.close();
       this.watcher = null;

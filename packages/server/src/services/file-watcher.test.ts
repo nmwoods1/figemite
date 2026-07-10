@@ -193,6 +193,34 @@ describe('FileWatcher core logic (handleFsEvent)', () => {
     vi.advanceTimersByTime(20_000);
     expect(onExternalChange).not.toHaveBeenCalled();
   });
+
+  // ── Watcher-error recovery (the fs.watch 'error' crash) ──────────────────
+  // A recursive `fs.watch` FSWatcher emits an 'error' event (e.g. Linux ENOENT
+  // `scandir` when a watched board sub-dir churns). An 'error' event with no
+  // listener makes Node THROW, crashing the whole dev/server process — which is
+  // exactly what took down the e2e web server. `handleWatcherError` must
+  // swallow it (log, not crash) and schedule a best-effort restart.
+  it('handleWatcherError logs and does NOT throw (no process crash on a watcher error)', () => {
+    const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const { watcher } = makeWatcher({ restartDelayMs: 1_000 });
+    expect(() => watcher.handleWatcherError(new Error('ENOENT: scandir'))).not.toThrow();
+    expect(errSpy).toHaveBeenCalled();
+    // The scheduled restart re-runs start() on the (bogus) core-test root; it
+    // must fail gracefully rather than throw when it fires.
+    expect(() => vi.advanceTimersByTime(1_000)).not.toThrow();
+    watcher.dispose();
+    errSpy.mockRestore();
+  });
+
+  it('dispose() cancels a pending watcher-error restart', () => {
+    const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const { watcher } = makeWatcher({ restartDelayMs: 1_000 });
+    watcher.handleWatcherError(new Error('boom'));
+    watcher.dispose();
+    // After dispose the pending restart must not run (no throw, no re-start).
+    expect(() => vi.advanceTimersByTime(5_000)).not.toThrow();
+    errSpy.mockRestore();
+  });
 });
 
 // ── Light integration test: real fs.watch wiring ────────────────────────────
@@ -251,4 +279,41 @@ describe('FileWatcher fs.watch integration (real filesystem)', () => {
       }
     },
   );
+
+  it('survives an error emitted by the real FSWatcher and re-establishes the watch', async () => {
+    const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const onExternalChange = vi.fn();
+    const watcher = new FileWatcher({
+      boardsRoot: tmpRoot,
+      isLocked: () => false,
+      onExternalChange,
+      debounceMs: 50,
+      suppressMs: 100,
+      restartDelayMs: 50,
+    });
+    watcher.start();
+    try {
+      // Reach the real underlying FSWatcher and emit 'error' on it. WITHOUT an
+      // 'error' listener (the bug) this `emit` throws synchronously — Node's
+      // EventEmitter contract — which is what crashed the process. WITH the fix
+      // it is handled, so the emit does not throw.
+      const underlying = (watcher as unknown as { watcher: fsSync.FSWatcher | null }).watcher;
+      expect(underlying).toBeTruthy();
+      expect(() => underlying!.emit('error', new Error('ENOENT: scandir'))).not.toThrow();
+      expect(errSpy).toHaveBeenCalled();
+
+      // It recovers: a fresh watcher is re-established after the restart delay.
+      await vi.waitFor(
+        () => {
+          const w = (watcher as unknown as { watcher: fsSync.FSWatcher | null }).watcher;
+          expect(w).toBeTruthy();
+          expect(w).not.toBe(underlying);
+        },
+        { timeout: 5000, interval: 25 },
+      );
+    } finally {
+      watcher.dispose();
+      errSpy.mockRestore();
+    }
+  });
 });
