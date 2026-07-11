@@ -1,0 +1,12 @@
+# Code owners for figemite.
+#
+# The "Protect main" ruleset has "Require review from Code Owners" enabled, so
+# every pull request needs an approving review from an owner listed here.
+#
+# NOTE: GitHub never lets you approve your OWN pull request. Since @nmwoods1
+# authors most PRs here, a repo-admin bypass entry on the ruleset lets those
+# self-authored PRs still merge; PRs opened by anyone else require @nmwoods1's
+# review.
+
+# Everything is owned by @nmwoods1.
+*       @nmwoods1
