@@ -23,6 +23,12 @@
         margin: 0;
         padding: 0;
       }
+      /* Base body font. Node/edge text uses `font-family: inherit`, so this
+         cascades to all board content; without it the browser default
+         (Times New Roman) leaked through. */
+      body {
+        font-family: Helvetica, Arial, sans-serif;
+      }
     </style>
   </head>
   <body>

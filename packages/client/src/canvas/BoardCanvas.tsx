@@ -131,6 +131,15 @@ const commonReactFlowProps = {
   // Matches the legacy prototype, which set `ConnectionMode.Loose` for the same
   // reason.
   connectionMode: ConnectionMode.Loose,
+  // Connector ergonomics. `reconnectRadius` is the grab zone around an edge's
+  // endpoint (the invisible reconnect anchor) — enlarged from RF's default 10
+  // so an endpoint is easy to pick up. `connectionRadius` is how close a drop
+  // must land to a target handle to snap onto it — enlarged from the default 20
+  // so dragging a connector's end onto a node reconnects even when the drop
+  // isn't pixel-perfect on the small handle dot. Together these make
+  // "drag a connector's end to a new anchor" reliably land.
+  reconnectRadius: 18,
+  connectionRadius: 45,
 } as const;
 
 /** Read-only pane (P3-T20): store snapshot → boardToRf → render, no handlers.
@@ -206,7 +215,7 @@ function ConnectingPlaceholder() {
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
-        fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
+        fontFamily: 'Helvetica, Arial, sans-serif',
       }}
     >
       <p style={{ color: '#94a3b8', fontSize: 14 }}>Connecting…</p>

@@ -115,7 +115,7 @@ export default function TagEditor({
         boxShadow: '0 8px 30px rgba(0,0,0,0.14)',
         padding: '16px',
         width: 280,
-        fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
+        fontFamily: 'Helvetica, Arial, sans-serif',
       }}
       onClick={(e) => e.stopPropagation()}
     >

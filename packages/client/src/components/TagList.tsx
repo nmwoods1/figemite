@@ -60,7 +60,7 @@ export default function TagList({ onPickTag, onPickUntagged, onPickBoard }: TagL
         height: '100%',
         overflowY: 'auto',
         background: '#f8fafc',
-        fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
+        fontFamily: 'Helvetica, Arial, sans-serif',
       }}
     >
       {/* Header */}

@@ -85,6 +85,30 @@ describe('boardNodeToRf', () => {
     expect(rf.data).toMatchObject({ title: 'Frame', color: '#fef3c7' });
   });
 
+  it('a frame drags only by its title bar and lets its body pan through', () => {
+    const node: BoardNode = {
+      id: 'f1',
+      type: 'frame',
+      pos: { x: 0, y: 0 },
+      order: 0,
+      size: { width: 480, height: 320 },
+      title: 'Frame',
+      color: '#fef3c7',
+    };
+    const rf = boardNodeToRf(node, false);
+    // Only the title bar drags the frame (not the whole background).
+    expect(rf.dragHandle).toBe('.frame-drag-handle');
+    // Body is pointer-events:none so drags over it pan the canvas instead of
+    // being swallowed; interactive parts re-enable events themselves.
+    expect(rf.style).toMatchObject({ pointerEvents: 'none' });
+  });
+
+  it('a non-frame node has no dragHandle (drags by its whole body)', () => {
+    const rf = boardNodeToRf(sticky(), false);
+    expect(rf.dragHandle).toBeUndefined();
+    expect(rf.style?.pointerEvents).toBeUndefined();
+  });
+
   it('a non-frame node gets a zIndex >= 0 (greater than any frame zIndex)', () => {
     const frame: BoardNode = {
       id: 'f1',
@@ -574,6 +598,23 @@ describe('sub-board (drill-in) injection', () => {
     const sub = adapter([], true);
     const rf = boardNodeToRf(shapeNode({ id: 'sh1' }), false, undefined, sub);
     expect(rf.data.hasSubBoard).toBe(false);
+    expect(rf.data.canCreateSubBoard).toBe(true);
+    expect(rf.data.onDrillIn).toBe(sub.onDrillIn);
+  });
+
+  it('attaches drill-in data to a frame node (sections own sub-boards)', () => {
+    const frameNode: BoardNode = {
+      id: 'f1',
+      type: 'frame',
+      pos: { x: 0, y: 0 },
+      order: 0,
+      size: { width: 480, height: 320 },
+      title: 'Section',
+      color: '#fef3c7',
+    };
+    const sub = adapter(['f1'], true);
+    const rf = boardNodeToRf(frameNode, false, undefined, sub);
+    expect(rf.data.hasSubBoard).toBe(true);
     expect(rf.data.canCreateSubBoard).toBe(true);
     expect(rf.data.onDrillIn).toBe(sub.onDrillIn);
   });
