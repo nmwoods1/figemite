@@ -241,7 +241,7 @@ function BoardRoute({ slug, path, onGoHome, onNavigate }: BoardRouteProps) {
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
+            fontFamily: 'Helvetica, Arial, sans-serif',
           }}
         >
           <p style={{ color: '#94a3b8', fontSize: 14 }}>Loading…</p>
@@ -255,7 +255,7 @@ function BoardRoute({ slug, path, onGoHome, onNavigate }: BoardRouteProps) {
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
+            fontFamily: 'Helvetica, Arial, sans-serif',
           }}
         >
           <p style={{ color: '#dc2626', fontSize: 14 }}>Failed to load board: {state.message}</p>

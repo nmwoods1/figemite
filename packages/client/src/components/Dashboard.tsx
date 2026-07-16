@@ -104,7 +104,7 @@ export default function Dashboard({ filter, onPick, onGoHome }: DashboardProps) 
         height: '100%',
         overflowY: 'auto',
         background: '#f8fafc',
-        fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
+        fontFamily: 'Helvetica, Arial, sans-serif',
       }}
     >
       {/* Header */}

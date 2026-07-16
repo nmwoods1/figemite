@@ -118,11 +118,12 @@ export interface NodeCallbacks {
 
 const DESCRIBABLE_TYPES = new Set<BoardNode['type']>(['sticky', 'text', 'shape', 'emoji', 'icon']);
 
-/** Node types that carry the drill-in (sub-board) badge. Exact legacy parity:
- * the original prototype drew the "›" drill button on sticky and shape nodes
- * only. Kept separate from `DESCRIBABLE_TYPES` so the two affordances can
- * diverge without entangling. */
-const DRILLABLE_TYPES = new Set<BoardNode['type']>(['sticky', 'shape']);
+/** Node types that carry the drill-in (sub-board) badge. Frames (a.k.a.
+ * "sections") are included so a section can own a nested board and be drilled
+ * into — the seed boards ship sub-boards on frame nodes, and without the badge
+ * those sub-boards were unreachable. Kept separate from `DESCRIBABLE_TYPES` so
+ * the two affordances can diverge without entangling. */
+const DRILLABLE_TYPES = new Set<BoardNode['type']>(['sticky', 'shape', 'frame']);
 
 const WH_RESIZABLE_TYPES = new Set<BoardNode['type']>(['sticky', 'shape', 'frame', 'drawing']);
 const SQUARE_RESIZABLE_TYPES = new Set<BoardNode['type']>(['emoji', 'icon']);
@@ -230,6 +231,17 @@ export function boardNodeToRf(
     },
     ...(width !== undefined ? { width } : {}),
     ...(height !== undefined ? { height } : {}),
+    // Frames ("sections") only drag by their title bar (`.frame-drag-handle`),
+    // not their whole body — otherwise dragging the large background moves the
+    // section and swallows canvas panning. Other node types have no dragHandle
+    // and drag by their whole body as usual.
+    ...(node.type === 'frame' ? { dragHandle: '.frame-drag-handle' } : {}),
+    // A frame's body is `pointer-events: none` so drags over its (large,
+    // otherwise empty) background fall through to the pane and PAN the canvas
+    // instead of being swallowed. The interactive parts inside FrameNode — the
+    // title bar, resize handles, and drill badge — re-enable pointer events on
+    // themselves. Inner nodes are separate RF nodes stacked above, unaffected.
+    ...(node.type === 'frame' ? { style: { pointerEvents: 'none' as const } } : {}),
     zIndex,
     draggable: !readonly,
     selectable: !readonly,

@@ -16,11 +16,13 @@
 // the legacy either), gated on `selected && !!data.onResizeEnd &&
 // !useIsMultiSelected()`.
 
+import { useState } from 'react';
 import type { NodeProps, Node } from '@xyflow/react';
 import { NodeResizer } from '@xyflow/react';
 import { hexToRgba } from './color.js';
 import { useEditableText } from './useEditableText.js';
 import { useIsMultiSelected } from './use-is-multi-selected.js';
+import { DrillInBadge } from './DrillInBadge.js';
 
 export interface FrameNodeData extends Record<string, unknown> {
   title: string;
@@ -29,6 +31,12 @@ export interface FrameNodeData extends Record<string, unknown> {
   height: number;
   onTitleChange?: (id: string, newTitle: string) => void;
   onResizeEnd?: (id: string, size: { width: number; height: number }) => void;
+  /** Whether this frame already has a sub-board (always-visible drill badge). */
+  hasSubBoard?: boolean;
+  /** Whether a sub-board may be created from this frame (editable mode only). */
+  canCreateSubBoard?: boolean;
+  /** Opens (or, when editable, creates) this frame's sub-board. */
+  onDrillIn?: (id: string) => void;
 }
 
 /** Ported from legacy FrameNode's NodeResizer minWidth/minHeight. */
@@ -39,6 +47,7 @@ export function FrameNode({ id, data, selected }: NodeProps<Node<FrameNodeData, 
   const editable = !!data.onTitleChange;
   const resizable = !!data.onResizeEnd;
   const multiSelected = useIsMultiSelected();
+  const [hovered, setHovered] = useState(false);
   const { editing, draft, startEdit, onChange, commit, cancel } = useEditableText(
     data.title,
     (next) => {
@@ -64,6 +73,18 @@ export function FrameNode({ id, data, selected }: NodeProps<Node<FrameNodeData, 
         cursor: 'default',
       }}
     >
+      {data.onDrillIn && (
+        <DrillInBadge
+          nodeId={id}
+          hasSubBoard={!!data.hasSubBoard}
+          canCreate={!!data.canCreateSubBoard}
+          // The frame body is `pointer-events: none` (pans through), so it can't
+          // report hover — reveal the create affordance when the title bar is
+          // hovered OR the frame is selected, keeping it clickable.
+          hovered={hovered || !!selected}
+          onDrillIn={data.onDrillIn}
+        />
+      )}
       <NodeResizer
         nodeId={id}
         isVisible={!!selected && resizable && !multiSelected}
@@ -76,6 +97,10 @@ export function FrameNode({ id, data, selected }: NodeProps<Node<FrameNodeData, 
           background: '#fff',
           border: `1.5px solid ${border}`,
           borderRadius: 2,
+          // Frame wrapper is `pointer-events: none` (see rf-adapters.ts) so the
+          // body pans through; the resize handles must opt back in to stay
+          // grabbable.
+          pointerEvents: 'auto',
         }}
         onResizeEnd={(_event, params) =>
           data.onResizeEnd?.(id, { width: params.width, height: params.height })
@@ -83,6 +108,8 @@ export function FrameNode({ id, data, selected }: NodeProps<Node<FrameNodeData, 
       />
       <div
         className="frame-drag-handle"
+        onMouseEnter={() => setHovered(true)}
+        onMouseLeave={() => setHovered(false)}
         onDoubleClick={(e) => {
           e.stopPropagation();
           if (editable) startEdit();
@@ -102,6 +129,10 @@ export function FrameNode({ id, data, selected }: NodeProps<Node<FrameNodeData, 
           borderBottomRightRadius: 10,
           cursor: editing ? 'text' : 'move',
           userSelect: 'none',
+          // Re-enable events on the title bar (frame wrapper is
+          // `pointer-events: none` so its body pans through — see
+          // rf-adapters.ts). This is the frame's drag/select handle.
+          pointerEvents: 'auto',
           maxWidth: 'calc(100% - 24px)',
           whiteSpace: 'nowrap',
           overflow: 'hidden',

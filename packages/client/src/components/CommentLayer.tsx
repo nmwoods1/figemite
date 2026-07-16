@@ -101,7 +101,7 @@ function NewCommentForm({
         display: 'flex',
         flexDirection: 'column',
         gap: 8,
-        fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
+        fontFamily: 'Helvetica, Arial, sans-serif',
       }}
       onMouseDown={(e) => e.stopPropagation()}
       onClick={(e) => e.stopPropagation()}

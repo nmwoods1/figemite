@@ -110,7 +110,7 @@ export default function NewBoardModal({ onCreated, onClose }: NewBoardModalProps
           width: '100%',
           maxWidth: 420,
           padding: '28px 28px 24px',
-          fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
+          fontFamily: 'Helvetica, Arial, sans-serif',
         }}
       >
         <h2

@@ -105,4 +105,27 @@ describe('FrameNode', () => {
     lastResizerProps().onResizeEnd?.({} as never, { x: 0, y: 0, width: 520, height: 360 });
     expect(onResizeEnd).toHaveBeenCalledWith('f1', { width: 520, height: 360 });
   });
+
+  it('shows an always-visible drill badge when the frame already has a sub-board', () => {
+    renderFrame({ hasSubBoard: true, onDrillIn: vi.fn() });
+    const btn = screen.getByTitle('Open sub-board');
+    expect(btn).toBeInTheDocument();
+  });
+
+  it('opens the sub-board via onDrillIn when the drill badge is clicked', () => {
+    const onDrillIn = vi.fn();
+    renderFrame({ hasSubBoard: true, onDrillIn });
+    fireEvent.click(screen.getByTitle('Open sub-board'));
+    expect(onDrillIn).toHaveBeenCalledWith('f1');
+  });
+
+  it('reveals the create-sub-board affordance when a drillable frame is selected', () => {
+    renderFrame({ canCreateSubBoard: true, onDrillIn: vi.fn() }, true);
+    expect(screen.getByTitle('Create sub-board')).toBeInTheDocument();
+  });
+
+  it('renders no drill badge when onDrillIn is absent', () => {
+    renderFrame({ hasSubBoard: true });
+    expect(screen.queryByTitle('Open sub-board')).not.toBeInTheDocument();
+  });
 });

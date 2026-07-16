@@ -86,7 +86,7 @@ export function CommentThread({
         boxShadow: '0 4px 20px rgba(0,0,0,0.14)',
         border: '1px solid #e2e8f0',
         width: 280,
-        fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
+        fontFamily: 'Helvetica, Arial, sans-serif',
         fontSize: 13,
       }}
       onMouseDown={(e) => e.stopPropagation()}
