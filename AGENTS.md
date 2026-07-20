@@ -42,11 +42,15 @@ no MCP tool. Don't add one.
 
 ## Work in a draft, not on prod
 
-A board's live `board.json` is "prod". So that an agent can't silently
-overwrite it, **work in a draft**: a full, editable copy of the board stored at
+A board's live `board.json` is "prod", and **prod is read-only** — for humans
+and agents alike. You cannot edit the live board: every content-mutating tool
+(`add_node`, `move_node`, `update_node`, `delete_node`, edges, drawings, …)
+requires a connection to a **draft** and errors on a prod connection. So **work
+in a draft**: a full, editable copy of the board stored at
 `boards/<slug>/.drafts/<draftId>/`. You edit the draft live (same collaboration
 loop as any board); a **human** later reviews it and, in their browser,
-**approves** it to overwrite prod.
+**approves** it to overwrite prod. (Comments and annotations are the only
+changes allowed on the live board.)
 
 The default workflow:
 
@@ -59,10 +63,10 @@ The default workflow:
    comments and tags stay human-owned by having no tools (see below). Don't ask
    for one; it won't be added.
 
-You *can* still `connect_board` to prod directly (no `draft`) — that's an
-ordinary incremental collaboration, exactly like a human collaborator editing
-alongside others. But prefer a draft for any substantial or speculative change,
-so a human gates it before it becomes the live board.
+You *can* still `connect_board` to prod directly (no `draft`) — but only to
+**read/observe** it (get the snapshot, move your cursor). Any content edit on a
+prod connection is rejected with a "create a draft" error. To change anything,
+connect with a `draft`.
 
 ## The collaboration loop
 

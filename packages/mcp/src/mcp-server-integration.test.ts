@@ -90,19 +90,31 @@ afterEach(async () => {
 
 describe('BoardPeer -> real Yjs room -> real server (integration)', () => {
   it(
-    'a node added via a real BoardPeer is visible to a second provider on the same room, and lands in board.json after the persist debounce',
+    'a node added via a real BoardPeer is visible to a second provider on the same room, and lands in the draft board.json after the persist debounce',
     { retry: 2, timeout: 20_000 },
     async () => {
       harness = await startHarness();
+      // The live board is frozen — edits (and persistence) happen in a draft.
+      harness.repo.write(
+        'spend',
+        [],
+        { ...emptyBoard('Draft'), nodes: [], edges: [] } as BoardFile,
+        'd1',
+      );
 
-      const peer = new BoardPeer({ wsUrl: harness.wsUrl, slug: 'spend', name: 'Integration AI' });
+      const peer = new BoardPeer({
+        wsUrl: harness.wsUrl,
+        slug: 'spend',
+        draftId: 'd1',
+        name: 'Integration AI',
+      });
 
-      // A second, independent client on the same room — proves the peer's
+      // A second, independent client on the same DRAFT room — proves the peer's
       // write reaches the server (and other peers), not just its own doc.
       const observerDoc = new Y.Doc();
       const observerProvider = new WebsocketProvider(
         harness.wsUrl,
-        roomNameFor('spend', []),
+        roomNameFor('spend', [], 'd1'),
         observerDoc,
         {
           WebSocketPolyfill: WebSocket as unknown as typeof globalThis.WebSocket,
@@ -124,15 +136,15 @@ describe('BoardPeer -> real Yjs room -> real server (integration)', () => {
         // Also visible through the peer's own tool-level read.
         expect(getBoard(peer).nodes).toHaveLength(1);
 
-        // (b) After the server's persist debounce, board.json on disk reflects it.
+        // (b) After the server's persist debounce, the draft board.json reflects it.
         await waitFor(() => {
           try {
-            return harness!.repo.read('spend', []).nodes.length === 1;
+            return harness!.repo.read('spend', [], 'd1').nodes.length === 1;
           } catch {
             return false;
           }
         });
-        const onDisk = harness.repo.read('spend', []);
+        const onDisk = harness.repo.read('spend', [], 'd1');
         expect(onDisk.nodes[0]).toMatchObject({ id, type: 'sticky', pos: { x: 12, y: 34 } });
       } finally {
         peer.destroy();

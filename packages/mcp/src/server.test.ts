@@ -247,10 +247,12 @@ describe('board management tools (HTTP)', () => {
 });
 
 describe('node/edge tools operate on the connected peer', () => {
+  // Content edits require a DRAFT connection now (the live board is read-only),
+  // so this helper connects to a draft.
   async function connectedWithPeer() {
     const { makePeer, lastPeer } = makePeerTracker();
     const { client } = await connectedClient({ makePeer });
-    await client.callTool({ name: 'connect_board', arguments: { slug: 'spend' } });
+    await client.callTool({ name: 'connect_board', arguments: { slug: 'spend', draft: 'd1' } });
     return { client, peer: () => lastPeer() };
   }
 
@@ -466,7 +468,8 @@ describe('BoardPeer does not flush to disk via the MCP tools', () => {
     });
     const { makePeer } = makePeerTracker();
     const { client } = await connectedClient({ makePeer });
-    await client.callTool({ name: 'connect_board', arguments: { slug: 'spend' } });
+    // Edits require a draft connection now (the live board is read-only).
+    await client.callTool({ name: 'connect_board', arguments: { slug: 'spend', draft: 'd1' } });
 
     const { id } = jsonOf(
       await client.callTool({
@@ -479,5 +482,44 @@ describe('BoardPeer does not flush to disk via the MCP tools', () => {
     await client.callTool({ name: 'delete_node', arguments: { id } });
 
     expect(calledUrls.some((u) => u.includes('/api/board'))).toBe(false);
+  });
+});
+
+describe('the live board is read-only over MCP', () => {
+  it('a content-mutating tool on a PROD connection returns the read-only error', async () => {
+    const { makePeer } = makePeerTracker();
+    const { client } = await connectedClient({ makePeer });
+    await client.callTool({ name: 'connect_board', arguments: { slug: 'spend' } });
+
+    const res = await client.callTool({
+      name: 'add_node',
+      arguments: { type: 'sticky', pos: { x: 0, y: 0 } },
+    });
+    expect(res.isError).toBe(true);
+    expect(textOf(res)).toMatch(/read-only|create a draft/i);
+  });
+
+  it('the same tool on a DRAFT connection succeeds', async () => {
+    const { makePeer } = makePeerTracker();
+    const { client } = await connectedClient({ makePeer });
+    await client.callTool({ name: 'connect_board', arguments: { slug: 'spend', draft: 'd1' } });
+
+    const res = await client.callTool({
+      name: 'add_node',
+      arguments: { type: 'sticky', pos: { x: 0, y: 0 } },
+    });
+    expect(res.isError).toBeFalsy();
+    expect((jsonOf(res) as { id: string }).id).toBeTruthy();
+  });
+
+  it('read + presence tools still work on a PROD connection', async () => {
+    const { makePeer } = makePeerTracker();
+    const { client } = await connectedClient({ makePeer });
+    await client.callTool({ name: 'connect_board', arguments: { slug: 'spend' } });
+
+    const board = await client.callTool({ name: 'get_board', arguments: {} });
+    expect(board.isError).toBeFalsy();
+    const cursor = await client.callTool({ name: 'move_cursor', arguments: { x: 1, y: 2 } });
+    expect(cursor.isError).toBeFalsy();
   });
 });

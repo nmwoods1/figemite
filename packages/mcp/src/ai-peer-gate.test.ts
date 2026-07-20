@@ -72,6 +72,9 @@ async function waitForProviderSynced(provider: WebsocketProvider): Promise<void>
 
 const DEBOUNCE_MS = 50;
 const SLUG = 'gate-board';
+// The live board is read-only now, so every MCP edit + persistence happens in a
+// draft — these end-to-end gates run against a draft room.
+const DRAFT = 'd1';
 
 interface Harness {
   handle: StartedServer;
@@ -85,6 +88,7 @@ async function startHarness(): Promise<Harness> {
   const boardsRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'figemite-ai-peer-gate-'));
   const repo = new BoardRepository(boardsRoot);
   repo.write(SLUG, [], { ...emptyBoard('Gate Board'), nodes: [], edges: [] } as BoardFile);
+  repo.write(SLUG, [], { ...emptyBoard('Gate Draft'), nodes: [], edges: [] } as BoardFile, DRAFT);
 
   const handle = await startServer({ boardsRoot, port: 0, yjsPersistDebounceMs: DEBOUNCE_MS });
   return {
@@ -105,7 +109,7 @@ async function stopHarness(h: Harness): Promise<void> {
  * stands in for "a browser client's realtime provider" without pulling in
  * @figemite/client, mirroring yjs-persistence.test.ts's `connectProvider`. */
 function connectObserver(h: Harness, doc: Y.Doc): WebsocketProvider {
-  return new WebsocketProvider(h.wsUrl, roomNameFor(SLUG, []), doc, {
+  return new WebsocketProvider(h.wsUrl, roomNameFor(SLUG, [], DRAFT), doc, {
     WebSocketPolyfill: WebSocket as unknown as typeof globalThis.WebSocket,
     connect: true,
   });
@@ -146,6 +150,7 @@ describe('Phase 5 gate B: MCP AI-peer round-trip (every tool, live convergence +
       const peer = new BoardPeer({
         wsUrl: harness.wsUrl,
         slug: SLUG,
+        draftId: DRAFT,
         name: 'Gate AI',
         agentClient: 'gate-test',
       });
@@ -225,7 +230,7 @@ describe('Phase 5 gate B: MCP AI-peer round-trip (every tool, live convergence +
         // ── Persistence: after the debounce, board.json reflects everything ──
         await waitFor(() => {
           try {
-            const onDisk = harness!.repo.read(SLUG, []);
+            const onDisk = harness!.repo.read(SLUG, [], DRAFT);
             return (
               onDisk.nodes.length === 3 &&
               onDisk.edges.length === 1 &&
@@ -235,7 +240,7 @@ describe('Phase 5 gate B: MCP AI-peer round-trip (every tool, live convergence +
             return false;
           }
         });
-        const onDisk = harness.repo.read(SLUG, []);
+        const onDisk = harness.repo.read(SLUG, [], DRAFT);
         expect(onDisk.nodes.find((n) => n.id === nodeId)).toMatchObject({
           pos: { x: 111, y: 222 },
           text: 'Hello from the AI peer',
@@ -263,6 +268,7 @@ describe('Phase 5 gate B: MCP AI-peer round-trip (every tool, live convergence +
       const peer = new BoardPeer({
         wsUrl: harness.wsUrl,
         slug: SLUG,
+        draftId: DRAFT,
         name: 'Gate AI',
         agentClient: 'gate-test',
       });
@@ -314,7 +320,7 @@ describe('Phase 5 gate D: convergence guarantee against LIVE mixed MCP + provide
     async () => {
       harness = await startHarness();
 
-      const peer = new BoardPeer({ wsUrl: harness.wsUrl, slug: SLUG, name: 'Gate AI' });
+      const peer = new BoardPeer({ wsUrl: harness.wsUrl, slug: SLUG, draftId: DRAFT, name: 'Gate AI' });
 
       const providerDoc = new Y.Doc();
       const provider = connectObserver(harness, providerDoc);
@@ -372,12 +378,12 @@ describe('Phase 5 gate D: convergence guarantee against LIVE mixed MCP + provide
         // Persisted board.json (after the server's debounce) matches too.
         await waitFor(() => {
           try {
-            return harness!.repo.read(SLUG, []).nodes.length === 2;
+            return harness!.repo.read(SLUG, [], DRAFT).nodes.length === 2;
           } catch {
             return false;
           }
         });
-        const onDisk = harness.repo.read(SLUG, []);
+        const onDisk = harness.repo.read(SLUG, [], DRAFT);
         const serialisedDisk = serialise(onDisk);
         expect(serialisedDisk).toBe(
           serialise({ ...onDisk, nodes: snapAI.nodes, edges: snapAI.edges }),
