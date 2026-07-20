@@ -22,6 +22,8 @@ export interface BreadcrumbProps {
   onGoHome: () => void;
   onDelete?: () => void;
   isDirty: boolean;
+  /** Optional trailing control (the LiveDraftMenu pill) embedded in the bar. */
+  draftControl?: React.ReactNode;
 }
 
 const HOME_BTN: React.CSSProperties = {
@@ -95,6 +97,7 @@ export default function Breadcrumb({
   onGoHome,
   onDelete,
   isDirty,
+  draftControl,
 }: BreadcrumbProps) {
   return (
     <div
@@ -169,6 +172,13 @@ export default function Breadcrumb({
         <button style={DEL_BTN} onClick={onDelete} title="Delete this sub-board">
           Delete sub-board
         </button>
+      )}
+
+      {draftControl && (
+        <>
+          <span style={SEPARATOR}>|</span>
+          {draftControl}
+        </>
       )}
     </div>
   );
