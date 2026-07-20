@@ -178,14 +178,19 @@ describe('cold-room seed (bindState)', () => {
   });
 });
 
-// ── Persist-on-edit ───────────────────────────────────────────────────────────
+// ── Persist-on-edit (draft rooms) ─────────────────────────────────────────────
+//
+// A peer's edit only persists in a DRAFT room now — the live (prod) board is
+// frozen (see the "live board is frozen" describe below), so the debounce /
+// coalesce / snapshot / metadata / dispose machinery is exercised on a draft.
 
-describe('persist-on-edit (debounced writeback)', () => {
-  it('writes the edited doc back to board.json (via repo.write + suppress) after the debounce, and takes a save snapshot', async () => {
+describe('persist-on-edit (debounced writeback, draft room)', () => {
+  it("writes the edited doc back to the draft's board.json (via repo.write + suppress) after the debounce, and takes a save snapshot", async () => {
     harness = await startHarness();
     harness.repo.seedBoard('my-board', 'My Board');
+    harness.repo.write('my-board', [], emptyBoard('Draft'), 'd1');
 
-    const room = roomNameFor('my-board', []);
+    const room = roomNameFor('my-board', [], 'd1');
     const doc = new Y.Doc();
     const provider = connectProvider(harness, room, doc);
     try {
@@ -195,13 +200,13 @@ describe('persist-on-edit (debounced writeback)', () => {
 
       await waitFor(() => {
         try {
-          return harness!.repo.read('my-board', []).nodes.length === 1;
+          return harness!.repo.read('my-board', [], 'd1').nodes.length === 1;
         } catch {
           return false;
         }
       });
 
-      const onDisk = harness.repo.read('my-board', []);
+      const onDisk = harness.repo.read('my-board', [], 'd1');
       expect(onDisk.nodes).toEqual([makeStickyNode('s1', { x: 5, y: 5 }, '#fef3c7', 0)]);
 
       // The watcher was suppressed for this write.
@@ -210,7 +215,7 @@ describe('persist-on-edit (debounced writeback)', () => {
       );
 
       // A 'save' snapshot was taken.
-      const snaps = harness.history.list('my-board', []);
+      const snaps = harness.history.list('my-board', [], 'd1');
       expect(snaps.some((s) => s.trigger === 'save')).toBe(true);
     } finally {
       provider.destroy();
@@ -221,8 +226,9 @@ describe('persist-on-edit (debounced writeback)', () => {
   it('debounces multiple rapid edits into a single settled write', async () => {
     harness = await startHarness();
     harness.repo.seedBoard('my-board', 'My Board');
+    harness.repo.write('my-board', [], emptyBoard('Draft'), 'd1');
 
-    const room = roomNameFor('my-board', []);
+    const room = roomNameFor('my-board', [], 'd1');
     const doc = new Y.Doc();
     const provider = connectProvider(harness, room, doc);
     try {
@@ -235,14 +241,14 @@ describe('persist-on-edit (debounced writeback)', () => {
 
       await waitFor(() => {
         try {
-          const board = harness!.repo.read('my-board', []);
+          const board = harness!.repo.read('my-board', [], 'd1');
           return board.nodes[0]?.pos.x === 3;
         } catch {
           return false;
         }
       });
 
-      const onDisk = harness.repo.read('my-board', []);
+      const onDisk = harness.repo.read('my-board', [], 'd1');
       expect(onDisk.nodes[0].pos).toEqual({ x: 3, y: 3 });
     } finally {
       provider.destroy();
@@ -251,14 +257,15 @@ describe('persist-on-edit (debounced writeback)', () => {
   });
 });
 
-// ── Two peers converge + file matches ────────────────────────────────────────
+// ── Two peers converge + file matches (draft room) ───────────────────────────
 
-describe('two peers converge and the persisted file matches', () => {
+describe('two peers converge and the persisted file matches (draft room)', () => {
   it('interleaved edits from two providers converge in-memory and on disk', async () => {
     harness = await startHarness();
     harness.repo.seedBoard('my-board', 'My Board');
+    harness.repo.write('my-board', [], emptyBoard('Draft'), 'd1');
 
-    const room = roomNameFor('my-board', []);
+    const room = roomNameFor('my-board', [], 'd1');
     const docA = new Y.Doc();
     const docB = new Y.Doc();
     const providerA = connectProvider(harness, room, docA);
@@ -282,13 +289,13 @@ describe('two peers converge and the persisted file matches', () => {
 
       await waitFor(() => {
         try {
-          return harness!.repo.read('my-board', []).nodes.length === 2;
+          return harness!.repo.read('my-board', [], 'd1').nodes.length === 2;
         } catch {
           return false;
         }
       });
 
-      const persisted = harness.repo.read('my-board', []);
+      const persisted = harness.repo.read('my-board', [], 'd1');
       expect(new Set(persisted.nodes.map((n) => n.id))).toEqual(new Set(['a1', 'b1']));
       // The persisted file matches BOTH docs' snapshots (order-insensitive).
       expect(serialise({ ...persisted })).toEqual(
@@ -303,18 +310,19 @@ describe('two peers converge and the persisted file matches', () => {
   });
 });
 
-// ── Metadata preserved ────────────────────────────────────────────────────────
+// ── Metadata preserved (draft room) ──────────────────────────────────────────
 
-describe('metadata (boardLabel/viewport) preserved across a doc-driven persist', () => {
-  it('a doc-driven persist keeps the on-disk boardLabel and viewport intact', async () => {
+describe('metadata (boardLabel/viewport) preserved across a doc-driven persist (draft room)', () => {
+  it("a doc-driven persist keeps the draft's on-disk boardLabel and viewport intact", async () => {
     harness = await startHarness();
-    const board: BoardFile = {
+    harness.repo.seedBoard('my-board', 'My Board');
+    const draft: BoardFile = {
       ...emptyBoard('Custom Label'),
       viewport: { x: 42, y: -7, zoom: 2.5 },
     };
-    harness.repo.write('my-board', [], board);
+    harness.repo.write('my-board', [], draft, 'd1');
 
-    const room = roomNameFor('my-board', []);
+    const room = roomNameFor('my-board', [], 'd1');
     const doc = new Y.Doc();
     const provider = connectProvider(harness, room, doc);
     try {
@@ -325,13 +333,13 @@ describe('metadata (boardLabel/viewport) preserved across a doc-driven persist',
 
       await waitFor(() => {
         try {
-          return harness!.repo.read('my-board', []).nodes.length === 1;
+          return harness!.repo.read('my-board', [], 'd1').nodes.length === 1;
         } catch {
           return false;
         }
       });
 
-      const onDisk = harness.repo.read('my-board', []);
+      const onDisk = harness.repo.read('my-board', [], 'd1');
       expect(onDisk.boardLabel).toBe('Custom Label');
       expect(onDisk.viewport).toEqual({ x: 42, y: -7, zoom: 2.5 });
     } finally {
@@ -341,14 +349,15 @@ describe('metadata (boardLabel/viewport) preserved across a doc-driven persist',
   });
 });
 
-// ── Dispose flushes a pending write ──────────────────────────────────────────
+// ── Dispose flushes a pending write (draft room) ─────────────────────────────
 
-describe('dispose flushes a pending write', () => {
+describe('dispose flushes a pending write (draft room)', () => {
   it('flushes a debounced write immediately on dispose, before the debounce would have fired', async () => {
     const boardsRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'figemite-yjs-persist-dispose-'));
     const repo = new BoardRepository(boardsRoot);
     const history = new SnapshotHistoryService(boardsRoot);
     repo.seedBoard('my-board', 'My Board');
+    repo.write('my-board', [], emptyBoard('Draft'), 'd1');
 
     // A long debounce so we can prove dispose() flushes synchronously/promptly
     // rather than waiting for the timer.
@@ -364,7 +373,7 @@ describe('dispose flushes a pending write', () => {
     const port = (server.address() as AddressInfo).port;
     const url = `ws://127.0.0.1:${port}/yjs/`;
 
-    const room = roomNameFor('my-board', []);
+    const room = roomNameFor('my-board', [], 'd1');
     const doc = new Y.Doc();
     const provider = connectProvider({ url } as Harness, room, doc);
     try {
@@ -377,13 +386,53 @@ describe('dispose flushes a pending write', () => {
       service.dispose();
       // dispose() should have flushed synchronously (or near-immediately) —
       // no need to wait out the debounce window.
-      const onDisk = repo.read('my-board', []);
+      const onDisk = repo.read('my-board', [], 'd1');
       expect(onDisk.nodes).toEqual([makeStickyNode('s1', { x: 9, y: 9 }, '#fef3c7', 0)]);
     } finally {
       provider.destroy();
       doc.destroy();
       await new Promise<void>((resolve) => server.close(() => resolve()));
       await fs.rm(boardsRoot, { recursive: true, force: true });
+    }
+  });
+});
+
+// ── Live (prod) board is frozen ──────────────────────────────────────────────
+//
+// A prod room still syncs edits live between peers, but a peer edit (arriving
+// with a non-LOCAL_ORIGIN) is NEVER written to disk — prod content changes only
+// via promote (replaceRoomContent, LOCAL_ORIGIN — covered separately below).
+
+describe('live (prod) board is frozen', () => {
+  it('relays a prod-room peer edit to other peers but never persists it to disk', async () => {
+    harness = await startHarness();
+    harness.repo.seedBoard('my-board', 'My Board'); // prod starts empty
+
+    const room = roomNameFor('my-board', []);
+    const docA = new Y.Doc();
+    const docB = new Y.Doc();
+    const providerA = connectProvider(harness, room, docA);
+    const providerB = connectProvider(harness, room, docB);
+    try {
+      await waitForSynced(providerA);
+      await waitForSynced(providerB);
+
+      addNode(docA, makeStickyNode('ghost', { x: 1, y: 2 }, '#fef3c7', 0));
+
+      // The edit is relayed live to the other peer (prod rooms still sync)...
+      await waitFor(() => getSnapshot(docB).nodes.map((n) => n.id).join() === 'ghost');
+
+      // ...but it is NOT persisted: wait past several debounce windows and the
+      // on-disk prod board is still empty.
+      await new Promise((r) => setTimeout(r, DEBOUNCE_MS * 4));
+      expect(harness.repo.read('my-board', []).nodes).toEqual([]);
+      // No 'save' snapshot was taken for prod either.
+      expect(harness.history.list('my-board', []).some((s) => s.trigger === 'save')).toBe(false);
+    } finally {
+      providerA.destroy();
+      providerB.destroy();
+      docA.destroy();
+      docB.destroy();
     }
   });
 });

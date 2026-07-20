@@ -126,6 +126,7 @@ import {
   FORMAT_VERSION,
   getSnapshot,
   loadBoardIntoDoc,
+  LOCAL_ORIGIN,
   roomNameFor,
   type BoardEdge,
   type BoardFile,
@@ -295,7 +296,16 @@ export class YjsWebsocketService {
     };
     this.rooms.set(docName, state);
 
-    doc.on('update', () => {
+    doc.on('update', (_update: Uint8Array, origin: unknown) => {
+      // The live (prod) board is frozen: content on disk changes ONLY via
+      // promote. A promote mutates the doc through `replaceRoomContent`, which
+      // transacts with LOCAL_ORIGIN; a peer's own edit (browser/agent/raw
+      // client) arrives here with the websocket connection as its origin and is
+      // relayed live to other peers but never written to disk. The initial
+      // disk seed (`bindState` → `loadBoardIntoDoc`, also LOCAL_ORIGIN) happens
+      // BEFORE this listener is armed, so it can't trip this. Draft rooms
+      // persist from any origin, exactly as before.
+      if (draftId === undefined && origin !== LOCAL_ORIGIN) return;
       state.dirty = true;
       if (state.timer) clearTimeout(state.timer);
       state.timer = setTimeout(() => state.flush(), this.debounceMs);
