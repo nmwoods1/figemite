@@ -429,10 +429,23 @@ function AiLockBanner() {
  * imperative viewport setter (`useReactFlow()`), and `onMoveStart` reports
  * every viewport change (including follow's own) to `useFollowMode`, which
  * tells its own programmatic moves apart from a real manual pan/zoom. */
-function EditableCanvas({ store, fitView, viewport, slug, path, subBoard }: EditablePaneProps) {
+function EditableCanvas({
+  store,
+  fitView,
+  viewport,
+  slug,
+  path,
+  contentLocked,
+  subBoard,
+}: EditablePaneProps) {
   const [descNodeId, setDescNodeId] = useState<string | null>(null);
   const openDescription = useCallback((id: string) => setDescNodeId(id), []);
-  const editable = useEditableCanvas(store, { onOpenDescription: openDescription, subBoard });
+  // On the live board (content-locked) descriptions are view-frozen too — pass a
+  // no-op opener so nodes never surface the edit affordance.
+  const editable = useEditableCanvas(store, {
+    onOpenDescription: contentLocked ? undefined : openDescription,
+    subBoard,
+  });
   const multiSelect = useMultiSelectResize(store, editable.selectedNodeIds);
   const containerRef = useRef<HTMLDivElement>(null);
   const { nodes } = useBoardStore(store);
@@ -506,6 +519,12 @@ function EditableCanvas({ store, fitView, viewport, slug, path, subBoard }: Edit
     },
   });
 
+  // The live board freezes content editing exactly like an AI lock does (no
+  // drag/connect/delete/select, no content shortcuts) — comments + annotations
+  // ride their own overlays and stay live. `contentLocked` is a persistent
+  // state (you're on prod), `aiLocked` is transient; either blocks edits.
+  const editsBlocked = aiLocked || contentLocked;
+
   // Cmd/Ctrl+S stays bound (useBoardInteractions calls it unconditionally on
   // the shortcut) but is now a harmless no-op — the server persists content
   // on its own debounce, so there's nothing left for the client to flush.
@@ -515,7 +534,7 @@ function EditableCanvas({ store, fitView, viewport, slug, path, subBoard }: Edit
     selectedNodeIds: editable.selectedNodeIds,
     selectedEdgeIds: editable.selectedEdgeIds,
     readonly: false,
-    aiLocked,
+    aiLocked: editsBlocked,
     undo: undoRedo.undo,
     redo: undoRedo.redo,
     flushNow,
@@ -650,14 +669,14 @@ function EditableCanvas({ store, fitView, viewport, slug, path, subBoard }: Edit
         onConnect={editable.onConnect}
         onEdgesDelete={editable.onEdgesDelete}
         onReconnect={editable.onReconnect}
-        edgesReconnectable={!aiLocked && !overlayModeActive}
+        edgesReconnectable={!editsBlocked && !overlayModeActive}
         onSelectionChange={editable.onSelectionChange}
         onMoveStart={followMode.notifyManualViewportChange}
         defaultViewport={fitView ? undefined : viewport}
         fitView={fitView}
-        nodesDraggable={!aiLocked && !overlayModeActive}
-        nodesConnectable={!aiLocked && !overlayModeActive}
-        elementsSelectable={!aiLocked && !overlayModeActive}
+        nodesDraggable={!editsBlocked && !overlayModeActive}
+        nodesConnectable={!editsBlocked && !overlayModeActive}
+        elementsSelectable={!editsBlocked && !overlayModeActive}
         panOnDrag={!overlayModeActive}
         zoomOnScroll={!overlayModeActive}
       >
@@ -676,6 +695,7 @@ function EditableCanvas({ store, fitView, viewport, slug, path, subBoard }: Edit
         selectedEdgeIds={editable.selectedEdgeIds}
         syncStatus={syncStatus}
         readonly={false}
+        contentLocked={contentLocked}
         activeMode={activeMode}
         onSetActiveMode={setActiveMode}
         hasAnnotations={hasAnnotations}
@@ -751,6 +771,10 @@ interface EditablePaneProps extends PaneProps {
    * convenience path, which never opens an AI-lock SSE connection either. */
   slug?: string;
   path?: string[];
+  /** The live (prod) board is content-frozen: only comments + annotations are
+   * allowed. True whenever this pane edits prod (no `draftId`). Blocks every
+   * node/edge gesture + the content-creation Toolbar tools, same as `aiLocked`. */
+  contentLocked: boolean;
   /** Drill-in (sub-board) adapter — see BoardCanvasProps.onDrillIn's doc. */
   subBoard?: SubBoardAdapter;
 }
@@ -998,6 +1022,13 @@ export function BoardCanvas({
   const room = !readonly && slug ? { slug, path: path ?? [], draftId } : undefined;
   const store = useBoardStoreLifecycle(board, readonly, room);
 
+  // The live (prod) board is content-frozen: only comments + annotations are
+  // allowed; every real edit happens in a draft. Editable pane, a real board
+  // (`slug` given — every real route supplies one), and NOT inside a draft. A
+  // slug-less board is the local-seed unit-test convenience path (no room, no
+  // prod/draft identity) and stays fully editable, as before.
+  const contentLocked = !readonly && !!slug && !draftId;
+
   const fitView = isDefaultViewport(board.viewport);
 
   // Drill-in adapter, orthogonal to the read-only/editable store split:
@@ -1005,12 +1036,18 @@ export function BoardCanvas({
   // !readonly`). Memoized on its inputs so the two panes' `boardToRf` results
   // stay reference-stable (the child-ids Set is itself stable per BoardRoute
   // mount — see App.tsx). Absent when the route supplies no `onDrillIn`.
+  // Navigate-in works everywhere; CREATE is a content edit, so allowed only
+  // inside a draft (never read-only, never the content-locked live board).
   const subBoard = useMemo<SubBoardAdapter | undefined>(
     () =>
       onDrillIn
-        ? { childIds: subBoardChildIds ?? new Set<string>(), onDrillIn, canCreate: !readonly }
+        ? {
+            childIds: subBoardChildIds ?? new Set<string>(),
+            onDrillIn,
+            canCreate: !readonly && !contentLocked,
+          }
         : undefined,
-    [onDrillIn, subBoardChildIds, readonly],
+    [onDrillIn, subBoardChildIds, readonly, contentLocked],
   );
 
   return (
@@ -1031,6 +1068,7 @@ export function BoardCanvas({
             viewport={board.viewport}
             slug={slug}
             path={path}
+            contentLocked={contentLocked}
             subBoard={subBoard}
           />
         )}

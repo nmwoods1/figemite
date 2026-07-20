@@ -78,6 +78,7 @@ function renderToolbar(
     hasAnnotations: boolean;
     onWipeAnnotations: () => void;
     onOpenHistory: (() => void) | undefined;
+    contentLocked: boolean;
   }> = {},
 ) {
   return render(
@@ -88,6 +89,7 @@ function renderToolbar(
         selectedEdgeIds={overrides.selectedEdgeIds ?? new Set()}
         syncStatus={overrides.syncStatus ?? 'connecting'}
         readonly={overrides.readonly ?? false}
+        contentLocked={overrides.contentLocked ?? false}
         activeMode={overrides.activeMode ?? 'none'}
         onSetActiveMode={overrides.onSetActiveMode ?? (() => {})}
         hasAnnotations={overrides.hasAnnotations ?? false}
@@ -97,6 +99,31 @@ function renderToolbar(
     </ReactFlowProvider>,
   );
 }
+
+describe('Toolbar — content-locked (live board)', () => {
+  it('hides content tools and shows only comment + annotation', () => {
+    const store = createBoardStore(emptyBoard(), { readonly: false });
+    renderToolbar(store, { contentLocked: true });
+
+    // Node/edge creation + styling affordances are gone.
+    expect(screen.queryByTitle('Sticky note')).toBeNull();
+    expect(screen.queryByRole('button', { name: /^text$/i })).toBeNull();
+    expect(screen.queryByTitle('Shape')).toBeNull();
+    expect(screen.queryByTitle('Frame / group')).toBeNull();
+    expect(screen.queryByTitle('Pencil')).toBeNull();
+
+    // The two allowed collaboration modes remain.
+    expect(screen.getByTitle('Comment')).toBeInTheDocument();
+    expect(screen.getByTitle('Annotation')).toBeInTheDocument();
+  });
+
+  it('still shows all content tools when not locked', () => {
+    const store = createBoardStore(emptyBoard(), { readonly: false });
+    renderToolbar(store, { contentLocked: false });
+    expect(screen.getByTitle('Sticky note')).toBeInTheDocument();
+    expect(screen.getByTitle('Pencil')).toBeInTheDocument();
+  });
+});
 
 describe('Toolbar — add-node buttons', () => {
   it('adds a sticky node at the view center when a sticky color is picked', () => {

@@ -533,7 +533,7 @@ describe('BoardCanvas', () => {
 
   it('an edit in the editable canvas NEVER calls boards-api.saveBoard for content (server persists the room)', async () => {
     useFakeRoom();
-    render(<BoardCanvas board={fixtureBoard()} readonly={false} slug="my-board" path={['sub']} />);
+    render(<BoardCanvas board={fixtureBoard()} readonly={false} draftId="d1" slug="my-board" path={['sub']} />);
     fireEvent.click(screen.getByTitle('Text'));
 
     await act(async () => {
@@ -560,7 +560,7 @@ describe('BoardCanvas', () => {
 
   it('Cmd+Z undoes the most recent edit (toolbar-added node disappears)', async () => {
     useFakeRoom();
-    render(<BoardCanvas board={fixtureBoard()} readonly={false} slug="my-board" path={[]} />);
+    render(<BoardCanvas board={fixtureBoard()} readonly={false} draftId="d1" slug="my-board" path={[]} />);
     fireEvent.click(screen.getByTitle('Text'));
     expect(screen.getByText('Label')).toBeInTheDocument();
 
@@ -573,7 +573,7 @@ describe('BoardCanvas', () => {
 
   it('Cmd+S is bound but harmless — no error, no saveBoard call (the server persists on its own debounce)', async () => {
     useFakeRoom();
-    render(<BoardCanvas board={fixtureBoard()} readonly={false} slug="my-board" path={[]} />);
+    render(<BoardCanvas board={fixtureBoard()} readonly={false} draftId="d1" slug="my-board" path={[]} />);
     fireEvent.click(screen.getByTitle('Text'));
 
     await act(async () => {
@@ -684,7 +684,7 @@ describe('BoardCanvas', () => {
     // module doc) — add a node via the Toolbar first (same pattern the
     // Cmd+Z/Cmd+S realtime-mode tests above use), then double-click IT.
     const getRoom = useFakeRoom();
-    render(<BoardCanvas board={fixtureBoard()} readonly={false} slug="my-board" path={[]} />);
+    render(<BoardCanvas board={fixtureBoard()} readonly={false} draftId="d1" slug="my-board" path={[]} />);
     fireEvent.click(screen.getByTitle('Text'));
     const textNode = document.querySelector('.react-flow__node') as HTMLElement;
     const nodeId = textNode.getAttribute('data-id');
@@ -714,7 +714,7 @@ describe('BoardCanvas', () => {
     // query the raw DOM for the textarea instead of via role.
     const getRoom = useFakeRoom();
     const { container } = render(
-      <BoardCanvas board={fixtureBoard()} readonly={false} slug="my-board" path={[]} />,
+      <BoardCanvas board={fixtureBoard()} readonly={false} draftId="d1" slug="my-board" path={[]} />,
     );
     const awareness = getRoom().awareness as FakeAwareness;
     fireEvent.click(screen.getByTitle('Text'));
@@ -767,7 +767,7 @@ describe('BoardCanvas', () => {
 
   it('passes aiLocked through to useBoardInteractions', () => {
     useAiLockMock.mockReturnValue({ aiLocked: true });
-    render(<BoardCanvas board={fixtureBoard()} readonly={false} slug="my-board" path={[]} />);
+    render(<BoardCanvas board={fixtureBoard()} readonly={false} draftId="d1" slug="my-board" path={[]} />);
     expect(useAiLockMock).toHaveBeenCalled();
     // Cmd+X (cut) is gated on `aiLocked` in useBoardInteractions.ts — select a
     // node then assert the shortcut is a no-op while locked, proving the flag
@@ -794,7 +794,7 @@ describe('BoardCanvas', () => {
 
   it('keeps ReactFlow interaction props on when not aiLocked', () => {
     useAiLockMock.mockReturnValue({ aiLocked: false });
-    render(<BoardCanvas board={fixtureBoard()} readonly={false} slug="my-board" path={[]} />);
+    render(<BoardCanvas board={fixtureBoard()} readonly={false} draftId="d1" slug="my-board" path={[]} />);
     const props = lastReactFlowProps();
     expect(props.nodesDraggable).toBe(true);
     expect(props.nodesConnectable).toBe(true);
@@ -820,7 +820,7 @@ describe('BoardCanvas', () => {
       capturedOnExternalChange = opts.onExternalChange;
       return { aiLocked: false };
     });
-    render(<BoardCanvas board={fixtureBoard()} readonly={false} slug="my-board" path={[]} />);
+    render(<BoardCanvas board={fixtureBoard()} readonly={false} draftId="d1" slug="my-board" path={[]} />);
     fireEvent.click(screen.getByTitle('Text'));
     expect(screen.getByText('Label')).toBeInTheDocument();
 
@@ -950,7 +950,7 @@ describe('BoardCanvas — comments (P6-T34)', () => {
 describe('BoardCanvas — pencil + annotation overlays, mode exclusivity (P6-T35)', () => {
   it('activating pencil mode deactivates comment mode', async () => {
     await act(async () => {
-      render(<BoardCanvas board={fixtureBoard()} readonly={false} slug="my-board" path={[]} />);
+      render(<BoardCanvas board={fixtureBoard()} readonly={false} draftId="d1" slug="my-board" path={[]} />);
     });
     fireEvent.click(screen.getByRole('button', { name: /comment/i }));
     expect(screen.queryByTestId('comment-placement-overlay')).toBeInTheDocument();
@@ -962,7 +962,7 @@ describe('BoardCanvas — pencil + annotation overlays, mode exclusivity (P6-T35
 
   it('activating annotation mode deactivates pencil mode', async () => {
     await act(async () => {
-      render(<BoardCanvas board={fixtureBoard()} readonly={false} slug="my-board" path={[]} />);
+      render(<BoardCanvas board={fixtureBoard()} readonly={false} draftId="d1" slug="my-board" path={[]} />);
     });
     fireEvent.click(screen.getByRole('button', { name: /pencil/i }));
     expect(screen.getByTestId('pencil-overlay')).toBeInTheDocument();
@@ -986,7 +986,7 @@ describe('BoardCanvas — pencil + annotation overlays, mode exclusivity (P6-T35
 
   it('clicking pencil mode again toggles it back off', async () => {
     await act(async () => {
-      render(<BoardCanvas board={fixtureBoard()} readonly={false} slug="my-board" path={[]} />);
+      render(<BoardCanvas board={fixtureBoard()} readonly={false} draftId="d1" slug="my-board" path={[]} />);
     });
     fireEvent.click(screen.getByRole('button', { name: /pencil/i }));
     expect(screen.getByTestId('pencil-overlay')).toBeInTheDocument();
@@ -997,7 +997,7 @@ describe('BoardCanvas — pencil + annotation overlays, mode exclusivity (P6-T35
   it('drawing a pencil stroke commits a persisted DrawingNode to the doc', async () => {
     const getRoom = useFakeRoom();
     await act(async () => {
-      render(<BoardCanvas board={fixtureBoard()} readonly={false} slug="my-board" path={[]} />);
+      render(<BoardCanvas board={fixtureBoard()} readonly={false} draftId="d1" slug="my-board" path={[]} />);
     });
     fireEvent.click(screen.getByRole('button', { name: /pencil/i }));
     const overlay = screen.getByTestId('pencil-overlay');
@@ -1094,7 +1094,7 @@ describe('BoardCanvas — history panel (time-travel, P6-T36)', () => {
 
   it('renders a History button in editable mode with a slug', async () => {
     await act(async () => {
-      render(<BoardCanvas board={fixtureBoard()} readonly={false} slug="my-board" path={[]} />);
+      render(<BoardCanvas board={fixtureBoard()} readonly={false} draftId="d1" slug="my-board" path={[]} />);
     });
     expect(screen.getByTitle('Version history')).toBeInTheDocument();
   });
@@ -1121,7 +1121,7 @@ describe('BoardCanvas — history panel (time-travel, P6-T36)', () => {
     ]);
     await act(async () => {
       render(
-        <BoardCanvas board={fixtureBoard()} readonly={false} slug="my-board" path={['sub']} />,
+        <BoardCanvas board={fixtureBoard()} readonly={false} draftId="d1" slug="my-board" path={['sub']} />,
       );
     });
 
@@ -1151,7 +1151,7 @@ describe('BoardCanvas — history panel (time-travel, P6-T36)', () => {
     ]);
     fetchVersionMock.mockResolvedValue(historySnapshotBoard());
     await act(async () => {
-      render(<BoardCanvas board={fixtureBoard()} readonly={false} slug="my-board" path={[]} />);
+      render(<BoardCanvas board={fixtureBoard()} readonly={false} draftId="d1" slug="my-board" path={[]} />);
     });
     expect(screen.getByText('Buy milk')).toBeInTheDocument();
 
@@ -1178,7 +1178,7 @@ describe('BoardCanvas — history panel (time-travel, P6-T36)', () => {
     ]);
     fetchVersionMock.mockResolvedValue(historySnapshotBoard());
     await act(async () => {
-      render(<BoardCanvas board={fixtureBoard()} readonly={false} slug="my-board" path={[]} />);
+      render(<BoardCanvas board={fixtureBoard()} readonly={false} draftId="d1" slug="my-board" path={[]} />);
     });
 
     fireEvent.click(screen.getByTitle('Version history'));
@@ -1202,7 +1202,7 @@ describe('BoardCanvas — history panel (time-travel, P6-T36)', () => {
     ]);
     fetchVersionMock.mockResolvedValue(historySnapshotBoard());
     await act(async () => {
-      render(<BoardCanvas board={fixtureBoard()} readonly={false} slug="my-board" path={[]} />);
+      render(<BoardCanvas board={fixtureBoard()} readonly={false} draftId="d1" slug="my-board" path={[]} />);
     });
     // Give undo something to clear, so we can positively assert it fires.
     fireEvent.click(screen.getByTitle('Text'));
