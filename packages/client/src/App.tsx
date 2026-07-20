@@ -27,8 +27,7 @@ import TagList from './components/TagList.js';
 import Dashboard from './components/Dashboard.js';
 import Breadcrumb from './components/Breadcrumb.js';
 import IdentityPrompt from './components/IdentityPrompt.js';
-import DraftsMenu from './components/DraftsMenu.js';
-import DraftBanner from './components/DraftBanner.js';
+import LiveDraftMenu from './components/LiveDraftMenu.js';
 import { BoardCanvas } from './canvas/BoardCanvas.js';
 import { useAppView } from './app/router.js';
 import { READONLY } from './app/mode.js';
@@ -245,6 +244,19 @@ function BoardRoute({
       ? path.map((seg, i) => (i === path.length - 1 ? state.board.boardLabel : seg))
       : undefined;
 
+  // The live (prod) board is content-locked: only comments + annotations are
+  // allowed, so a sub-board can't be deleted from it either (that's a draft-only
+  // edit). Locked whenever we're editable and NOT inside a draft.
+  const contentLocked = !READONLY && !draftId;
+  const draftControl = READONLY ? undefined : (
+    <LiveDraftMenu
+      slug={slug}
+      draftId={draftId}
+      onOpenDraft={onOpenDraft}
+      onExitDraft={onExitDraft}
+    />
+  );
+
   return (
     <div style={{ position: 'relative', width: '100%', height: '100%', background: '#f8fafc' }}>
       <Breadcrumb
@@ -253,8 +265,9 @@ function BoardRoute({
         path={path}
         onNavigate={onNavigate}
         onGoHome={onGoHome}
-        onDelete={!READONLY && path.length > 0 ? handleDelete : undefined}
+        onDelete={!READONLY && !contentLocked && path.length > 0 ? handleDelete : undefined}
         isDirty={false}
+        draftControl={draftControl}
       />
       {state.status === 'loading' && (
         <div
@@ -295,14 +308,8 @@ function BoardRoute({
           subBoardChildIds={subBoardChildIds}
         />
       )}
-      {/* Draft affordances (dev only). At the prod root: a menu to create/open
-          drafts. Inside a draft: a banner with human-only approve/discard. */}
-      {!READONLY && !draftId && path.length === 0 && (
-        <DraftsMenu slug={slug} onOpenDraft={onOpenDraft} />
-      )}
-      {!READONLY && draftId && (
-        <DraftBanner slug={slug} draftId={draftId} onDone={onExitDraft} />
-      )}
+      {/* Draft affordances (dev only) now live in the top-left breadcrumb via
+          `draftControl` (LiveDraftMenu) — no separate menu or banner. */}
     </div>
   );
 }
