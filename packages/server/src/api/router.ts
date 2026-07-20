@@ -35,6 +35,8 @@ import {
   handleDeleteBoard,
   handleCreateSubBoard,
 } from './handlers/board.js';
+import { handleListDrafts, handleCreateDraft, handleDiscardDraft } from './handlers/drafts.js';
+import { handlePromoteDraft } from './handlers/promote.js';
 import { handleAiBegin, handleAiEnd, handleAiStatus } from './handlers/ai.js';
 import { handleEvents } from './handlers/events.js';
 import { handleListHistory, handleReadHistoryVersion } from './handlers/history.js';
@@ -47,6 +49,21 @@ import { handleGetTags, handleSaveTags } from './handlers/tags.js';
  * `ai.onChange` should already be wired to `sse` (see `makeAiBroadcast`) so lock
  * transitions broadcast; the router does not wire it.
  */
+/**
+ * The narrow slice of `YjsWebsocketService` the promote handler needs: push new
+ * content into a live prod room so connected browsers converge. Kept as an
+ * interface (not the concrete service) so the router/handlers don't depend on
+ * the whole Yjs stack and tests can supply a fake.
+ */
+export interface RoomContentReplacer {
+  replaceRoomContent(
+    slug: string,
+    subPath: string[],
+    snapshot: { nodes: import('@figemite/shared').BoardNode[]; edges: import('@figemite/shared').BoardEdge[] },
+    draftId?: string,
+  ): boolean;
+}
+
 export interface RequestContext {
   repo: BoardRepository;
   history: SnapshotHistoryService;
@@ -54,6 +71,8 @@ export interface RequestContext {
   sse: SseHub;
   watcher: FileWatcher;
   config: ServerConfig;
+  /** Live-room content replacement, used by draft promotion. */
+  yjs: RoomContentReplacer;
 }
 
 type Handler = (
@@ -69,7 +88,11 @@ const ROUTES: Record<string, Handler> = {
   'GET /api/board': handleGetBoard,
   'POST /api/board': handleSaveBoard,
   'DELETE /api/board': handleDeleteBoard,
+  'POST /api/board/promote': handlePromoteDraft,
   'POST /api/create': handleCreateSubBoard,
+  'GET /api/drafts': handleListDrafts,
+  'POST /api/drafts': handleCreateDraft,
+  'DELETE /api/drafts': handleDiscardDraft,
   'POST /api/ai/begin': handleAiBegin,
   'POST /api/ai/end': handleAiEnd,
   'GET /api/ai/status': handleAiStatus,

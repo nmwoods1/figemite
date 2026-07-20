@@ -63,8 +63,13 @@ function wsBaseUrl(): string {
  * presence, a later task) is dropped on the floor and no remote peer ever
  * sees this client. This call MUST happen before any such field-set.
  */
-export function joinBoardRoom(doc: Y.Doc, slug: string, path: string[]): BoardRoom {
-  const roomName = roomNameFor(slug, path);
+export function joinBoardRoom(
+  doc: Y.Doc,
+  slug: string,
+  path: string[],
+  draftId?: string,
+): BoardRoom {
+  const roomName = roomNameFor(slug, path, draftId);
   const wsUrl = wsBaseUrl();
 
   const provider = new WebsocketProvider(wsUrl, roomName, doc, { connect: true });

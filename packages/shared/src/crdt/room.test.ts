@@ -13,4 +13,14 @@ describe('roomNameFor', () => {
   it('supports nested sub-board paths', () => {
     expect(roomNameFor('spend', ['NodeA', 'NodeB'])).toBe('spend.NodeA.NodeB');
   });
+
+  it('inserts a ~<draftId> marker after the slug for a draft room', () => {
+    expect(roomNameFor('spend', [], 'd1')).toBe('spend~d1');
+    expect(roomNameFor('spend', ['NodeA'], 'd1')).toBe('spend~d1.NodeA');
+    expect(roomNameFor('spend', ['NodeA', 'NodeB'], 'd1')).toBe('spend~d1.NodeA.NodeB');
+  });
+
+  it('omitting the draftId yields exactly the prod room name', () => {
+    expect(roomNameFor('spend', ['NodeA'], undefined)).toBe('spend.NodeA');
+  });
 });

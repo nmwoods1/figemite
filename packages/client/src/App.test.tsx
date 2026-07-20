@@ -195,7 +195,9 @@ describe('App view switch', () => {
   it('renders sub-board path segments in the breadcrumb for a nested board route', async () => {
     setHash('#/spend/nodeA');
     render(<App />);
-    await waitFor(() => expect(boardsApiMock.getBoard).toHaveBeenCalledWith('spend', ['nodeA']));
+    await waitFor(() =>
+      expect(boardsApiMock.getBoard).toHaveBeenCalledWith('spend', ['nodeA'], undefined),
+    );
     await waitFor(() => expect(document.querySelector('.react-flow')).toBeInTheDocument());
   });
 

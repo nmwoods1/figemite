@@ -27,6 +27,8 @@ import TagList from './components/TagList.js';
 import Dashboard from './components/Dashboard.js';
 import Breadcrumb from './components/Breadcrumb.js';
 import IdentityPrompt from './components/IdentityPrompt.js';
+import DraftsMenu from './components/DraftsMenu.js';
+import DraftBanner from './components/DraftBanner.js';
 import { BoardCanvas } from './canvas/BoardCanvas.js';
 import { useAppView } from './app/router.js';
 import { READONLY } from './app/mode.js';
@@ -103,11 +105,18 @@ export default function App() {
     <>
       {identityPrompt}
       <BoardRoute
-        key={[view.slug, ...view.path].join('/')}
+        key={[view.draftId ?? '', view.slug, ...view.path].join('/')}
         slug={view.slug}
         path={view.path}
+        draftId={view.draftId}
         onGoHome={() => navigate({ view: 'tagList' })}
-        onNavigate={(nextPath) => navigate({ view: 'board', slug: view.slug, path: nextPath })}
+        onNavigate={(nextPath) =>
+          navigate({ view: 'board', slug: view.slug, path: nextPath, draftId: view.draftId })
+        }
+        onOpenDraft={(draftId) =>
+          navigate({ view: 'board', slug: view.slug, path: [], draftId })
+        }
+        onExitDraft={() => navigate({ view: 'board', slug: view.slug, path: [] })}
       />
     </>
   );
@@ -123,11 +132,25 @@ type LoadState =
 interface BoardRouteProps {
   slug: string;
   path: string[];
+  /** When set, this route edits a draft of the board rather than prod. */
+  draftId?: string;
   onGoHome: () => void;
   onNavigate: (path: string[]) => void;
+  /** Navigate into a draft of the current board. */
+  onOpenDraft: (draftId: string) => void;
+  /** Leave the current draft back to the prod board. */
+  onExitDraft: () => void;
 }
 
-function BoardRoute({ slug, path, onGoHome, onNavigate }: BoardRouteProps) {
+function BoardRoute({
+  slug,
+  path,
+  draftId,
+  onGoHome,
+  onNavigate,
+  onOpenDraft,
+  onExitDraft,
+}: BoardRouteProps) {
   const [state, setState] = useState<LoadState>({ status: 'loading' });
   // Ids of nodes at THIS board level that already have a sub-board — derived
   // from `listBoards()`'s `subBoardPaths` (available in dev AND the static
@@ -143,7 +166,7 @@ function BoardRoute({ slug, path, onGoHome, onNavigate }: BoardRouteProps) {
 
   useEffect(() => {
     let cancelled = false;
-    getBoard(slug, path)
+    getBoard(slug, path, draftId)
       .then((board) => {
         if (!cancelled) setState({ status: 'ready', board });
       })
@@ -154,7 +177,7 @@ function BoardRoute({ slug, path, onGoHome, onNavigate }: BoardRouteProps) {
     return () => {
       cancelled = true;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- `path` is a fresh array each render; the component is remounted via `key` (slug+path) on navigation instead.
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- `path` is a fresh array each render; the component is remounted via `key` (draftId+slug+path) on navigation instead.
   }, [slug]);
 
   useEffect(() => {
@@ -267,9 +290,18 @@ function BoardRoute({ slug, path, onGoHome, onNavigate }: BoardRouteProps) {
           readonly={READONLY}
           slug={slug}
           path={path}
+          draftId={draftId}
           onDrillIn={handleDrillIn}
           subBoardChildIds={subBoardChildIds}
         />
+      )}
+      {/* Draft affordances (dev only). At the prod root: a menu to create/open
+          drafts. Inside a draft: a banner with human-only approve/discard. */}
+      {!READONLY && !draftId && path.length === 0 && (
+        <DraftsMenu slug={slug} onOpenDraft={onOpenDraft} />
+      )}
+      {!READONLY && draftId && (
+        <DraftBanner slug={slug} draftId={draftId} onDone={onExitDraft} />
       )}
     </div>
   );

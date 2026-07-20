@@ -22,7 +22,7 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import { BoardPeer } from './peer.js';
 import { PeerDiscovery, buildDirectUrls, type PeerInfo } from './discovery.js';
-import { listBoards, createBoard } from './board-http.js';
+import { listBoards, createBoard, listDrafts, createDraft } from './board-http.js';
 import {
   getBoard,
   getNode,
@@ -180,11 +180,23 @@ export function createFigemiteMcpServer(options: FigemiteMcpServerOptions = {}):
         'Call this first in every session. Returns the current board snapshot.',
         'The AI gets a visible cursor and "AI" name pill in everyone\'s browser.',
         '',
-        'To connect to your own local server, just pass `slug`.',
+        'IMPORTANT: work in a DRAFT, not on prod. Prefer passing `draft` (from',
+        'create_draft / list_drafts) so your edits land in a draft that a human',
+        'reviews and approves before it overwrites the live board. Only a human',
+        'can approve a draft — there is deliberately no tool for that.',
+        '',
+        'To connect to your own local server, just pass `slug` (and `draft`).',
         "To connect to someone else's board, pass `slug` AND `address` (their mDNS peer name, IP, or hostname).",
       ].join('\n'),
       inputSchema: {
         slug: z.string().describe('Board slug, e.g. "spend"'),
+        draft: z
+          .string()
+          .optional()
+          .describe(
+            'Draft id to edit (from create_draft / list_drafts). Strongly preferred over ' +
+              'editing prod directly — a human approves a draft before it overwrites the board.',
+          ),
         address: z
           .string()
           .optional()
@@ -216,6 +228,7 @@ export function createFigemiteMcpServer(options: FigemiteMcpServerOptions = {}):
         wsUrl,
         slug: input.slug,
         path: input.path ?? [],
+        draftId: input.draft,
         name: input.name ?? defaultName,
         agentClient: input.agentClient ?? defaultAgentClient,
       });
@@ -286,6 +299,48 @@ export function createFigemiteMcpServer(options: FigemiteMcpServerOptions = {}):
       },
     },
     async (input) => jsonResult(await createBoard(activeHttpUrl, input.slug, input.label)),
+  );
+
+  // ── Drafts (HTTP; no connection required) ─────────────────────────────────
+  //
+  // Agents work in DRAFTS so a human can review + approve changes before they
+  // overwrite the live board. There is deliberately NO promote/approve tool —
+  // promotion is a human-only browser action, exactly as comments/tags stay
+  // human-owned by having no MCP tools (see AGENTS.md).
+
+  server.registerTool(
+    'list_drafts',
+    {
+      description: [
+        'List the drafts of a board (id, title, who created it, when).',
+        'Use a draft id with create_draft/connect_board to edit inside that draft.',
+      ].join(' '),
+      inputSchema: {
+        slug: z.string().describe('Board slug, e.g. "spend"'),
+      },
+    },
+    async (input) => jsonResult(await listDrafts(activeHttpUrl, input.slug)),
+  );
+
+  server.registerTool(
+    'create_draft',
+    {
+      description: [
+        'Create a new draft of a board — a full copy you can edit safely without',
+        'touching the live ("prod") board. Returns the new draft id; pass it as',
+        '`draft` to connect_board to start editing inside the draft. A human',
+        'reviews the draft and approves it (in their browser) to overwrite prod;',
+        'you cannot approve it yourself.',
+      ].join(' '),
+      inputSchema: {
+        slug: z.string().describe('Board slug to draft, e.g. "spend"'),
+        title: z
+          .string()
+          .optional()
+          .describe('Human-readable title for the draft; defaults to "Draft of <board>"'),
+      },
+    },
+    async (input) => jsonResult(await createDraft(activeHttpUrl, input.slug, input.title)),
   );
 
   // ── Reads (require connection) ───────────────────────────────────────────

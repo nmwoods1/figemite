@@ -387,3 +387,94 @@ describe('dispose flushes a pending write', () => {
     }
   });
 });
+
+// ── Draft rooms (slug~<draftId>) seed/persist into .drafts/, not prod ─────────
+
+describe('draft rooms', () => {
+  it('seeds a draft room from the draft board file, not prod', async () => {
+    harness = await startHarness();
+    harness.repo.write('my-board', [], { ...emptyBoard('Prod'), nodes: [] });
+    harness.repo.write(
+      'my-board',
+      [],
+      { ...emptyBoard('Draft'), nodes: [makeStickyNode('draftNode', { x: 1, y: 2 }, '#fef3c7', 0)] },
+      'd1',
+    );
+
+    const room = roomNameFor('my-board', [], 'd1');
+    const doc = new Y.Doc();
+    const provider = connectProvider(harness, room, doc);
+    try {
+      await waitForSynced(provider);
+      await waitFor(() => getSnapshot(doc).nodes.length === 1);
+      expect(getSnapshot(doc).nodes.map((n) => n.id)).toEqual(['draftNode']);
+    } finally {
+      provider.destroy();
+      doc.destroy();
+    }
+  });
+
+  it('persists a draft room edit into .drafts/<id>/board.json, leaving prod untouched', async () => {
+    harness = await startHarness();
+    harness.repo.seedBoard('my-board', 'Prod');
+    harness.repo.write('my-board', [], emptyBoard('Draft'), 'd1');
+
+    const room = roomNameFor('my-board', [], 'd1');
+    const doc = new Y.Doc();
+    const provider = connectProvider(harness, room, doc);
+    try {
+      await waitForSynced(provider);
+      addNode(doc, makeStickyNode('addedInDraft', { x: 5, y: 5 }, '#fef3c7', 0));
+      await waitFor(() => harness!.repo.read('my-board', [], 'd1').nodes.length === 1);
+
+      expect(harness.repo.read('my-board', [], 'd1').nodes.map((n) => n.id)).toEqual([
+        'addedInDraft',
+      ]);
+      // Prod stays empty.
+      expect(harness.repo.read('my-board', []).nodes).toEqual([]);
+    } finally {
+      provider.destroy();
+      doc.destroy();
+    }
+  });
+});
+
+// ── replaceRoomContent (promotion into a live prod room) ─────────────────────
+
+describe('replaceRoomContent', () => {
+  it('returns false when no room is live for the target', async () => {
+    harness = await startHarness();
+    expect(harness.service.replaceRoomContent('my-board', [], { nodes: [], edges: [] })).toBe(false);
+  });
+
+  it('converges a connected prod doc and persists the replacement to disk', async () => {
+    harness = await startHarness();
+    harness.repo.write(
+      'my-board',
+      [],
+      { ...emptyBoard('Prod'), nodes: [makeStickyNode('old', { x: 0, y: 0 }, '#fef3c7', 0)] },
+    );
+
+    const room = roomNameFor('my-board', []);
+    const doc = new Y.Doc();
+    const provider = connectProvider(harness, room, doc);
+    try {
+      await waitForSynced(provider);
+      await waitFor(() => getSnapshot(doc).nodes.length === 1);
+
+      const applied = harness.service.replaceRoomContent('my-board', [], {
+        nodes: [makeStickyNode('new', { x: 9, y: 9 }, '#fef3c7', 0)],
+        edges: [],
+      });
+      expect(applied).toBe(true);
+
+      // The connected client converges on the replacement...
+      await waitFor(() => getSnapshot(doc).nodes.map((n) => n.id).join() === 'new');
+      // ...and the room's own debounce persists it to prod board.json.
+      await waitFor(() => harness!.repo.read('my-board', []).nodes.map((n) => n.id).join() === 'new');
+    } finally {
+      provider.destroy();
+      doc.destroy();
+    }
+  });
+});

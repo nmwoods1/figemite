@@ -42,16 +42,17 @@ import type { SnapshotHistoryService, SnapshotTrigger } from '../services/snapsh
 export interface PersistContext {
   repo: BoardRepository;
   history: SnapshotHistoryService;
-  watcher: { suppress(slug: string, subPath: string[]): void };
+  watcher: { suppress(slug: string, subPath: string[], draftId?: string): void };
   ai: { isLocked(slug: string, subPath: string[]): boolean };
 }
 
 /**
- * The sole disk-write path for a board or sub-board. See the module doc for the
- * ordering guarantees and the lock policy (the caller gates the lock; this does
- * not). `data` MUST already be a validated `BoardFile` — the repo re-serialises
- * it canonically, but callers should have parsed untrusted input through the
- * shared schema first so an invalid payload surfaces as a 400, not a write.
+ * The sole disk-write path for a board or sub-board (or a draft, when `draftId`
+ * is given). See the module doc for the ordering guarantees and the lock policy
+ * (the caller gates the lock; this does not). `data` MUST already be a validated
+ * `BoardFile` — the repo re-serialises it canonically, but callers should have
+ * parsed untrusted input through the shared schema first so an invalid payload
+ * surfaces as a 400, not a write.
  */
 export function persistBoard(
   ctx: PersistContext,
@@ -59,8 +60,9 @@ export function persistBoard(
   subPath: string[],
   data: BoardFile,
   trigger: SnapshotTrigger,
+  draftId?: string,
 ): void {
-  ctx.watcher.suppress(slug, subPath);
-  ctx.repo.write(slug, subPath, data);
-  ctx.history.snapshot(slug, subPath, trigger);
+  ctx.watcher.suppress(slug, subPath, draftId);
+  ctx.repo.write(slug, subPath, data, draftId);
+  ctx.history.snapshot(slug, subPath, trigger, draftId);
 }

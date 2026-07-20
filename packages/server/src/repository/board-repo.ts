@@ -15,15 +15,26 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { deserialise, emptyBoard, serialise, type BoardFile } from '@figemite/shared';
-import { boardDirPath, boardFilePath, validateSlugAndPath } from './paths.js';
+import {
+  boardDirPath,
+  boardFilePath,
+  contentDirPath,
+  draftDirPath,
+  draftsRootDir,
+  validateSlugAndPath,
+} from './paths.js';
 import { atomicWriteFileSync } from './atomic-write.js';
 
 export class BoardRepository {
   constructor(private readonly boardsRoot: string) {}
 
-  /** Reads and validates a board (or sub-board). Throws a clear, distinct error if missing or invalid. */
-  read(slug: string, subPath: string[] = []): BoardFile {
-    const filePath = boardFilePath(this.boardsRoot, slug, subPath);
+  /**
+   * Reads and validates a board (or sub-board). When `draftId` is given, reads
+   * that draft's copy from `.drafts/<draftId>/` instead of prod. Throws a clear,
+   * distinct error if missing or invalid.
+   */
+  read(slug: string, subPath: string[] = [], draftId?: string): BoardFile {
+    const filePath = boardFilePath(this.boardsRoot, slug, subPath, draftId);
 
     let raw: string;
     try {
@@ -32,7 +43,7 @@ export class BoardRepository {
       const code = (err as NodeJS.ErrnoException)?.code;
       if (code === 'ENOENT') {
         throw new Error(
-          `Board not found: slug=${JSON.stringify(slug)} path=${JSON.stringify(subPath)} (${filePath})`,
+          `Board not found: slug=${JSON.stringify(slug)} path=${JSON.stringify(subPath)} draft=${JSON.stringify(draftId)} (${filePath})`,
         );
       }
       throw err;
@@ -53,8 +64,8 @@ export class BoardRepository {
    * the sole write path — every mutation to board JSON on disk should route
    * through here.
    */
-  write(slug: string, subPath: string[], board: BoardFile): void {
-    const filePath = boardFilePath(this.boardsRoot, slug, subPath);
+  write(slug: string, subPath: string[], board: BoardFile, draftId?: string): void {
+    const filePath = boardFilePath(this.boardsRoot, slug, subPath, draftId);
     atomicWriteFileSync(filePath, serialise(board));
   }
 
@@ -71,17 +82,23 @@ export class BoardRepository {
    * LAN API would be irreversible data loss. Callers that genuinely need to
    * remove a board (an admin/tooling path) use this directly.
    */
-  delete(slug: string, subPath: string[]): string[] {
+  delete(slug: string, subPath: string[], draftId?: string): string[] {
     validateSlugAndPath(slug, subPath);
 
     if (subPath.length === 0) {
-      const dir = boardDirPath(this.boardsRoot, slug);
+      // Clearing the whole board (prod) — or, with a draftId, the whole draft
+      // directory `.drafts/<draftId>/` (board.json, its sub-boards, its
+      // .history). This is the discard-draft primitive the promote/discard
+      // handlers use; it does NOT touch prod.
+      const dir = draftId === undefined
+        ? boardDirPath(this.boardsRoot, slug)
+        : draftDirPath(this.boardsRoot, slug, draftId);
       if (!fs.existsSync(dir)) return [];
       fs.rmSync(dir, { recursive: true, force: true });
-      return [slug];
+      return [draftId ?? slug];
     }
 
-    const dir = boardDirPath(this.boardsRoot, slug);
+    const dir = contentDirPath(this.boardsRoot, slug, draftId);
     let entries: string[] = [];
     try {
       entries = fs.readdirSync(dir);
@@ -101,9 +118,9 @@ export class BoardRepository {
     return deleted;
   }
 
-  /** True if the given board (or sub-board) file exists. */
-  exists(slug: string, subPath: string[] = []): boolean {
-    const filePath = boardFilePath(this.boardsRoot, slug, subPath);
+  /** True if the given board/sub-board (of prod, or of a draft) file exists. */
+  exists(slug: string, subPath: string[] = [], draftId?: string): boolean {
+    const filePath = boardFilePath(this.boardsRoot, slug, subPath, draftId);
     return fs.existsSync(filePath);
   }
 
@@ -126,9 +143,9 @@ export class BoardRepository {
    * into segment arrays. E.g. `board.NodeA.json`, `board.NodeA.NodeB.json` ->
    * `[['NodeA'], ['NodeA', 'NodeB']]`. Does not include the root `board.json`.
    */
-  listSubBoardPaths(slug: string): string[][] {
+  listSubBoardPaths(slug: string, draftId?: string): string[][] {
     validateSlugAndPath(slug, []);
-    const dir = boardDirPath(this.boardsRoot, slug);
+    const dir = contentDirPath(this.boardsRoot, slug, draftId);
     let entries: string[] = [];
     try {
       entries = fs.readdirSync(dir);
@@ -145,6 +162,37 @@ export class BoardRepository {
       result.push(inner.split('.'));
     }
     return result;
+  }
+
+  /**
+   * The draft ids that physically exist for a board — the immediate
+   * subdirectories of `<slug>/.drafts/` that contain a root `board.json`. This
+   * is the source of truth for draft *existence*; the human-owned `drafts.json`
+   * sidecar carries the metadata index (titles, provenance). Returns `[]` when
+   * the board has no `.drafts/` directory.
+   */
+  listDrafts(slug: string): string[] {
+    validateSlugAndPath(slug, []);
+    const dir = draftsRootDir(this.boardsRoot, slug);
+    let entries: fs.Dirent[];
+    try {
+      entries = fs.readdirSync(dir, { withFileTypes: true });
+    } catch {
+      return [];
+    }
+    const draftHasBoard = (name: string): boolean => {
+      // `exists` validates the id grammar and throws on a malformed dir name;
+      // treat any such stray directory as "not a draft" rather than propagating.
+      try {
+        return this.exists(slug, [], name);
+      } catch {
+        return false;
+      }
+    };
+    return entries
+      .filter((e) => e.isDirectory() && draftHasBoard(e.name))
+      .map((e) => e.name)
+      .sort();
   }
 
   /** Creates the board directory and seeds an empty root board with the given label. */

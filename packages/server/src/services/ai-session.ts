@@ -67,8 +67,8 @@ export class AiSessionManager {
    * If already locked, this refreshes the timer rather than stacking a
    * second one. Always increments the epoch and fires onChange.
    */
-  begin(slug: string, subPath: string[]): void {
-    const key = sessionKey(slug, subPath);
+  begin(slug: string, subPath: string[], draftId?: string): void {
+    const key = sessionKey(slug, subPath, draftId);
     const existing = this.sessions.get(key);
     if (existing?.timer) clearTimeout(existing.timer);
 
@@ -83,8 +83,8 @@ export class AiSessionManager {
    * Unlocks the session for `slug`/`subPath`. A no-op (no epoch bump, no
    * onChange) if the session isn't currently locked.
    */
-  end(slug: string, subPath: string[]): void {
-    const key = sessionKey(slug, subPath);
+  end(slug: string, subPath: string[], draftId?: string): void {
+    const key = sessionKey(slug, subPath, draftId);
     this.transitionToUnlocked(key);
   }
 
@@ -102,12 +102,12 @@ export class AiSessionManager {
     this.onChange(key, { locked: record.locked, epoch: record.epoch });
   }
 
-  isLocked(slug: string, subPath: string[]): boolean {
-    return this.sessions.get(sessionKey(slug, subPath))?.locked ?? false;
+  isLocked(slug: string, subPath: string[], draftId?: string): boolean {
+    return this.sessions.get(sessionKey(slug, subPath, draftId))?.locked ?? false;
   }
 
-  status(slug: string, subPath: string[]): AiSessionState {
-    const record = this.sessions.get(sessionKey(slug, subPath));
+  status(slug: string, subPath: string[], draftId?: string): AiSessionState {
+    const record = this.sessions.get(sessionKey(slug, subPath, draftId));
     return record ? { locked: record.locked, epoch: record.epoch } : { locked: false, epoch: 0 };
   }
 

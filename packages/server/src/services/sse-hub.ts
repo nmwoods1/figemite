@@ -72,8 +72,9 @@ export class SseHub {
     subPath: string[],
     res: SseSubscriberResponse,
     initialState: unknown,
+    draftId?: string,
   ): () => void {
-    const key = sessionKey(slug, subPath);
+    const key = sessionKey(slug, subPath, draftId);
     let set = this.subscribers.get(key);
     if (!set) {
       set = new Set();
@@ -96,8 +97,8 @@ export class SseHub {
   }
 
   /** Writes a `event: <name>\ndata: <json>\n\n` frame to every subscriber on the key. */
-  broadcast(slug: string, subPath: string[], event: string, data: unknown): void {
-    const key = sessionKey(slug, subPath);
+  broadcast(slug: string, subPath: string[], event: string, data: unknown, draftId?: string): void {
+    const key = sessionKey(slug, subPath, draftId);
     const set = this.subscribers.get(key);
     if (!set || set.size === 0) return;
     const payload = sseFrame(event, data);

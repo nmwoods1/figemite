@@ -303,3 +303,67 @@ describe('atomic write', () => {
     expect(() => JSON.parse(raw)).not.toThrow();
   });
 });
+
+// ── Drafts (boards/<slug>/.drafts/<draftId>/…) ────────────────────────────────
+
+describe('drafts', () => {
+  it('writes/reads a draft board without creating or touching prod', () => {
+    repo.seedBoard('spend', 'Spend');
+    const prodBefore = repo.read('spend');
+
+    repo.write('spend', [], boardWithContent(), 'd1');
+    expect(repo.exists('spend', [], 'd1')).toBe(true);
+    expect(repo.read('spend', [], 'd1').nodes).toHaveLength(1);
+
+    // Prod is unchanged by the draft write.
+    expect(repo.read('spend')).toEqual(prodBefore);
+    // On disk the draft lives under .drafts/<id>/.
+    expect(fsSync.existsSync(path.join(tmpRoot, 'spend', '.drafts', 'd1', 'board.json'))).toBe(true);
+  });
+
+  it('keeps prod and draft sub-boards separate', () => {
+    repo.seedBoard('spend', 'Spend');
+    repo.write('spend', ['frame1'], emptyBoard('Prod Frame'));
+    repo.write('spend', ['frame1'], emptyBoard('Draft Frame'), 'd1');
+
+    expect(repo.read('spend', ['frame1']).boardLabel).toBe('Prod Frame');
+    expect(repo.read('spend', ['frame1'], 'd1').boardLabel).toBe('Draft Frame');
+  });
+
+  it('listDrafts returns draft ids that have a root board, sorted', () => {
+    repo.seedBoard('spend', 'Spend');
+    repo.write('spend', [], emptyBoard('B'), 'd2');
+    repo.write('spend', [], emptyBoard('A'), 'd1');
+    expect(repo.listDrafts('spend')).toEqual(['d1', 'd2']);
+  });
+
+  it('listSlugs and listSubBoardPaths never surface drafts', () => {
+    repo.seedBoard('spend', 'Spend');
+    repo.write('spend', ['frame1'], emptyBoard('Prod Frame'));
+    repo.write('spend', [], emptyBoard('Draft'), 'd1');
+    repo.write('spend', ['secretFrame'], emptyBoard('Draft Frame'), 'd1');
+
+    expect(repo.listSlugs()).toEqual(['spend']); // no ".drafts", no draft id
+    expect(repo.listSubBoardPaths('spend')).toEqual([['frame1']]); // draft sub-board hidden
+    // But the draft's own sub-boards are listable with its id:
+    expect(repo.listSubBoardPaths('spend', 'd1')).toEqual([['secretFrame']]);
+  });
+
+  it('delete(slug, [], draftId) removes only that draft dir, not prod', () => {
+    repo.seedBoard('spend', 'Spend');
+    repo.write('spend', [], emptyBoard('Draft'), 'd1');
+    repo.write('spend', [], emptyBoard('Draft2'), 'd2');
+
+    expect(repo.delete('spend', [], 'd1')).toEqual(['d1']);
+    expect(repo.exists('spend', [], 'd1')).toBe(false);
+    expect(repo.exists('spend', [], 'd2')).toBe(true);
+    expect(repo.exists('spend')).toBe(true); // prod intact
+  });
+
+  it('deleting the whole board removes its .drafts too', () => {
+    repo.seedBoard('spend', 'Spend');
+    repo.write('spend', [], emptyBoard('Draft'), 'd1');
+    repo.delete('spend', []);
+    expect(fsSync.existsSync(path.join(tmpRoot, 'spend'))).toBe(false);
+  });
+});

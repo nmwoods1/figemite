@@ -91,7 +91,7 @@ export function createServer(config: ServerConfig): ServerHandle {
   const yjsWs = new YjsWebsocketService({
     repo,
     history,
-    suppress: (slug, subPath) => watcher.suppress(slug, subPath),
+    suppress: (slug, subPath, draftId) => watcher.suppress(slug, subPath, draftId),
     debounceMs: config.yjsPersistDebounceMs,
   });
 
@@ -102,7 +102,7 @@ export function createServer(config: ServerConfig): ServerHandle {
   });
   mdns.start();
 
-  const ctx: RequestContext = { repo, history, ai, sse, watcher, config };
+  const ctx: RequestContext = { repo, history, ai, sse, watcher, config, yjs: yjsWs };
   const requestHandler = createRequestHandler(ctx);
 
   return {

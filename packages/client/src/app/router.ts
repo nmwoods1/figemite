@@ -2,10 +2,11 @@
 //
 // Ported from the original prototype's `src/lib/router.ts`. The hash router
 // maps URL fragments to one of four views:
-//   #/                       → tagList   (default — the tag cards screen)
-//   #/untagged               → untagged  (boards with no tags)
-//   #/tag/<encoded>          → tagDetail (boards filtered to one tag)
-//   #/<slug>[/<seg>/<seg>…]  → board     (canvas for a board or sub-board)
+//   #/                          → tagList   (default — the tag cards screen)
+//   #/untagged                  → untagged  (boards with no tags)
+//   #/tag/<encoded>             → tagDetail (boards filtered to one tag)
+//   #/<slug>[/<seg>/<seg>…]     → board     (canvas for a board or sub-board)
+//   #/d/<slug>/<draftId>[/<seg>…] → board (draft) (canvas editing a draft)
 //
 // Deviation from the legacy shape: the `board` view's slug field is named
 // `slug` here (matching the P2-T15 spec), not `board` as in the prototype's
@@ -18,7 +19,7 @@ export type AppView =
   | { view: 'tagList' }
   | { view: 'untagged' }
   | { view: 'tagDetail'; tag: string }
-  | { view: 'board'; slug: string; path: string[] };
+  | { view: 'board'; slug: string; path: string[]; draftId?: string };
 
 // ── Serialization ─────────────────────────────────────────────────────────────
 
@@ -31,7 +32,10 @@ export function viewToHash(v: AppView): string {
     case 'tagDetail':
       return `#/tag/${encodeURIComponent(v.tag)}`;
     case 'board': {
-      const parts = [v.slug, ...v.path].map((seg) => encodeURIComponent(seg));
+      // A draft board route is prefixed `d/<slug>/<draftId>`; a prod board is
+      // just `<slug>`. Sub-board path segments follow in both cases.
+      const head = v.draftId ? ['d', v.slug, v.draftId] : [v.slug];
+      const parts = [...head, ...v.path].map((seg) => encodeURIComponent(seg));
       return '#/' + parts.join('/');
     }
   }
@@ -49,7 +53,19 @@ export function parseHash(hash: string): AppView {
     const raw = parts[1] ?? '';
     return { view: 'tagDetail', tag: decodeURIComponent(raw) };
   }
-  // Fall through: treat as a board slug (+ optional sub-board path segments).
+  if (first === 'd') {
+    // Draft board: #/d/<slug>/<draftId>[/<seg>...]. A missing slug/draftId
+    // yields empty strings, which the board route surfaces as a load error —
+    // same as a bad prod slug.
+    const decoded = parts.slice(1).map((seg) => decodeURIComponent(seg));
+    return {
+      view: 'board',
+      slug: decoded[0] ?? '',
+      draftId: decoded[1] ?? '',
+      path: decoded.slice(2),
+    };
+  }
+  // Fall through: treat as a prod board slug (+ optional sub-board path segments).
   const decoded = parts.map((seg) => decodeURIComponent(seg));
   return { view: 'board', slug: decoded[0] ?? '', path: decoded.slice(1) };
 }

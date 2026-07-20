@@ -107,6 +107,9 @@ export interface BoardCanvasProps {
    * local-seed behaviour (a convenience most unit tests rely on). */
   slug?: string;
   path?: string[];
+  /** When set, join the DRAFT room for this board instead of prod — the store's
+   * edits then persist into `boards/<slug>/.drafts/<draftId>/`, never prod. */
+  draftId?: string;
 }
 
 /** True when a viewport is just the BoardFile zero-value default — i.e. not
@@ -891,7 +894,7 @@ const pendingDestroyByKey = new Map<symbol, ReturnType<typeof setTimeout>>();
 function useBoardStoreLifecycle(
   board: BoardFile,
   readonly: boolean,
-  room: { slug: string; path: string[] } | undefined,
+  room: { slug: string; path: string[]; draftId?: string } | undefined,
 ): BoardStore {
   // A stable per-instance key for `pendingStoreByKey` — `Symbol()` itself has
   // no live-resource side effect (unlike `createBoardStore`), so constructing
@@ -937,7 +940,7 @@ function useBoardStoreLifecycle(
   // correctly rules that out). A stable, comparable `depsKey` stands in for
   // `room` (a fresh object each render — App.tsx's board route notes the
   // same caveat) so this doesn't rebuild on `room`'s per-render identity alone.
-  const roomKey = room ? `${room.slug} ${room.path.join(' ')}` : '';
+  const roomKey = room ? `${room.draftId ?? ''} ${room.slug} ${room.path.join(' ')}` : '';
   const depsKey = `${readonly} ${roomKey}`;
   const [lastBoard, setLastBoard] = useState(board);
   const [lastDepsKey, setLastDepsKey] = useState(depsKey);
@@ -988,10 +991,11 @@ export function BoardCanvas({
   readonly,
   slug,
   path,
+  draftId,
   onDrillIn,
   subBoardChildIds,
 }: BoardCanvasProps) {
-  const room = !readonly && slug ? { slug, path: path ?? [] } : undefined;
+  const room = !readonly && slug ? { slug, path: path ?? [], draftId } : undefined;
   const store = useBoardStoreLifecycle(board, readonly, room);
 
   const fitView = isDefaultViewport(board.viewport);

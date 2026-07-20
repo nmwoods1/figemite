@@ -42,3 +42,45 @@ export async function createBoard(
   }
   return data;
 }
+
+export interface ListDraftsResult {
+  drafts: unknown[];
+}
+
+export interface CreateDraftResult {
+  ok: true;
+  draftId: string;
+  draft: unknown;
+}
+
+/** GET `${httpUrl}/api/drafts?board=<slug>`. Throws with the server's error message on a non-2xx response. */
+export async function listDrafts(httpUrl: string, slug: string): Promise<ListDraftsResult> {
+  const res = await fetch(`${httpUrl}/api/drafts?board=${encodeURIComponent(slug)}`);
+  const data = (await res.json()) as ListDraftsResult & { error?: string };
+  if (!res.ok) {
+    throw new Error(data?.error ?? `Failed to list drafts: HTTP ${res.status}`);
+  }
+  return data;
+}
+
+/**
+ * POST `${httpUrl}/api/drafts` with `{ board, title?, createdBy: 'agent' }`.
+ * Agents always create drafts tagged as agent-authored. Throws with the
+ * server's error message on a non-2xx response.
+ */
+export async function createDraft(
+  httpUrl: string,
+  slug: string,
+  title?: string,
+): Promise<CreateDraftResult> {
+  const res = await fetch(`${httpUrl}/api/drafts`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ board: slug, title, createdBy: 'agent' }),
+  });
+  const data = (await res.json()) as CreateDraftResult & { error?: string };
+  if (!res.ok) {
+    throw new Error(data?.error ?? `Failed to create draft: HTTP ${res.status}`);
+  }
+  return data;
+}

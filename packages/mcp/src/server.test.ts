@@ -77,7 +77,7 @@ afterEach(() => {
 });
 
 describe('createFigemiteMcpServer tool list', () => {
-  it('registers all 18 board tools', async () => {
+  it('registers all 20 board tools', async () => {
     const { client } = await connectedClient();
     const { tools } = await client.listTools();
     const names = tools.map((t) => t.name).sort();
@@ -87,6 +87,8 @@ describe('createFigemiteMcpServer tool list', () => {
         'disconnect',
         'list_boards',
         'create_board',
+        'list_drafts',
+        'create_draft',
         'get_board',
         'get_node',
         'list_nodes',
@@ -105,6 +107,15 @@ describe('createFigemiteMcpServer tool list', () => {
         'delete_edge',
       ].sort(),
     );
+  });
+
+  it('does NOT register a promote/approve tool (human-only, enforced by omission)', async () => {
+    const { client } = await connectedClient();
+    const { tools } = await client.listTools();
+    const names = tools.map((t) => t.name);
+    expect(names).not.toContain('promote_draft');
+    expect(names).not.toContain('promote');
+    expect(names).not.toContain('approve_draft');
   });
 });
 
