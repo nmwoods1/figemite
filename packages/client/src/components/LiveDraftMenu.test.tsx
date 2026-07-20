@@ -62,6 +62,26 @@ describe('LiveDraftMenu', () => {
     await waitFor(() => expect(api.promoteDraft).toHaveBeenCalledWith('spend', 'd1'));
   });
 
+  it('does not double-submit promote when the confirm button is clicked twice', async () => {
+    let resolvePromote: () => void = () => {};
+    api.promoteDraft.mockReset().mockReturnValue(
+      new Promise<void>((r) => {
+        resolvePromote = r;
+      }),
+    );
+    render(<LiveDraftMenu slug="spend" onOpenDraft={() => {}} onExitDraft={() => {}} />);
+    fireEvent.click(screen.getByRole('button', { name: /Live/ }));
+    await waitFor(() => expect(screen.getByText('New card limits')).toBeTruthy());
+    fireEvent.click(screen.getByRole('button', { name: 'Promote draft New card limits to live' }));
+
+    const confirm = screen.getByRole('button', { name: 'Promote to live' });
+    fireEvent.click(confirm);
+    fireEvent.click(confirm); // second click while the first is still in flight
+    resolvePromote();
+
+    await waitFor(() => expect(api.promoteDraft).toHaveBeenCalledTimes(1));
+  });
+
   it('discard asks for confirmation then calls discardDraft', async () => {
     render(<LiveDraftMenu slug="spend" onOpenDraft={() => {}} onExitDraft={() => {}} />);
     fireEvent.click(screen.getByRole('button', { name: /Live/ }));

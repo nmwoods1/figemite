@@ -496,7 +496,7 @@ describe('replaceRoomContent', () => {
     expect(harness.service.replaceRoomContent('my-board', [], { nodes: [], edges: [] })).toBe(false);
   });
 
-  it('converges a connected prod doc and persists the replacement to disk', async () => {
+  it('converges a connected prod doc in memory but does NOT persist (prod is frozen)', async () => {
     harness = await startHarness();
     harness.repo.write(
       'my-board',
@@ -517,10 +517,14 @@ describe('replaceRoomContent', () => {
       });
       expect(applied).toBe(true);
 
-      // The connected client converges on the replacement...
+      // The connected client converges on the replacement in memory...
       await waitFor(() => getSnapshot(doc).nodes.map((n) => n.id).join() === 'new');
-      // ...and the room's own debounce persists it to prod board.json.
-      await waitFor(() => harness!.repo.read('my-board', []).nodes.map((n) => n.id).join() === 'new');
+
+      // ...but the prod room NEVER persists (frozen). Disk stays 'old' — the
+      // promote handler is the only thing that writes prod to disk (it calls
+      // persistBoard directly, NOT relying on this convergence).
+      await new Promise((r) => setTimeout(r, DEBOUNCE_MS * 4));
+      expect(harness.repo.read('my-board', []).nodes.map((n) => n.id)).toEqual(['old']);
     } finally {
       provider.destroy();
       doc.destroy();

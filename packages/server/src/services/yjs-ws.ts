@@ -126,7 +126,6 @@ import {
   FORMAT_VERSION,
   getSnapshot,
   loadBoardIntoDoc,
-  LOCAL_ORIGIN,
   roomNameFor,
   type BoardEdge,
   type BoardFile,
@@ -296,16 +295,17 @@ export class YjsWebsocketService {
     };
     this.rooms.set(docName, state);
 
-    doc.on('update', (_update: Uint8Array, origin: unknown) => {
-      // The live (prod) board is frozen: content on disk changes ONLY via
-      // promote. A promote mutates the doc through `replaceRoomContent`, which
-      // transacts with LOCAL_ORIGIN; a peer's own edit (browser/agent/raw
-      // client) arrives here with the websocket connection as its origin and is
-      // relayed live to other peers but never written to disk. The initial
-      // disk seed (`bindState` → `loadBoardIntoDoc`, also LOCAL_ORIGIN) happens
-      // BEFORE this listener is armed, so it can't trip this. Draft rooms
-      // persist from any origin, exactly as before.
-      if (draftId === undefined && origin !== LOCAL_ORIGIN) return;
+    doc.on('update', () => {
+      // The live (prod) board is FROZEN: a prod room never persists itself,
+      // whatever the update's origin. Prod content on disk changes ONLY via the
+      // promote handler's direct `persistBoard` write (see api/handlers/
+      // promote.ts). A peer's edit still syncs live to other peers, but is never
+      // written to disk. Persisting from the room (even a promote's own
+      // `replaceRoomContent` update) is unsafe: a stale/lingering prod
+      // connection can revert the in-memory doc before the debounce fires, so
+      // the room is not a reliable disk-writer for prod. Draft rooms persist
+      // normally — that is where real editing happens.
+      if (draftId === undefined) return;
       state.dirty = true;
       if (state.timer) clearTimeout(state.timer);
       state.timer = setTimeout(() => state.flush(), this.debounceMs);

@@ -224,7 +224,7 @@ describe('POST /api/board/promote', () => {
     expect(res.status).toBe(404);
   });
 
-  it('uses the live room path when a prod room is connected', async () => {
+  it('writes prod to disk directly AND converges the live room when a prod room is connected', async () => {
     const calls: Array<{ subPath: string[]; snapshot: { nodes: BoardNode[]; edges: BoardEdge[] } }> =
       [];
     const live = await startTestServer({
@@ -254,7 +254,13 @@ describe('POST /api/board/promote', () => {
         body: JSON.stringify({ board: 'spend', draft: draftId }),
       });
       expect(res.status).toBe(200);
-      // The live-room replacer was invoked with the draft's content.
+
+      // REGRESSION: prod DISK must be written by the handler itself — NOT left
+      // to the live room's debounce. A prod room being connected (a stale
+      // client) must not stop the promoted content from reaching disk.
+      expect(live.ctx.repo.read('spend').nodes.map((n) => n.id)).toEqual(['liveNode']);
+
+      // The live-room replacer was also invoked (best-effort browser convergence).
       expect(calls.length).toBeGreaterThan(0);
       expect(calls[0].snapshot.nodes.map((n) => n.id)).toEqual(['liveNode']);
     } finally {

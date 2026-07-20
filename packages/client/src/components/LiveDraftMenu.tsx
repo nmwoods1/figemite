@@ -48,6 +48,8 @@ export default function LiveDraftMenu({
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editValue, setEditValue] = useState('');
   const renamingRef = useRef(false);
+  // Re-entry guard for the promote/discard confirm action (see runPending).
+  const runningRef = useRef(false);
   const rootRef = useRef<HTMLDivElement>(null);
 
   const refresh = useCallback(() => {
@@ -98,6 +100,12 @@ export default function LiveDraftMenu({
 
   const runPending = async () => {
     if (!pending) return;
+    // Guard against a double-submit of a destructive confirm: `busy` disables
+    // the button, but that state update is async, so a second synchronous click
+    // (or a stray double-fire) could otherwise slip through and fire promote/
+    // discard twice — the second hitting an already-deleted draft (a 404).
+    if (runningRef.current) return;
+    runningRef.current = true;
     setBusy(true);
     setPendingError(null);
     try {
@@ -112,6 +120,7 @@ export default function LiveDraftMenu({
       setPendingError(err instanceof Error ? err.message : String(err));
     } finally {
       setBusy(false);
+      runningRef.current = false;
     }
   };
 

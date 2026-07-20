@@ -74,17 +74,18 @@ export async function handlePromoteDraft(
       ? { ...ctx.repo.read(slug, subPath), nodes: draftBoard.nodes, edges: draftBoard.edges }
       : draftBoard;
 
-    // Push into the live prod room if one is connected (so open browsers
-    // converge and the room's own debounce persists it); otherwise write disk
-    // directly. `replaceRoomContent` only carries nodes/edges — the room's
-    // persist preserves prod's on-disk boardLabel/viewport, matching `merged`.
-    const applied = ctx.yjs.replaceRoomContent(slug, subPath, {
-      nodes: merged.nodes,
-      edges: merged.edges,
-    });
-    if (!applied) {
-      persistBoard(ctx, slug, subPath, merged, 'save');
-    }
+    // Write prod to disk DIRECTLY — the durable source of truth. Prod rooms are
+    // frozen and never persist themselves (see services/yjs-ws.ts), so this is
+    // the only path that changes prod on disk. Doing it here (rather than
+    // relying on a live prod room's debounced persist) makes promotion correct
+    // regardless of whether a prod room is connected: a stale/lingering prod
+    // connection can otherwise revert an in-memory `replaceRoomContent` before
+    // any debounce fires, so the promoted content would never reach disk.
+    persistBoard(ctx, slug, subPath, merged, 'save');
+
+    // Best-effort: converge any OPEN prod browsers on the new content in memory
+    // (this only mutates the live doc; it does not — and must not — persist).
+    ctx.yjs.replaceRoomContent(slug, subPath, { nodes: merged.nodes, edges: merged.edges });
   }
 
   // 3. Replace semantics: remove prod sub-boards the draft no longer has. Each
