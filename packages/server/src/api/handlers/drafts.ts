@@ -4,6 +4,8 @@
 // POST   /api/drafts               — create a draft (copy current prod into a
 //                                    new .drafts/<id>/ and index it). Body
 //                                    `{ board, title?, createdBy? }`.
+// PATCH  /api/drafts               — rename a draft (update its title in the
+//                                    index). Body `{ board, draft, title }`.
 // DELETE /api/drafts?board=&draft= — discard a draft (delete its dir + de-index).
 //
 // A draft is a full board copy nested at boards/<slug>/.drafts/<id>/; the human-
@@ -106,6 +108,35 @@ export async function handleCreateDraft(
   writeDrafts(ctx.config.boardsRoot, slug, { drafts: [...current, meta] });
 
   sendJson(res, 200, { ok: true, draftId, draft: meta });
+}
+
+/** PATCH /api/drafts — rename a draft. Body `{ board, draft, title }`.
+ *
+ * Human-owned, like create/discard/promote — updates only the draft's title in
+ * the drafts.json index (never its content). Writes back the reconciled index
+ * so a physical-but-unindexed draft self-heals into a real entry on rename. */
+export async function handleRenameDraft(
+  ctx: RequestContext,
+  req: IncomingMessage,
+  res: ServerResponse,
+): Promise<void> {
+  const body = (await readJsonBody(req)) as { board?: unknown; draft?: unknown; title?: unknown };
+  const slug = requireSlug(body.board);
+  const draftId = requireDraftId(body.draft);
+  const title = typeof body.title === 'string' ? body.title.trim() : '';
+  if (!title) {
+    throw new ValidationError('Draft title must not be empty');
+  }
+
+  if (!ctx.repo.exists(slug, [], draftId)) {
+    throw new NotFoundError('not_found');
+  }
+
+  const drafts = reconcileDrafts(ctx, slug).map((d) => (d.id === draftId ? { ...d, title } : d));
+  writeDrafts(ctx.config.boardsRoot, slug, { drafts });
+
+  const updated = drafts.find((d) => d.id === draftId);
+  sendJson(res, 200, { ok: true, draft: updated });
 }
 
 /** DELETE /api/drafts?board=&draft= — discard a draft (dir + index entry). */

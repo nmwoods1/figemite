@@ -197,6 +197,16 @@ export async function createDraft(slug: string, title?: string): Promise<string>
   return data.draftId;
 }
 
+/** Renames a draft (updates its title in the index; content untouched). */
+export async function renameDraft(slug: string, draftId: string, title: string): Promise<void> {
+  if (READONLY) throw new ReadOnlyError('rename a draft');
+  await fetchJson('/api/drafts', {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ board: slug, draft: draftId, title }),
+  });
+}
+
 /** Discards a draft (deletes it without touching prod). */
 export async function discardDraft(slug: string, draftId: string): Promise<void> {
   if (READONLY) throw new ReadOnlyError('discard a draft');

@@ -68,6 +68,48 @@ describe('POST /api/drafts (create)', () => {
   });
 });
 
+describe('PATCH /api/drafts (rename)', () => {
+  async function rename(slug: string, draft: string, title: unknown): Promise<Response> {
+    return fetch(`${h.url}/api/drafts`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ board: slug, draft, title }),
+    });
+  }
+
+  it('updates a draft title in the index without touching its content', async () => {
+    h.ctx.repo.seedBoard('spend', 'Spend');
+    h.ctx.repo.write('spend', [], boardWith('Spend', 's1'));
+    const draftId = await createDraft('spend', 'Old name');
+
+    const res = await rename('spend', draftId, '  New name  ');
+    expect(res.status).toBe(200);
+    expect((await res.json()).draft).toMatchObject({ id: draftId, title: 'New name' });
+
+    // The listing reflects the trimmed new title; content is untouched.
+    const list = await (await fetch(`${h.url}/api/drafts?board=spend`)).json();
+    expect(list.drafts).toHaveLength(1);
+    expect(list.drafts[0]).toMatchObject({ id: draftId, title: 'New name', createdBy: 'agent' });
+    expect(h.ctx.repo.read('spend', [], draftId).nodes).toHaveLength(1);
+  });
+
+  it('400s on an empty (whitespace-only) title', async () => {
+    h.ctx.repo.seedBoard('spend', 'Spend');
+    const draftId = await createDraft('spend', 'Keep me');
+    const res = await rename('spend', draftId, '   ');
+    expect(res.status).toBe(400);
+    // Title is unchanged.
+    const list = await (await fetch(`${h.url}/api/drafts?board=spend`)).json();
+    expect(list.drafts[0]).toMatchObject({ id: draftId, title: 'Keep me' });
+  });
+
+  it('404s when the draft does not exist', async () => {
+    h.ctx.repo.seedBoard('spend', 'Spend');
+    const res = await rename('spend', 'draft-nope', 'whatever');
+    expect(res.status).toBe(404);
+  });
+});
+
 describe('GET /api/board?draft=', () => {
   it('reads the draft copy, not prod', async () => {
     h.ctx.repo.seedBoard('spend', 'Spend');

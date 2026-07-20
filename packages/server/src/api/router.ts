@@ -35,7 +35,12 @@ import {
   handleDeleteBoard,
   handleCreateSubBoard,
 } from './handlers/board.js';
-import { handleListDrafts, handleCreateDraft, handleDiscardDraft } from './handlers/drafts.js';
+import {
+  handleListDrafts,
+  handleCreateDraft,
+  handleRenameDraft,
+  handleDiscardDraft,
+} from './handlers/drafts.js';
 import { handlePromoteDraft } from './handlers/promote.js';
 import { handleAiBegin, handleAiEnd, handleAiStatus } from './handlers/ai.js';
 import { handleEvents } from './handlers/events.js';
@@ -92,6 +97,7 @@ const ROUTES: Record<string, Handler> = {
   'POST /api/create': handleCreateSubBoard,
   'GET /api/drafts': handleListDrafts,
   'POST /api/drafts': handleCreateDraft,
+  'PATCH /api/drafts': handleRenameDraft,
   'DELETE /api/drafts': handleDiscardDraft,
   'POST /api/ai/begin': handleAiBegin,
   'POST /api/ai/end': handleAiEnd,

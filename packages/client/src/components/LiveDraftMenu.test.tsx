@@ -7,6 +7,7 @@ const api = vi.hoisted(() => ({
   createDraft: vi.fn(),
   promoteDraft: vi.fn(),
   discardDraft: vi.fn(),
+  renameDraft: vi.fn(),
 }));
 vi.mock('../lib/boards-api.js', () => api);
 
@@ -17,6 +18,7 @@ beforeEach(() => {
   api.createDraft.mockReset().mockResolvedValue('d2');
   api.promoteDraft.mockReset().mockResolvedValue(undefined);
   api.discardDraft.mockReset().mockResolvedValue(undefined);
+  api.renameDraft.mockReset().mockResolvedValue(undefined);
 });
 afterEach(cleanup);
 
@@ -67,6 +69,36 @@ describe('LiveDraftMenu', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Discard draft New card limits' }));
     fireEvent.click(screen.getByRole('button', { name: 'Discard' }));
     await waitFor(() => expect(api.discardDraft).toHaveBeenCalledWith('spend', 'd1'));
+  });
+
+  it('renames a draft via the edit icon (Enter commits)', async () => {
+    render(<LiveDraftMenu slug="spend" onOpenDraft={() => {}} onExitDraft={() => {}} />);
+    fireEvent.click(screen.getByRole('button', { name: /Live/ }));
+    await waitFor(() => expect(screen.getByText('New card limits')).toBeTruthy());
+
+    fireEvent.click(screen.getByRole('button', { name: 'Rename draft New card limits' }));
+    const input = screen.getByRole('textbox', { name: 'Rename draft New card limits' });
+    fireEvent.change(input, { target: { value: 'Tighter limits' } });
+    fireEvent.keyDown(input, { key: 'Enter' });
+
+    await waitFor(() =>
+      expect(api.renameDraft).toHaveBeenCalledWith('spend', 'd1', 'Tighter limits'),
+    );
+  });
+
+  it('Escape cancels a rename without calling renameDraft', async () => {
+    render(<LiveDraftMenu slug="spend" onOpenDraft={() => {}} onExitDraft={() => {}} />);
+    fireEvent.click(screen.getByRole('button', { name: /Live/ }));
+    await waitFor(() => expect(screen.getByText('New card limits')).toBeTruthy());
+
+    fireEvent.click(screen.getByRole('button', { name: 'Rename draft New card limits' }));
+    const input = screen.getByRole('textbox', { name: 'Rename draft New card limits' });
+    fireEvent.change(input, { target: { value: 'Discarded edit' } });
+    fireEvent.keyDown(input, { key: 'Escape' });
+
+    // Back to the label; no API call.
+    expect(screen.getByText('New card limits')).toBeTruthy();
+    expect(api.renameDraft).not.toHaveBeenCalled();
   });
 
   it('clicking the Live row while in a draft exits to live', async () => {

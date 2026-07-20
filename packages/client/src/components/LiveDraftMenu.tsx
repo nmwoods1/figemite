@@ -15,6 +15,7 @@ import {
   createDraft,
   promoteDraft,
   discardDraft,
+  renameDraft,
   type DraftMeta,
 } from '../lib/boards-api.js';
 import ConfirmModal from './ConfirmModal.js';
@@ -43,6 +44,10 @@ export default function LiveDraftMenu({
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState<Pending>(null);
   const [pendingError, setPendingError] = useState<string | null>(null);
+  // Inline rename: which draft's title is being edited, and the working value.
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editValue, setEditValue] = useState('');
+  const renamingRef = useRef(false);
   const rootRef = useRef<HTMLDivElement>(null);
 
   const refresh = useCallback(() => {
@@ -107,6 +112,34 @@ export default function LiveDraftMenu({
       setPendingError(err instanceof Error ? err.message : String(err));
     } finally {
       setBusy(false);
+    }
+  };
+
+  const startEdit = (d: DraftMeta) => {
+    setError(null);
+    setEditingId(d.id);
+    setEditValue(d.title);
+  };
+  const cancelEdit = () => {
+    setEditingId(null);
+    setEditValue('');
+  };
+  const commitEdit = async (d: DraftMeta) => {
+    if (renamingRef.current) return;
+    const title = editValue.trim();
+    if (!title || title === d.title) {
+      cancelEdit();
+      return;
+    }
+    renamingRef.current = true;
+    try {
+      await renameDraft(slug, d.id, title);
+      cancelEdit();
+      refresh();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      renamingRef.current = false;
     }
   };
 
@@ -204,6 +237,7 @@ export default function LiveDraftMenu({
               <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
                 {drafts.map((d) => {
                   const isCurrent = d.id === draftId;
+                  const isEditing = editingId === d.id;
                   return (
                     <div
                       key={d.id}
@@ -216,64 +250,106 @@ export default function LiveDraftMenu({
                         borderRadius: 8,
                       }}
                     >
-                      <button
-                        onClick={() => {
-                          setOpen(false);
-                          onOpenDraft(d.id);
-                        }}
-                        style={{
-                          display: 'flex',
-                          flexDirection: 'column',
-                          alignItems: 'flex-start',
-                          flex: 1,
-                          minWidth: 0,
-                          background: 'transparent',
-                          border: 'none',
-                          cursor: 'pointer',
-                          textAlign: 'left',
-                          padding: 0,
-                        }}
-                      >
-                        <span
+                      {isEditing ? (
+                        <input
+                          autoFocus
+                          value={editValue}
+                          aria-label={`Rename draft ${d.title}`}
+                          onChange={(e) => setEditValue(e.target.value)}
+                          onClick={(e) => e.stopPropagation()}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') {
+                              e.preventDefault();
+                              void commitEdit(d);
+                            } else if (e.key === 'Escape') {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              cancelEdit();
+                            }
+                          }}
+                          onBlur={() => void commitEdit(d)}
                           style={{
+                            flex: 1,
+                            minWidth: 0,
                             fontSize: 13,
                             fontWeight: 600,
                             color: '#0f172a',
-                            maxWidth: '100%',
-                            overflow: 'hidden',
-                            textOverflow: 'ellipsis',
-                            whiteSpace: 'nowrap',
+                            padding: '4px 6px',
+                            border: '1.5px solid #6366f1',
+                            borderRadius: 6,
+                            outline: 'none',
                           }}
-                        >
-                          {d.title}
-                        </span>
-                        <span style={{ fontSize: 11, color: '#94a3b8' }}>
-                          by {d.createdBy === 'agent' ? 'an agent' : 'a person'}
-                          {isCurrent ? ' · current' : ''}
-                        </span>
-                      </button>
-                      <button
-                        aria-label={`Promote draft ${d.title} to live`}
-                        title="Promote to Live"
-                        onClick={() => {
-                          setPendingError(null);
-                          setPending({ kind: 'promote', draft: d });
-                        }}
-                        style={miniBtn}
-                      >
-                        ↑
-                      </button>
-                      <button
-                        aria-label={`Discard draft ${d.title}`}
-                        title="Discard"
-                        onClick={() => {
-                          setPendingError(null);
-                          setPending({ kind: 'discard', draft: d });
-                        }}
-                        style={{ ...miniBtn, color: '#dc2626' }}
-                      >
-                        ✕
-                      </button>
+                        />
+                      ) : (
+                        <>
+                          <button
+                            onClick={() => {
+                              setOpen(false);
+                              onOpenDraft(d.id);
+                            }}
+                            style={{
+                              display: 'flex',
+                              flexDirection: 'column',
+                              alignItems: 'flex-start',
+                              flex: 1,
+                              minWidth: 0,
+                              background: 'transparent',
+                              border: 'none',
+                              cursor: 'pointer',
+                              textAlign: 'left',
+                              padding: 0,
+                            }}
+                          >
+                            <span
+                              style={{
+                                fontSize: 13,
+                                fontWeight: 600,
+                                color: '#0f172a',
+                                maxWidth: '100%',
+                                overflow: 'hidden',
+                                textOverflow: 'ellipsis',
+                                whiteSpace: 'nowrap',
+                              }}
+                            >
+                              {d.title}
+                            </span>
+                            <span style={{ fontSize: 11, color: '#94a3b8' }}>
+                              by {d.createdBy === 'agent' ? 'an agent' : 'a person'}
+                              {isCurrent ? ' · current' : ''}
+                            </span>
+                          </button>
+                          <button
+                            aria-label={`Rename draft ${d.title}`}
+                            title="Rename"
+                            onClick={() => startEdit(d)}
+                            style={miniBtn}
+                          >
+                            ✎
+                          </button>
+                          <button
+                            aria-label={`Promote draft ${d.title} to live`}
+                            title="Promote to Live"
+                            onClick={() => {
+                              setPendingError(null);
+                              setPending({ kind: 'promote', draft: d });
+                            }}
+                            style={miniBtn}
+                          >
+                            ↑
+                          </button>
+                          <button
+                            aria-label={`Discard draft ${d.title}`}
+                            title="Discard"
+                            onClick={() => {
+                              setPendingError(null);
+                              setPending({ kind: 'discard', draft: d });
+                            }}
+                            style={{ ...miniBtn, color: '#dc2626' }}
+                          >
+                            ✕
+                          </button>
+                        </>
+                      )}
                     </div>
                   );
                 })}

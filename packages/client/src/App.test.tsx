@@ -25,6 +25,7 @@ const boardsApiMock = vi.hoisted(() => ({
   createDraft: vi.fn(),
   promoteDraft: vi.fn(),
   discardDraft: vi.fn(),
+  renameDraft: vi.fn(),
 }));
 vi.mock('./lib/boards-api.js', () => boardsApiMock);
 
@@ -87,6 +88,7 @@ describe('App view switch', () => {
     boardsApiMock.createDraft.mockReset().mockResolvedValue('newdraft');
     boardsApiMock.promoteDraft.mockReset().mockResolvedValue(undefined);
     boardsApiMock.discardDraft.mockReset().mockResolvedValue(undefined);
+    boardsApiMock.renameDraft.mockReset().mockResolvedValue(undefined);
     joinBoardRoomMock.mockReset().mockImplementation((_doc, slug: string) => fakeRoom(slug));
     setHash('');
     localStorage.clear();
