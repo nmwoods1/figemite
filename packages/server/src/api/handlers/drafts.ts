@@ -82,6 +82,13 @@ export async function handleCreateDraft(
   const createdBy = body.createdBy === 'agent' ? 'agent' : 'human';
   const rawTitle = typeof body.title === 'string' ? body.title.trim() : '';
 
+  // Default title numbers the draft by how many already exist RIGHT NOW: 0
+  // existing → "Draft #1", 2 existing → "Draft #3", etc. It's a snapshot count
+  // (computed before this draft's dir is created below), so a number can repeat
+  // after a discard — matching "based on how many other drafts there are at that
+  // moment". Physical dirs are the source of truth for what the user sees.
+  const priorDraftCount = ctx.repo.listDrafts(slug).length;
+
   // A fresh id, unique against both the index and any physical draft dir.
   const existing = new Set<string>([
     ...ctx.repo.listDrafts(slug),
@@ -100,7 +107,7 @@ export async function handleCreateDraft(
 
   const meta: DraftMeta = {
     id: draftId,
-    title: rawTitle || `Draft of ${rootBoard.boardLabel}`,
+    title: rawTitle || `Draft #${priorDraftCount + 1}`,
     createdBy,
     createdAt: new Date().toISOString(),
   };

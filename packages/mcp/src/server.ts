@@ -354,7 +354,7 @@ export function createFigemiteMcpServer(options: FigemiteMcpServerOptions = {}):
         title: z
           .string()
           .optional()
-          .describe('Human-readable title for the draft; defaults to "Draft of <board>"'),
+          .describe('Human-readable title for the draft; defaults to "Draft #N" (N = current draft count + 1)'),
       },
     },
     async (input) => jsonResult(await createDraft(activeHttpUrl, input.slug, input.title)),

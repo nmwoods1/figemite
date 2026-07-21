@@ -66,6 +66,37 @@ describe('POST /api/drafts (create)', () => {
     });
     expect(res.status).toBe(404);
   });
+
+  it('defaults an untitled draft to "Draft #N" numbered by the current draft count', async () => {
+    h.ctx.repo.seedBoard('spend', 'Spend');
+
+    // Create a draft with the given body; return the parsed response.
+    const create = async (body: Record<string, unknown>) => {
+      const res = await fetch(`${h.url}/api/drafts`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ board: 'spend', ...body }),
+      });
+      expect(res.status).toBe(200);
+      return (await res.json()) as { draftId: string; draft: { title: string } };
+    };
+
+    const first = await create({ createdBy: 'human' });
+    expect(first.draft.title).toBe('Draft #1');
+
+    const second = await create({ createdBy: 'human' });
+    expect(second.draft.title).toBe('Draft #2');
+
+    // A provided title still wins over the default.
+    const named = await create({ title: 'My own name' });
+    expect(named.draft.title).toBe('My own name');
+
+    // The number reflects the count AT THAT MOMENT: discard one, and the next
+    // untitled draft reuses that number (2 drafts remain → "Draft #3").
+    await fetch(`${h.url}/api/drafts?board=spend&draft=${second.draftId}`, { method: 'DELETE' });
+    const afterDiscard = await create({ createdBy: 'human' });
+    expect(afterDiscard.draft.title).toBe('Draft #3');
+  });
 });
 
 describe('PATCH /api/drafts (rename)', () => {
