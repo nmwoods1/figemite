@@ -174,12 +174,22 @@ describe('joinBoardRoom', () => {
     room.destroy();
   });
 
-  it('attaches an IndexeddbPersistence for the same room/doc (offline persistence)', () => {
+  it('attaches an IndexeddbPersistence for a DRAFT room (offline cache for editing)', () => {
+    const doc = new Y.Doc();
+    const room = joinBoardRoom(doc, 'spend', [], 'd1');
+    expect(idbInstances).toHaveLength(1);
+    expect(idbInstances[0]!.room).toBe('spend~d1');
+    expect(idbInstances[0]!.doc).toBe(doc);
+    room.destroy();
+  });
+
+  it('does NOT attach IndexeddbPersistence for the live (prod) room', () => {
+    // The live board is read-only + server-authoritative: a local cache would
+    // resurrect stale pre-promote content after a promote. Prod always takes
+    // the server's disk-seeded content.
     const doc = new Y.Doc();
     const room = joinBoardRoom(doc, 'spend', []);
-    expect(idbInstances).toHaveLength(1);
-    expect(idbInstances[0]!.room).toBe('spend');
-    expect(idbInstances[0]!.doc).toBe(doc);
+    expect(idbInstances).toHaveLength(0);
     room.destroy();
   });
 
@@ -200,9 +210,9 @@ describe('joinBoardRoom', () => {
       expect(providerInstance.destroy).toHaveBeenCalled();
     });
 
-    it('destroys the indexeddb persistence', () => {
+    it('destroys the indexeddb persistence (draft room)', () => {
       const doc = new Y.Doc();
-      const room = joinBoardRoom(doc, 'spend', []);
+      const room = joinBoardRoom(doc, 'spend', [], 'd1');
       const idbInstance = idbInstances[0]!;
       room.destroy();
       expect(idbInstance.destroy).toHaveBeenCalled();
