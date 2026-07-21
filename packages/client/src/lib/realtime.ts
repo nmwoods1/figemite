@@ -63,12 +63,27 @@ function wsBaseUrl(): string {
  * presence, a later task) is dropped on the floor and no remote peer ever
  * sees this client. This call MUST happen before any such field-set.
  */
-export function joinBoardRoom(doc: Y.Doc, slug: string, path: string[]): BoardRoom {
-  const roomName = roomNameFor(slug, path);
+export function joinBoardRoom(
+  doc: Y.Doc,
+  slug: string,
+  path: string[],
+  draftId?: string,
+): BoardRoom {
+  const roomName = roomNameFor(slug, path, draftId);
   const wsUrl = wsBaseUrl();
 
   const provider = new WebsocketProvider(wsUrl, roomName, doc, { connect: true });
-  const idb = new IndexeddbPersistence(roomName, doc);
+
+  // Offline cache — DRAFT rooms only. The live ("prod") board is read-only and
+  // server-authoritative (the server seeds each prod room from disk, and prod
+  // content changes only via promote — see @figemite/server's promote handler +
+  // yjs-ws). Caching prod locally is actively harmful: after a promote changes
+  // prod on disk, a client rejoining Live would rehydrate its STALE IndexedDB
+  // copy and sync it back into the freshly-seeded room, reverting the live view
+  // to pre-promote content (the disk stays correct, so it looked like "promote
+  // didn't update live"). Drafts are where the client actually edits, so they
+  // keep the offline cache.
+  const idb = draftId ? new IndexeddbPersistence(roomName, doc) : null;
 
   // CRITICAL: see this function's doc comment above.
   provider.awareness.setLocalState({ user: getLocalUser() });
@@ -97,7 +112,7 @@ export function joinBoardRoom(doc: Y.Doc, slug: string, path: string[]): BoardRo
       syncListeners.clear();
       provider.awareness.setLocalState(null);
       provider.destroy();
-      idb.destroy();
+      idb?.destroy();
       // Deliberately does NOT call `doc.destroy()` — the doc is caller-owned
       // (the BoardStore constructed it and is responsible for its lifecycle).
     },

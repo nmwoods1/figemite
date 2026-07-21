@@ -22,7 +22,7 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import { BoardPeer } from './peer.js';
 import { PeerDiscovery, buildDirectUrls, type PeerInfo } from './discovery.js';
-import { listBoards, createBoard } from './board-http.js';
+import { listBoards, createBoard, listDrafts, createDraft } from './board-http.js';
 import {
   getBoard,
   getNode,
@@ -168,6 +168,21 @@ export function createFigemiteMcpServer(options: FigemiteMcpServerOptions = {}):
     return peer;
   }
 
+  // Every board-CONTENT mutation goes through here: the live ("prod") board is
+  // read-only, so editing requires a connection to a DRAFT. Reading and presence
+  // (get_*, move_cursor, set_editing, set_viewport) stay on assertConnected().
+  function assertEditable(): BoardPeer {
+    const p = assertConnected();
+    if (!p.draftId) {
+      throw new Error(
+        'This is the live board and is read-only. Create a draft with create_draft, ' +
+          'then connect_board with that draft (the `draft` param) to make changes. ' +
+          'A human approves the draft to update the live board.',
+      );
+    }
+    return p;
+  }
+
   const server = new McpServer({ name: 'figemite', version: '0.1.0' });
 
   // ── connect_board / disconnect ───────────────────────────────────────────
@@ -180,11 +195,25 @@ export function createFigemiteMcpServer(options: FigemiteMcpServerOptions = {}):
         'Call this first in every session. Returns the current board snapshot.',
         'The AI gets a visible cursor and "AI" name pill in everyone\'s browser.',
         '',
-        'To connect to your own local server, just pass `slug`.',
+        'IMPORTANT: the live ("prod") board is READ-ONLY. You can connect to it',
+        'to read/observe, but every content edit (add/move/update/delete nodes',
+        'and edges) REQUIRES a draft — pass `draft` (from create_draft /',
+        'list_drafts) to edit. A human reviews and approves the draft to update',
+        'the live board; only a human can approve — there is deliberately no',
+        'tool for that.',
+        '',
+        'To connect to your own local server, just pass `slug` (and `draft`).',
         "To connect to someone else's board, pass `slug` AND `address` (their mDNS peer name, IP, or hostname).",
       ].join('\n'),
       inputSchema: {
         slug: z.string().describe('Board slug, e.g. "spend"'),
+        draft: z
+          .string()
+          .optional()
+          .describe(
+            'Draft id to edit (from create_draft / list_drafts). REQUIRED to make any ' +
+              'content edit — the live board is read-only. Omit only to read/observe prod.',
+          ),
         address: z
           .string()
           .optional()
@@ -216,6 +245,7 @@ export function createFigemiteMcpServer(options: FigemiteMcpServerOptions = {}):
         wsUrl,
         slug: input.slug,
         path: input.path ?? [],
+        draftId: input.draft,
         name: input.name ?? defaultName,
         agentClient: input.agentClient ?? defaultAgentClient,
       });
@@ -286,6 +316,48 @@ export function createFigemiteMcpServer(options: FigemiteMcpServerOptions = {}):
       },
     },
     async (input) => jsonResult(await createBoard(activeHttpUrl, input.slug, input.label)),
+  );
+
+  // ── Drafts (HTTP; no connection required) ─────────────────────────────────
+  //
+  // Agents work in DRAFTS so a human can review + approve changes before they
+  // overwrite the live board. There is deliberately NO promote/approve tool —
+  // promotion is a human-only browser action, exactly as comments/tags stay
+  // human-owned by having no MCP tools (see AGENTS.md).
+
+  server.registerTool(
+    'list_drafts',
+    {
+      description: [
+        'List the drafts of a board (id, title, who created it, when).',
+        'Use a draft id with create_draft/connect_board to edit inside that draft.',
+      ].join(' '),
+      inputSchema: {
+        slug: z.string().describe('Board slug, e.g. "spend"'),
+      },
+    },
+    async (input) => jsonResult(await listDrafts(activeHttpUrl, input.slug)),
+  );
+
+  server.registerTool(
+    'create_draft',
+    {
+      description: [
+        'Create a new draft of a board — a full copy you can edit safely without',
+        'touching the live ("prod") board. Returns the new draft id; pass it as',
+        '`draft` to connect_board to start editing inside the draft. A human',
+        'reviews the draft and approves it (in their browser) to overwrite prod;',
+        'you cannot approve it yourself.',
+      ].join(' '),
+      inputSchema: {
+        slug: z.string().describe('Board slug to draft, e.g. "spend"'),
+        title: z
+          .string()
+          .optional()
+          .describe('Human-readable title for the draft; defaults to "Draft #N" (N = current draft count + 1)'),
+      },
+    },
+    async (input) => jsonResult(await createDraft(activeHttpUrl, input.slug, input.title)),
   );
 
   // ── Reads (require connection) ───────────────────────────────────────────
@@ -431,7 +503,7 @@ export function createFigemiteMcpServer(options: FigemiteMcpServerOptions = {}):
       },
     },
     async (input) => {
-      const p = assertConnected();
+      const p = assertEditable();
       await leadCursor(p, centreOf(input.pos, input.size));
       const id = addNode(p, input);
       return jsonResult({ id });
@@ -460,7 +532,7 @@ export function createFigemiteMcpServer(options: FigemiteMcpServerOptions = {}):
       },
     },
     async (input) => {
-      const p = assertConnected();
+      const p = assertEditable();
       await sweepCursorAlong(p, input.points);
       const id = addDrawing(p, input);
       return jsonResult({ id });
@@ -478,7 +550,7 @@ export function createFigemiteMcpServer(options: FigemiteMcpServerOptions = {}):
       },
     },
     async (input) => {
-      const p = assertConnected();
+      const p = assertEditable();
       const existing = getNode(p, input.id);
       if (existing) {
         const patch = input.patch as { pos?: XY; size?: unknown };
@@ -501,7 +573,7 @@ export function createFigemiteMcpServer(options: FigemiteMcpServerOptions = {}):
       },
     },
     async (input) => {
-      const p = assertConnected();
+      const p = assertEditable();
       const existing = getNode(p, input.id);
       await leadCursor(
         p,
@@ -519,7 +591,7 @@ export function createFigemiteMcpServer(options: FigemiteMcpServerOptions = {}):
       inputSchema: { id: z.string().describe('Node id to delete') },
     },
     async (input) => {
-      const p = assertConnected();
+      const p = assertEditable();
       const doomed = getNode(p, input.id);
       if (doomed) await leadCursor(p, nodeCentre(doomed));
       deleteNode(p, input.id);
@@ -542,7 +614,7 @@ export function createFigemiteMcpServer(options: FigemiteMcpServerOptions = {}):
       },
     },
     async (input) => {
-      const p = assertConnected();
+      const p = assertEditable();
       const node = getNode(p, input.id);
       if (node) await leadCursor(p, nodeCentre(node));
       setNodeText(p, input.id, input.text);
@@ -564,7 +636,7 @@ export function createFigemiteMcpServer(options: FigemiteMcpServerOptions = {}):
       },
     },
     async (input) => {
-      const p = assertConnected();
+      const p = assertEditable();
       const node = getNode(p, input.id);
       if (node) await leadCursor(p, nodeCentre(node));
       setDescription(p, input.id, input.description);
@@ -592,7 +664,7 @@ export function createFigemiteMcpServer(options: FigemiteMcpServerOptions = {}):
       },
     },
     async (input) => {
-      const p = assertConnected();
+      const p = assertEditable();
       // Trace source -> target so the AI looks like it's "drawing" the
       // connection, not teleporting to dead space between the two nodes.
       const a = getNode(p, input.source);
@@ -620,7 +692,7 @@ export function createFigemiteMcpServer(options: FigemiteMcpServerOptions = {}):
       },
     },
     async (input) => {
-      const p = assertConnected();
+      const p = assertEditable();
       const existingEdge = getBoard(p).edges.find((e) => e.id === input.id);
       if (existingEdge) {
         await leadCursor(p, edgeMidpoint(p, existingEdge.source, existingEdge.target));
@@ -637,7 +709,7 @@ export function createFigemiteMcpServer(options: FigemiteMcpServerOptions = {}):
       inputSchema: { id: z.string().describe('Edge id to delete') },
     },
     async (input) => {
-      const p = assertConnected();
+      const p = assertEditable();
       const doomedEdge = getBoard(p).edges.find((e) => e.id === input.id);
       if (doomedEdge) await leadCursor(p, edgeMidpoint(p, doomedEdge.source, doomedEdge.target));
       deleteEdge(p, input.id);

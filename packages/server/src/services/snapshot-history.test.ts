@@ -266,6 +266,14 @@ describe('thinSnapshots', () => {
     expect(del).not.toContainEqual(expect.objectContaining({ id: 'preai-1' }));
   });
 
+  it('promote snapshots are boundaries too: never thinned in an old, collapsed bucket', () => {
+    const collapsedVictim = meta('victim', 46, 'save');
+    const survivorSameBucket = meta('promote-1', 50, 'promote'); // older, but a boundary
+    const { keep, delete: del } = thinSnapshots([collapsedVictim, survivorSameBucket], NOW);
+    expect(keep.some((s) => s.id === 'promote-1')).toBe(true);
+    expect(del).not.toContainEqual(expect.objectContaining({ id: 'promote-1' }));
+  });
+
   it('ai snapshots always survive thinning, even when several share a bucket with a non-AI snapshot', () => {
     // Two 'ai' snapshots and one 'save' snapshot all in the same old bucket.
     // Both ai snapshots must survive; the save snapshot (not newest) is

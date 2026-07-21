@@ -36,11 +36,44 @@ or `dashed` line style and an optional label.
 content never touches them. There are no MCP tools for comments or tags —
 this is enforced by omission, not just convention. Don't add any.
 
+**Approving a draft is human-owned in the same way.** An agent can create and
+edit drafts, but promoting one to overwrite prod is a browser-only action with
+no MCP tool. Don't add one.
+
+## Work in a draft, not on prod
+
+A board's live `board.json` is "prod", and **prod is read-only** — for humans
+and agents alike. You cannot edit the live board: every content-mutating tool
+(`add_node`, `move_node`, `update_node`, `delete_node`, edges, drawings, …)
+requires a connection to a **draft** and errors on a prod connection. So **work
+in a draft**: a full, editable copy of the board stored at
+`boards/<slug>/.drafts/<draftId>/`. You edit the draft live (same collaboration
+loop as any board); a **human** later reviews it and, in their browser,
+**approves** it to overwrite prod. (Comments and annotations are the only
+changes allowed on the live board.)
+
+The default workflow:
+
+1. **Make (or find) a draft** — `create_draft` with the board slug returns a new
+   `draftId` (a copy of current prod); `list_drafts` lists existing ones.
+2. **Connect to the draft** — `connect_board` with `slug` **and** `draft:
+   <draftId>`. Your edits now land in the draft, never prod.
+3. **A human approves** — only a person can promote a draft to prod, from their
+   browser. **There is deliberately no `promote`/`approve` tool** — the same way
+   comments and tags stay human-owned by having no tools (see below). Don't ask
+   for one; it won't be added.
+
+You *can* still `connect_board` to prod directly (no `draft`) — but only to
+**read/observe** it (get the snapshot, move your cursor). Any content edit on a
+prod connection is rejected with a "create a draft" error. To change anything,
+connect with a `draft`.
+
 ## The collaboration loop
 
-1. **Connect** — call `connect_board` with a board slug. This joins the
-   board as a real multiplayer peer: you get a visible cursor and an "AI"
-   name pill in every connected browser, exactly like a human collaborator.
+1. **Connect** — call `connect_board` with a board slug (and, preferably, a
+   `draft` id — see above). This joins the board/draft as a real multiplayer
+   peer: you get a visible cursor and an "AI" name pill in every connected
+   browser, exactly like a human collaborator.
 2. **Read** — inspect current state with `get_board` / `get_node` /
    `list_nodes` before deciding what to change.
 3. **Edit via ops** — call the node/edge tools below. Each call is a real
@@ -49,7 +82,8 @@ this is enforced by omission, not just convention. Don't add any.
 4. **Your edits sync live and persist** — every connected human sees your
    change immediately (with a small cursor-lead delay so it reads as
    deliberate, not a teleporting mutation), and the server debounces a
-   writeback to `board.json` on disk. There is no separate "save" step.
+   writeback to `board.json` on disk (or the draft's copy). There is no
+   separate "save" step.
 5. **Disconnect** when done, or just let the session end — `disconnect`
    removes your presence cleanly, but the server also auto-ends stale AI
    sessions on its own.
@@ -60,15 +94,21 @@ this is enforced by omission, not just convention. Don't add any.
 
 | Tool            | Purpose                                                                                     |
 | --------------- | ------------------------------------------------------------------------------------------- |
-| `connect_board` | Connect to a board as a multiplayer AI peer; call this first. Returns the current snapshot. |
+| `connect_board` | Connect to a board (or a draft, via `draft`) as a multiplayer AI peer; call this first. Returns the current snapshot. |
 | `disconnect`    | Disconnect from the current board and clear this peer's presence.                           |
 
-### Board management (HTTP, no connection required)
+### Board & draft management (HTTP, no connection required)
 
 | Tool           | Purpose                                                                                 |
 | -------------- | --------------------------------------------------------------------------------------- |
 | `list_boards`  | List every board on the targeted server (slug, label, tags, last-modified, sub-boards). |
 | `create_board` | Create a new, empty board by slug (and optional label).                                 |
+| `list_drafts`  | List a board's drafts (id, title, who created it, when).                                 |
+| `create_draft` | Create a new draft (a copy) of a board; returns its `draftId` to pass to `connect_board`. |
+
+**There is deliberately no promote/approve tool.** Approving a draft to
+overwrite prod is a human-only browser action — enforced, like comments and
+tags, by omission (see below).
 
 ### Read
 

@@ -20,6 +20,12 @@ const boardsApiMock = vi.hoisted(() => ({
   // components/CommentLayer.test.tsx).
   fetchComments: vi.fn(),
   saveComments: vi.fn(),
+  // The breadcrumb's LiveDraftMenu (dev mode) lists drafts on every board route.
+  listDrafts: vi.fn(),
+  createDraft: vi.fn(),
+  promoteDraft: vi.fn(),
+  discardDraft: vi.fn(),
+  renameDraft: vi.fn(),
 }));
 vi.mock('./lib/boards-api.js', () => boardsApiMock);
 
@@ -78,6 +84,11 @@ describe('App view switch', () => {
     boardsApiMock.deleteSubBoard.mockReset().mockResolvedValue(undefined);
     boardsApiMock.fetchComments.mockReset().mockResolvedValue({ comments: [] });
     boardsApiMock.saveComments.mockReset().mockResolvedValue(undefined);
+    boardsApiMock.listDrafts.mockReset().mockResolvedValue([]);
+    boardsApiMock.createDraft.mockReset().mockResolvedValue('newdraft');
+    boardsApiMock.promoteDraft.mockReset().mockResolvedValue(undefined);
+    boardsApiMock.discardDraft.mockReset().mockResolvedValue(undefined);
+    boardsApiMock.renameDraft.mockReset().mockResolvedValue(undefined);
     joinBoardRoomMock.mockReset().mockImplementation((_doc, slug: string) => fakeRoom(slug));
     setHash('');
     localStorage.clear();
@@ -144,6 +155,12 @@ describe('App view switch', () => {
     expect(screen.queryByText(/coming in phase 3/i)).not.toBeInTheDocument();
   });
 
+  it('renders the Live pill in the breadcrumb on a board route', async () => {
+    setHash('#/spend');
+    render(<App />);
+    await waitFor(() => expect(screen.getByRole('button', { name: /^Live/ })).toBeInTheDocument());
+  });
+
   // P5-T29: the editable board route joins the realtime room for the routed
   // slug/path — this is the whole point of the board route wiring (App.tsx
   // fetches the BoardFile for metadata/existence, then BoardCanvas's store
@@ -195,12 +212,23 @@ describe('App view switch', () => {
   it('renders sub-board path segments in the breadcrumb for a nested board route', async () => {
     setHash('#/spend/nodeA');
     render(<App />);
-    await waitFor(() => expect(boardsApiMock.getBoard).toHaveBeenCalledWith('spend', ['nodeA']));
+    await waitFor(() =>
+      expect(boardsApiMock.getBoard).toHaveBeenCalledWith('spend', ['nodeA'], undefined),
+    );
     await waitFor(() => expect(document.querySelector('.react-flow')).toBeInTheDocument());
   });
 
-  it('shows a delete-sub-board affordance on a nested board route in dev mode', async () => {
+  it('hides the delete-sub-board affordance on a LIVE nested board route (content-locked)', async () => {
     setHash('#/spend/nodeA');
+    render(<App />);
+    await waitFor(() => expect(document.querySelector('.react-flow')).toBeInTheDocument());
+    // The live board is read-only for content — deleting a sub-board is a
+    // draft-only edit, so the affordance is absent here.
+    expect(screen.queryByRole('button', { name: /delete sub-board/i })).not.toBeInTheDocument();
+  });
+
+  it('shows a delete-sub-board affordance inside a DRAFT nested board route', async () => {
+    setHash('#/d/spend/draft1/nodeA');
     render(<App />);
     await waitFor(() => expect(document.querySelector('.react-flow')).toBeInTheDocument());
     expect(screen.getByRole('button', { name: /delete sub-board/i })).toBeInTheDocument();

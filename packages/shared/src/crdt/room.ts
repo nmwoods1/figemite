@@ -32,11 +32,20 @@ export interface AwarenessState {
 }
 
 /**
- * The Yjs room name for a board (or sub-board). The root board is just its
- * `slug`; a sub-board appends its dot-joined path (`slug.NodeA.NodeB`). The id
- * grammar (see model/schema.ts `ID_GRAMMAR`) guarantees no segment contains a
- * `.`, so this encoding is unambiguous.
+ * The Yjs room name for a board (or sub-board), optionally scoped to a DRAFT.
+ * The root board is just its `slug`; a sub-board appends its dot-joined path
+ * (`slug.NodeA.NodeB`). The id grammar (see model/schema.ts `ID_GRAMMAR`)
+ * guarantees no segment contains a `.`, so the dot encoding is unambiguous.
+ *
+ * A draft scopes the room to a distinct persistence target
+ * (`boards/<slug>/.drafts/<draftId>/…`) by inserting a `~<draftId>` marker
+ * right after the slug: `slug~<draftId>` for a draft's root, or
+ * `slug~<draftId>.NodeA.NodeB` for a draft sub-board. `~` is outside the id
+ * grammar `[A-Za-z0-9_-]+` (and is URL-unreserved), so it is an unambiguous
+ * second delimiter that `parseRoomName` can split on before the dots. Omitting
+ * `draftId` yields exactly the legacy prod room name — fully backward-compatible.
  */
-export function roomNameFor(slug: string, path: string[]): string {
-  return path.length > 0 ? `${slug}.${path.join('.')}` : slug;
+export function roomNameFor(slug: string, path: string[], draftId?: string): string {
+  const head = draftId ? `${slug}~${draftId}` : slug;
+  return path.length > 0 ? `${head}.${path.join('.')}` : head;
 }

@@ -122,7 +122,15 @@ import { WebSocketServer } from 'ws';
 // @ts-expect-error -- untyped CJS subpath export, see module doc above
 import { setupWSConnection, setPersistence } from 'y-websocket/bin/utils';
 import * as Y from 'yjs';
-import { FORMAT_VERSION, getSnapshot, loadBoardIntoDoc, type BoardFile } from '@figemite/shared';
+import {
+  FORMAT_VERSION,
+  getSnapshot,
+  loadBoardIntoDoc,
+  roomNameFor,
+  type BoardEdge,
+  type BoardFile,
+  type BoardNode,
+} from '@figemite/shared';
 import type { BoardRepository } from '../repository/board-repo.js';
 import type { SnapshotHistoryService } from './snapshot-history.js';
 import { parseRoomName } from './room-name.js';
@@ -138,7 +146,7 @@ export interface YjsWebsocketServiceOptions {
   /** Takes a `'save'` snapshot after each debounced persist. */
   history: SnapshotHistoryService;
   /** The file-watcher's self-write suppression hook — called immediately before `repo.write`. */
-  suppress: (slug: string, subPath: string[]) => void;
+  suppress: (slug: string, subPath: string[], draftId?: string) => void;
   /** Debounce window (ms) between a doc update and the write-back to disk. Defaults to 1000. */
   debounceMs?: number;
 }
@@ -165,6 +173,8 @@ export function roomFromUpgradeUrl(url: string | undefined | null): string | nul
 
 /** Per-room bookkeeping for the debounced persist-on-update hook. */
 interface RoomPersistState {
+  /** The live Y.Doc for this room — used by `replaceRoomContent` to converge peers. */
+  doc: Y.Doc;
   timer: ReturnType<typeof setTimeout> | null;
   /** True once this doc has at least one update pending a flush. */
   dirty: boolean;
@@ -177,7 +187,7 @@ export class YjsWebsocketService {
   private httpServer: http.Server | null = null;
   private readonly repo: BoardRepository | undefined;
   private readonly history: SnapshotHistoryService | undefined;
-  private readonly suppress: ((slug: string, subPath: string[]) => void) | undefined;
+  private readonly suppress: ((slug: string, subPath: string[], draftId?: string) => void) | undefined;
   private readonly debounceMs: number;
   private readonly rooms = new Map<string, RoomPersistState>();
 
@@ -226,13 +236,13 @@ export class YjsWebsocketService {
    * caller) gets the same safe treatment rather than throwing.
    */
   private bindState(docName: string, doc: Y.Doc): void {
-    let parsed: { slug: string; subPath: string[] };
+    let parsed: { slug: string; subPath: string[]; draftId?: string };
     try {
       parsed = parseRoomName(docName);
     } catch {
       return; // invalid room name — do not touch disk, do not arm persistence
     }
-    const { slug, subPath } = parsed;
+    const { slug, subPath, draftId } = parsed;
 
     // Guard against double-seeding: if the doc already has content (e.g. a
     // peer's sync step landed before this ran — bindState is synchronous
@@ -242,9 +252,9 @@ export class YjsWebsocketService {
     const snapshot = getSnapshot(doc);
     const alreadyHasContent = snapshot.nodes.length > 0 || snapshot.edges.length > 0;
 
-    if (!alreadyHasContent && this.repo!.exists(slug, subPath)) {
+    if (!alreadyHasContent && this.repo!.exists(slug, subPath, draftId)) {
       try {
-        const board = this.repo!.read(slug, subPath);
+        const board = this.repo!.read(slug, subPath, draftId);
         loadBoardIntoDoc(doc, { nodes: board.nodes, edges: board.edges });
       } catch {
         // Corrupt/invalid on-disk file — leave the doc empty rather than
@@ -256,14 +266,21 @@ export class YjsWebsocketService {
     // No file on disk (or already seeded) — leave the doc as-is (empty for a
     // brand-new board).
 
-    this.armPersist(docName, doc, slug, subPath);
+    this.armPersist(docName, doc, slug, subPath, draftId);
   }
 
   // ── Persist-on-update (debounced) ───────────────────────────────────────────
 
   /** Registers the debounced `on('update')` writeback listener for one doc's lifetime. */
-  private armPersist(docName: string, doc: Y.Doc, slug: string, subPath: string[]): void {
+  private armPersist(
+    docName: string,
+    doc: Y.Doc,
+    slug: string,
+    subPath: string[],
+    draftId?: string,
+  ): void {
     const state: RoomPersistState = {
+      doc,
       timer: null,
       dirty: false,
       flush: () => {
@@ -273,12 +290,22 @@ export class YjsWebsocketService {
         }
         if (!state.dirty) return;
         state.dirty = false;
-        this.persistNow(doc, slug, subPath);
+        this.persistNow(doc, slug, subPath, draftId);
       },
     };
     this.rooms.set(docName, state);
 
     doc.on('update', () => {
+      // The live (prod) board is FROZEN: a prod room never persists itself,
+      // whatever the update's origin. Prod content on disk changes ONLY via the
+      // promote handler's direct `persistBoard` write (see api/handlers/
+      // promote.ts). A peer's edit still syncs live to other peers, but is never
+      // written to disk. Persisting from the room (even a promote's own
+      // `replaceRoomContent` update) is unsafe: a stale/lingering prod
+      // connection can revert the in-memory doc before the debounce fires, so
+      // the room is not a reliable disk-writer for prod. Draft rooms persist
+      // normally — that is where real editing happens.
+      if (draftId === undefined) return;
       state.dirty = true;
       if (state.timer) clearTimeout(state.timer);
       state.timer = setTimeout(() => state.flush(), this.debounceMs);
@@ -294,13 +321,13 @@ export class YjsWebsocketService {
    * caller to propagate a rejection to, and a transient write failure
    * shouldn't crash the process — the next debounced update will retry.
    */
-  private persistNow(doc: Y.Doc, slug: string, subPath: string[]): void {
+  private persistNow(doc: Y.Doc, slug: string, subPath: string[], draftId?: string): void {
     try {
       let boardLabel = '';
       let viewport = { x: 0, y: 0, zoom: 1 };
-      if (this.repo!.exists(slug, subPath)) {
+      if (this.repo!.exists(slug, subPath, draftId)) {
         try {
-          const existing = this.repo!.read(slug, subPath);
+          const existing = this.repo!.read(slug, subPath, draftId);
           boardLabel = existing.boardLabel;
           viewport = existing.viewport;
         } catch {
@@ -319,12 +346,40 @@ export class YjsWebsocketService {
         edges,
       };
 
-      this.suppress!(slug, subPath);
-      this.repo!.write(slug, subPath, board);
-      this.history!.snapshot(slug, subPath, 'save');
+      this.suppress!(slug, subPath, draftId);
+      this.repo!.write(slug, subPath, board, draftId);
+      this.history!.snapshot(slug, subPath, 'save', draftId);
     } catch (err) {
-      console.error(`YjsWebsocketService: failed to persist room (slug=${slug})`, err);
+      console.error(`YjsWebsocketService: failed to persist room (slug=${slug} draft=${draftId})`, err);
     }
+  }
+
+  /**
+   * Replace the content of a live room's doc so all connected peers converge on
+   * `snapshot`. Used by draft PROMOTION to push the approved draft content into
+   * the prod room (`draftId` omitted): a bare `repo.write` to prod would be
+   * silently clobbered by the live prod doc's next debounced persist and would
+   * never reach open browsers, so we mutate the doc itself instead — the armed
+   * `on('update')` listener then debounce-persists it to disk and snapshots it.
+   *
+   * Returns `true` if a live room doc existed and was updated; `false` if no
+   * room is currently in memory for `(slug, subPath, draftId)`, in which case
+   * the caller must persist to disk directly (there are no peers to converge).
+   */
+  replaceRoomContent(
+    slug: string,
+    subPath: string[],
+    snapshot: { nodes: BoardNode[]; edges: BoardEdge[] },
+    draftId?: string,
+  ): boolean {
+    const docName = roomNameFor(slug, subPath, draftId);
+    const state = this.rooms.get(docName);
+    if (!state) return false;
+    // Clears + reloads the three CRDT maps in one transaction (LOCAL_ORIGIN),
+    // which fires the doc's `on('update')` → debounced `persistNow` for this
+    // room, so disk + history follow automatically.
+    loadBoardIntoDoc(state.doc, snapshot);
+    return true;
   }
 
   /** Flushes a pending debounced write for `docName` immediately, if one exists. Used by `writeState` and `dispose`. */

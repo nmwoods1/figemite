@@ -249,6 +249,23 @@ describe('boards-api', () => {
       );
       expect(result).toEqual(board);
     });
+
+    it('threads a draftId as the `draft` query param (draft-scoped history)', async () => {
+      fetchMock.mockResolvedValueOnce(jsonResponse({ versions: [] }));
+      await fetchHistory('spend', ['nodeA'], 'draft-x');
+      expect(fetchMock).toHaveBeenCalledWith(
+        '/api/history?board=spend&path=nodeA&draft=draft-x',
+        undefined,
+      );
+
+      const board = makeBoardFile();
+      fetchMock.mockResolvedValueOnce(jsonResponse(board));
+      await fetchVersion('spend', [], 'abc123', 'draft-x');
+      expect(fetchMock).toHaveBeenCalledWith(
+        '/api/history/version?board=spend&id=abc123&draft=draft-x',
+        undefined,
+      );
+    });
   });
 
   // ── READONLY mode ────────────────────────────────────────────────────────

@@ -17,7 +17,7 @@ import { AiSessionManager } from '../services/ai-session.js';
 import { SseHub } from '../services/sse-hub.js';
 import { FileWatcher } from '../services/file-watcher.js';
 import type { ServerConfig } from '../config.js';
-import { createRequestHandler, type RequestContext } from './router.js';
+import { createRequestHandler, type RequestContext, type RoomContentReplacer } from './router.js';
 import { makeAiBroadcast } from './ai-broadcast.js';
 
 export interface TestHarness {
@@ -36,6 +36,13 @@ export interface TestHarnessOptions {
   autoEndMs?: number;
   /** SSE heartbeat interval; long by default so heartbeats don't interleave with assertions. */
   heartbeatMs?: number;
+  /**
+   * Live-room content replacer for draft promotion. Defaults to a stub that
+   * reports "no live room" (returns false), so `POST /api/board/promote` falls
+   * back to a direct disk write — the right behaviour for HTTP-only tests with
+   * no Yjs relay running. Override to assert live-room convergence.
+   */
+  yjs?: RoomContentReplacer;
 }
 
 /** Builds a fresh temp boards dir, wires all services, and starts listening. */
@@ -76,7 +83,8 @@ export async function startTestServer(options: TestHarnessOptions = {}): Promise
   sse.start();
   watcher.start();
 
-  const ctx: RequestContext = { repo, history, ai, sse, watcher, config };
+  const yjs: RoomContentReplacer = options.yjs ?? { replaceRoomContent: () => false };
+  const ctx: RequestContext = { repo, history, ai, sse, watcher, config, yjs };
   const server = http.createServer(createRequestHandler(ctx));
 
   await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));

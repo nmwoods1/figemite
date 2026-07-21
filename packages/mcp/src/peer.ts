@@ -43,6 +43,8 @@ export interface BoardPeerOptions {
   slug: string;
   /** Sub-board path, e.g. ["NodeA"] for a sub-board, [] (default) for root. */
   path?: string[];
+  /** Draft id to join instead of prod — agents edit drafts, not prod (see server.ts). */
+  draftId?: string;
   /** Display name shown in other users' browsers. Defaults to "AI". */
   name?: string;
   /** Tag identifying the AI client software, e.g. "cursor", "claude-code". */
@@ -58,13 +60,15 @@ export class BoardPeer {
   readonly roomName: string;
   readonly slug: string;
   readonly path: string[];
+  readonly draftId: string | undefined;
   readonly wsUrl: string;
 
   constructor(opts: BoardPeerOptions) {
     this.slug = opts.slug;
     this.path = opts.path ?? [];
+    this.draftId = opts.draftId;
     this.wsUrl = opts.wsUrl;
-    this.roomName = roomNameFor(this.slug, this.path);
+    this.roomName = roomNameFor(this.slug, this.path, this.draftId);
 
     this.doc = new Y.Doc();
 

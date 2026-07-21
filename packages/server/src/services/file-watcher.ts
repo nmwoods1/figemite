@@ -129,9 +129,15 @@ export class FileWatcher {
     this.restartDelayMs = options.restartDelayMs ?? DEFAULT_RESTART_DELAY_MS;
   }
 
-  /** Marks `slug`/`subPath` as self-written; fs events for it are ignored for `suppressMs`. */
-  suppress(slug: string, subPath: string[]): void {
-    const key = sessionKey(slug, subPath);
+  /**
+   * Marks `slug`/`subPath` (optionally scoped to a draft) as self-written; fs
+   * events for it are ignored for `suppressMs`. Draft writes never surface as
+   * watcher events (draft files are nested and `parseWatchedPath` rejects them),
+   * so a draft-scoped suppress is a harmless no-op in practice — accepted for a
+   * consistent key with `persistBoard`/`yjs-ws`.
+   */
+  suppress(slug: string, subPath: string[], draftId?: string): void {
+    const key = sessionKey(slug, subPath, draftId);
     this.suppressedUntil.set(key, Date.now() + this.suppressMs);
   }
 

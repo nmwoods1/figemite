@@ -130,6 +130,10 @@ export interface ToolbarProps {
   selectedEdgeIds: Set<string>;
   syncStatus: SyncStatus;
   readonly: boolean;
+  /** The live board is content-frozen: only comment + annotation are allowed.
+   * Hides every node/edge creation + styling affordance, the pencil (which
+   * creates a persisted drawing node), and history (restore mutates prod). */
+  contentLocked?: boolean;
   /** Which of comment/pencil/annotation mode (if any) is currently active. */
   activeMode: ToolbarMode;
   /** Set the active mode. BoardCanvas owns the actual state and is expected
@@ -155,6 +159,7 @@ export function Toolbar({
   selectedEdgeIds,
   syncStatus,
   readonly,
+  contentLocked = false,
   activeMode,
   onSetActiveMode,
   hasAnnotations,
@@ -269,90 +274,96 @@ export function Toolbar({
       }}
       onMouseDown={(e) => e.stopPropagation()}
     >
-      {/* ── Sticky picker ─────────────────────────────────────────────── */}
-      <IconButton
-        icon={StickyNote}
-        label="Sticky note"
-        caret
-        open={openPicker === 'sticky'}
-        buttonRef={stickyBtnRef}
-        onClick={() => setOpenPicker((p) => (p === 'sticky' ? null : 'sticky'))}
-      >
-        {openPicker === 'sticky' && (
-          <StickyColorPicker
-            onPick={(color) => {
-              addNode((id, pos, order) => makeStickyNode(id, pos, color, order), 'sticky');
-              setOpenPicker(null);
-            }}
+      {/* Content-creation tools — hidden on the live board (content-locked):
+          only comment + annotation are allowed there. */}
+      {!contentLocked && (
+        <>
+          {/* ── Sticky picker ─────────────────────────────────────────────── */}
+          <IconButton
+            icon={StickyNote}
+            label="Sticky note"
+            caret
+            open={openPicker === 'sticky'}
+            buttonRef={stickyBtnRef}
+            onClick={() => setOpenPicker((p) => (p === 'sticky' ? null : 'sticky'))}
+          >
+            {openPicker === 'sticky' && (
+              <StickyColorPicker
+                onPick={(color) => {
+                  addNode((id, pos, order) => makeStickyNode(id, pos, color, order), 'sticky');
+                  setOpenPicker(null);
+                }}
+              />
+            )}
+          </IconButton>
+
+          <IconButton
+            icon={Type}
+            label="Text"
+            onClick={() => addNode((id, pos, order) => makeTextNode(id, pos, order), 'text')}
           />
-        )}
-      </IconButton>
 
-      <IconButton
-        icon={Type}
-        label="Text"
-        onClick={() => addNode((id, pos, order) => makeTextNode(id, pos, order), 'text')}
-      />
+          {/* ── Shape picker ──────────────────────────────────────────────── */}
+          <IconButton
+            icon={Shapes}
+            label="Shape"
+            caret
+            open={openPicker === 'shape'}
+            onClick={() => setOpenPicker((p) => (p === 'shape' ? null : 'shape'))}
+          >
+            {openPicker === 'shape' && (
+              <ShapePicker
+                onPick={(kind: ShapeKind) => {
+                  addNode((id, pos, order) => makeShapeNode(id, pos, order, kind), 'shape');
+                  setOpenPicker(null);
+                }}
+              />
+            )}
+          </IconButton>
 
-      {/* ── Shape picker ──────────────────────────────────────────────── */}
-      <IconButton
-        icon={Shapes}
-        label="Shape"
-        caret
-        open={openPicker === 'shape'}
-        onClick={() => setOpenPicker((p) => (p === 'shape' ? null : 'shape'))}
-      >
-        {openPicker === 'shape' && (
-          <ShapePicker
-            onPick={(kind: ShapeKind) => {
-              addNode((id, pos, order) => makeShapeNode(id, pos, order, kind), 'shape');
-              setOpenPicker(null);
-            }}
+          <IconButton
+            icon={Frame}
+            label="Frame / group"
+            onClick={() => addNode((id, pos, order) => makeFrameNode(id, pos, order), 'frame')}
           />
-        )}
-      </IconButton>
 
-      <IconButton
-        icon={Frame}
-        label="Frame / group"
-        onClick={() => addNode((id, pos, order) => makeFrameNode(id, pos, order), 'frame')}
-      />
+          {/* ── Emoji picker ──────────────────────────────────────────────── */}
+          <IconButton
+            icon={Smile}
+            label="Emoji"
+            caret
+            open={openPicker === 'emoji'}
+            onClick={() => setOpenPicker((p) => (p === 'emoji' ? null : 'emoji'))}
+          >
+            {openPicker === 'emoji' && (
+              <EmojiPicker
+                onPick={(emoji) => {
+                  addNode((id, pos, order) => makeEmojiNode(id, pos, order, emoji), 'emoji');
+                  setOpenPicker(null);
+                }}
+              />
+            )}
+          </IconButton>
 
-      {/* ── Emoji picker ──────────────────────────────────────────────── */}
-      <IconButton
-        icon={Smile}
-        label="Emoji"
-        caret
-        open={openPicker === 'emoji'}
-        onClick={() => setOpenPicker((p) => (p === 'emoji' ? null : 'emoji'))}
-      >
-        {openPicker === 'emoji' && (
-          <EmojiPicker
-            onPick={(emoji) => {
-              addNode((id, pos, order) => makeEmojiNode(id, pos, order, emoji), 'emoji');
-              setOpenPicker(null);
-            }}
-          />
-        )}
-      </IconButton>
-
-      {/* ── Icon picker ───────────────────────────────────────────────── */}
-      <IconButton
-        icon={Sparkles}
-        label="Icon"
-        caret
-        open={openPicker === 'icon'}
-        onClick={() => setOpenPicker((p) => (p === 'icon' ? null : 'icon'))}
-      >
-        {openPicker === 'icon' && (
-          <IconPicker
-            onPick={(name) => {
-              addNode((id, pos, order) => makeIconNode(id, pos, order, name), 'icon');
-              setOpenPicker(null);
-            }}
-          />
-        )}
-      </IconButton>
+          {/* ── Icon picker ───────────────────────────────────────────────── */}
+          <IconButton
+            icon={Sparkles}
+            label="Icon"
+            caret
+            open={openPicker === 'icon'}
+            onClick={() => setOpenPicker((p) => (p === 'icon' ? null : 'icon'))}
+          >
+            {openPicker === 'icon' && (
+              <IconPicker
+                onPick={(name) => {
+                  addNode((id, pos, order) => makeIconNode(id, pos, order, name), 'icon');
+                  setOpenPicker(null);
+                }}
+              />
+            )}
+          </IconButton>
+        </>
+      )}
 
       <IconButton
         icon={MessageCircle}
@@ -361,13 +372,15 @@ export function Toolbar({
         onClick={() => toggleMode('comment')}
       />
 
-      {/* ── Pencil (persisted freehand drawing) ──────────────────────────── */}
-      <IconButton
-        icon={Pencil}
-        label={activeMode === 'pencil' ? 'Exit pencil mode' : 'Pencil'}
-        active={activeMode === 'pencil'}
-        onClick={() => toggleMode('pencil')}
-      />
+      {/* ── Pencil (persisted freehand drawing) — content, so hidden on live ── */}
+      {!contentLocked && (
+        <IconButton
+          icon={Pencil}
+          label={activeMode === 'pencil' ? 'Exit pencil mode' : 'Pencil'}
+          active={activeMode === 'pencil'}
+          onClick={() => toggleMode('pencil')}
+        />
+      )}
 
       {/* ── Annotation (ephemeral discussion scribbles) ──────────────────── */}
       <IconButton
@@ -381,28 +394,37 @@ export function Toolbar({
         <IconButton icon={Trash2} label="Wipe all annotations" onClick={onWipeAnnotations} />
       )}
 
-      <Divider />
-
-      {showColorCycle && (
-        <IconButton icon={Palette} label="Cycle colour" onClick={handleCycleColor} />
-      )}
-
-      {selectionIsEdgeOnly && (
+      {/* Selection-styling + history — all mutate board content, so hidden on
+          the live board (content-locked). */}
+      {!contentLocked && (
         <>
-          <EdgeKindToggle value={selectedEdgeKind} onChange={setEdgeKindOnSelection} />
+          <Divider />
 
-          {selectedEdgeKind === 'cardinality' ? (
-            <CardinalitySelect value={selectedCardinality} onChange={setCardinalityOnSelection} />
-          ) : (
-            <ArrowSelect value={selectedArrow} onChange={setArrowOnSelection} />
+          {showColorCycle && (
+            <IconButton icon={Palette} label="Cycle colour" onClick={handleCycleColor} />
           )}
 
-          <LineStyleToggle value={selectedLineStyle} onChange={setLineStyleOnSelection} />
-        </>
-      )}
+          {selectionIsEdgeOnly && (
+            <>
+              <EdgeKindToggle value={selectedEdgeKind} onChange={setEdgeKindOnSelection} />
 
-      {onOpenHistory && (
-        <IconButton icon={History} label="Version history" onClick={onOpenHistory} />
+              {selectedEdgeKind === 'cardinality' ? (
+                <CardinalitySelect
+                  value={selectedCardinality}
+                  onChange={setCardinalityOnSelection}
+                />
+              ) : (
+                <ArrowSelect value={selectedArrow} onChange={setArrowOnSelection} />
+              )}
+
+              <LineStyleToggle value={selectedLineStyle} onChange={setLineStyleOnSelection} />
+            </>
+          )}
+
+          {onOpenHistory && (
+            <IconButton icon={History} label="Version history" onClick={onOpenHistory} />
+          )}
+        </>
       )}
 
       <Divider />

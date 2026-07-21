@@ -39,12 +39,51 @@
 // persist debounce are all asynchronous, so a single immediate read would be
 // racy by construction (same rationale as `interaction.spec.ts`'s
 // `waitForPersisted`).
-import { test, expect, type Page, type Browser, type BrowserContext } from '@playwright/test';
+import {
+  test,
+  expect,
+  type Page,
+  type Browser,
+  type BrowserContext,
+  type APIRequestContext,
+} from '@playwright/test';
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { seedSlug, BOARDS_ROOT } from './support/seed-boards.mjs';
 
 const SLUG = 'multiplayer';
+
+// ── Editing happens inside a DRAFT; presence/follow still use the live board ─
+//
+// The "board drafts + read-only live board" change made the live (prod) board
+// read-only: canvas gestures are inert and the server never persists a prod
+// room to disk (App.tsx's `contentLocked`, yjs-ws.ts's persist guard). So the
+// three tests that MUTATE the board (create / drag / type) now run inside a
+// draft — a byte-for-byte copy of prod nested at
+// `boards/<slug>/.drafts/<draftId>/` (repository/paths.ts). Both simulated
+// peers join the SAME draft room (`#/d/<slug>/<draftId>`), so their sync +
+// persistence behaviour is identical to the old prod room, just draft-scoped.
+// The presence/cursor and follow-mode tests do NOT edit content — they work on
+// the read-only live board unchanged, so they stay on it.
+
+// The current mutating test's draft id (undefined for the presence/follow
+// tests, which stay on the live board). Set at the start of each editing test.
+let currentDraftId: string | undefined;
+
+/** Creates a draft off the current prod board via the real `POST /api/drafts`
+ * (copies prod into `.drafts/<id>/` + indexes it — api/handlers/drafts.ts),
+ * returning the new draft id. Same call the "New draft" button makes. */
+async function createDraft(request: APIRequestContext): Promise<string> {
+  const res = await request.post('/api/drafts', { data: { board: SLUG } });
+  if (!res.ok()) {
+    throw new Error(`POST /api/drafts failed (${res.status()}): ${await res.text()}`);
+  }
+  const body = (await res.json()) as { draftId?: string };
+  if (!body.draftId) {
+    throw new Error(`POST /api/drafts returned no draftId: ${JSON.stringify(body)}`);
+  }
+  return body.draftId;
+}
 
 // ── Types (minimal local shape — just what this spec reads off board.json) ──
 
@@ -74,7 +113,12 @@ interface PersistedBoard {
 }
 
 function boardJsonPath(): string {
-  return path.join(BOARDS_ROOT, SLUG, 'board.json');
+  // Editing tests read the DRAFT's board.json; the live board is read-only and
+  // is never written (see module doc). `currentDraftId` is set only by the
+  // mutating tests.
+  return currentDraftId
+    ? path.join(BOARDS_ROOT, SLUG, '.drafts', currentDraftId, 'board.json')
+    : path.join(BOARDS_ROOT, SLUG, 'board.json');
 }
 
 function readBoardJson(): PersistedBoard {
@@ -114,6 +158,15 @@ async function gotoBoard(page: Page): Promise<void> {
   await expect(page.locator('.react-flow__node')).toHaveCount(1);
 }
 
+/** Like `gotoBoard`, but opens the current test's DRAFT (`#/d/<slug>/<draftId>`)
+ * — the editable route where mutations actually persist. Both peers call this
+ * with the same `currentDraftId`, so they join one shared draft room. */
+async function gotoDraftBoard(page: Page): Promise<void> {
+  await page.goto(`/#/d/${SLUG}/${currentDraftId}`);
+  await page.locator('.react-flow').waitFor({ state: 'visible' });
+  await expect(page.locator('.react-flow__node')).toHaveCount(1);
+}
+
 function nodeLocator(page: Page, id: string) {
   return page.locator(`.react-flow__node[data-id="${id}"]`);
 }
@@ -144,21 +197,25 @@ test.describe('multi-peer browser sync (Phase 5 gate)', () => {
     // Fresh on-disk board before every test — this suite mutates the shared
     // room, and tests run serially against one dev server (see module doc).
     seedSlug(SLUG);
+    // Reset per-test draft state; the editing tests set it via createDraft.
+    currentDraftId = undefined;
   });
 
   // ── A. Node creation converges A -> B, and persists ─────────────────────
 
   test('a node created in page A appears in page B and persists to board.json', async ({
     browser,
+    request,
   }) => {
+    currentDraftId = await createDraft(request);
     const contextA = await newIdentifiedContext(browser, 'Page A');
     const contextB = await newIdentifiedContext(browser, 'Page B');
     try {
       const pageA = await contextA.newPage();
       const pageB = await contextB.newPage();
 
-      await gotoBoard(pageA);
-      await gotoBoard(pageB);
+      await gotoDraftBoard(pageA);
+      await gotoDraftBoard(pageB);
 
       // Create a sticky in A via the toolbar (same flow as interaction.spec.ts).
       await pageA.getByTitle('Sticky note', { exact: true }).click();
@@ -198,15 +255,17 @@ test.describe('multi-peer browser sync (Phase 5 gate)', () => {
 
   test('dragging a node in page A moves it in page B and persists the new position', async ({
     browser,
+    request,
   }) => {
+    currentDraftId = await createDraft(request);
     const contextA = await newIdentifiedContext(browser, 'Page A');
     const contextB = await newIdentifiedContext(browser, 'Page B');
     try {
       const pageA = await contextA.newPage();
       const pageB = await contextB.newPage();
 
-      await gotoBoard(pageA);
-      await gotoBoard(pageB);
+      await gotoDraftBoard(pageA);
+      await gotoDraftBoard(pageB);
 
       const beforeBoxB = await nodeLocator(pageB, 'sticky1').boundingBox();
       expect(beforeBoxB).toBeTruthy();
@@ -253,15 +312,17 @@ test.describe('multi-peer browser sync (Phase 5 gate)', () => {
 
   test('typing text in page A appears in page B and persists to board.json', async ({
     browser,
+    request,
   }) => {
+    currentDraftId = await createDraft(request);
     const contextA = await newIdentifiedContext(browser, 'Page A');
     const contextB = await newIdentifiedContext(browser, 'Page B');
     try {
       const pageA = await contextA.newPage();
       const pageB = await contextB.newPage();
 
-      await gotoBoard(pageA);
-      await gotoBoard(pageB);
+      await gotoDraftBoard(pageA);
+      await gotoDraftBoard(pageB);
 
       const stickyA = nodeLocator(pageA, 'sticky1');
       await stickyA.dblclick();

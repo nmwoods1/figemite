@@ -149,4 +149,18 @@ describe('Breadcrumb', () => {
     );
     expect(screen.queryByTitle(/unsaved/i)).not.toBeInTheDocument();
   });
+
+  it('renders a draftControl node when provided', () => {
+    render(
+      <Breadcrumb
+        boardLabel="Spend"
+        path={[]}
+        onNavigate={vi.fn()}
+        onGoHome={vi.fn()}
+        isDirty={false}
+        draftControl={<button>Live ▾</button>}
+      />,
+    );
+    expect(screen.getByRole('button', { name: 'Live ▾' })).toBeInTheDocument();
+  });
 });

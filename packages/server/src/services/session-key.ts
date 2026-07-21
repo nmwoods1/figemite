@@ -11,7 +11,14 @@
 // phase is new (no existing on-disk or wire format depends on the legacy
 // exact string), so this is a safe simplification, not a compatibility break.
 
-/** The shared per-board/sub-board key used by AiSessionManager, SseHub, and FileWatcher. */
-export function sessionKey(slug: string, subPath: string[]): string {
-  return subPath.length ? `${slug}|${subPath.join('.')}` : slug;
+/**
+ * The shared per-board/sub-board key used by AiSessionManager, SseHub, and
+ * FileWatcher. When `draftId` is given the key is scoped to that draft
+ * (`<draftId>~<slug>[|<subPath>]`) so a draft's live-sync state (AI lock, SSE
+ * room, self-write suppression) is distinct from prod's and from other drafts'.
+ * Omitting `draftId` yields exactly the legacy prod key — backward-compatible.
+ */
+export function sessionKey(slug: string, subPath: string[], draftId?: string): string {
+  const base = subPath.length ? `${slug}|${subPath.join('.')}` : slug;
+  return draftId ? `${draftId}~${base}` : base;
 }

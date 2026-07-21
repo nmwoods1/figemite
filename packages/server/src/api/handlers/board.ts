@@ -48,6 +48,18 @@ function requireSubPath(subPath: string[]): string[] {
   return subPath;
 }
 
+/**
+ * Validates an optional draft id (from a query param or request body). Returns
+ * `undefined` when absent (= prod), or throws a 400 for a malformed value.
+ */
+function optionalDraftId(raw: unknown): string | undefined {
+  if (raw === undefined || raw === null || raw === '') return undefined;
+  if (typeof raw !== 'string' || !PathSegmentSchema.safeParse(raw).success) {
+    throw new ValidationError('Invalid draft id');
+  }
+  return raw;
+}
+
 /** GET /api/board — returns the board JSON, or 404 if missing. */
 export function handleGetBoard(
   ctx: RequestContext,
@@ -57,12 +69,13 @@ export function handleGetBoard(
   const query = getQuery(req);
   const slug = requireSlug(query);
   const subPath = requireSubPath(parsePathParam(query));
-  if (!ctx.repo.exists(slug, subPath)) {
+  const draftId = optionalDraftId(query.get('draft'));
+  if (!ctx.repo.exists(slug, subPath, draftId)) {
     throw new NotFoundError('not_found');
   }
   // `read` validates + migrates; a corrupt file throws and the router maps it
   // to 500 with a safe message.
-  const board = ctx.repo.read(slug, subPath);
+  const board = ctx.repo.read(slug, subPath, draftId);
   sendJson(res, 200, board);
 }
 
@@ -123,7 +136,12 @@ export async function handleCreateSubBoard(
   req: IncomingMessage,
   res: ServerResponse,
 ): Promise<void> {
-  const body = (await readJsonBody(req)) as { board?: unknown; path?: unknown; label?: unknown };
+  const body = (await readJsonBody(req)) as {
+    board?: unknown;
+    path?: unknown;
+    label?: unknown;
+    draft?: unknown;
+  };
   const slug = typeof body.board === 'string' ? body.board : '';
   if (!SlugSchema.safeParse(slug).success) {
     throw new ValidationError(`Invalid board: ${JSON.stringify(slug)}`);
@@ -132,8 +150,9 @@ export async function handleCreateSubBoard(
   if (segments.length === 0) {
     throw new ValidationError('path must have at least one segment');
   }
+  const draftId = optionalDraftId(body.draft);
 
-  if (ctx.repo.exists(slug, segments)) {
+  if (ctx.repo.exists(slug, segments, draftId)) {
     sendJson(res, 200, { ok: true, existed: true });
     return;
   }
@@ -142,6 +161,6 @@ export async function handleCreateSubBoard(
   const label = rawLabel || segments[segments.length - 1];
   // Route the seed through the funnel so it snapshots + suppresses like any
   // other write. `emptyBoard` produces a valid, canonical board.
-  persistBoard(ctx, slug, segments, emptyBoard(label), 'save');
+  persistBoard(ctx, slug, segments, emptyBoard(label), 'save', draftId);
   sendJson(res, 200, { ok: true, existed: false });
 }

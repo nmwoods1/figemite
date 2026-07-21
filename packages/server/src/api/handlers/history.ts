@@ -27,6 +27,16 @@ function requireSubPath(subPath: string[]): string[] {
   return subPath;
 }
 
+/** Optional draft scope from the `draft` query param (undefined = prod). */
+function optionalDraftId(query: URLSearchParams): string | undefined {
+  const draftId = query.get('draft');
+  if (draftId === null || draftId === '') return undefined;
+  if (!PathSegmentSchema.safeParse(draftId).success) {
+    throw new ValidationError('Invalid draft id');
+  }
+  return draftId;
+}
+
 /** GET /api/history — `{ versions: SnapshotMeta[] }`. */
 export function handleListHistory(
   ctx: RequestContext,
@@ -36,7 +46,8 @@ export function handleListHistory(
   const query = getQuery(req);
   const slug = requireSlug(query);
   const subPath = requireSubPath(parsePathParam(query));
-  const versions = ctx.history.list(slug, subPath);
+  const draftId = optionalDraftId(query);
+  const versions = ctx.history.list(slug, subPath, draftId);
   sendJson(res, 200, { versions });
 }
 
@@ -49,6 +60,7 @@ export function handleReadHistoryVersion(
   const query = getQuery(req);
   const slug = requireSlug(query);
   const subPath = requireSubPath(parsePathParam(query));
+  const draftId = optionalDraftId(query);
   const id = query.get('id') ?? '';
   if (!id) {
     throw new ValidationError('Missing id parameter');
@@ -61,7 +73,7 @@ export function handleReadHistoryVersion(
   // — we never echo an arbitrary fs error message back to the client.
   let raw: string;
   try {
-    raw = ctx.history.read(slug, subPath, id);
+    raw = ctx.history.read(slug, subPath, id, draftId);
   } catch (err) {
     const message = err instanceof Error ? err.message : '';
     if (/^Snapshot not found/.test(message)) {

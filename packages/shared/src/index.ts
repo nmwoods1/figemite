@@ -1,6 +1,7 @@
 export * from './model/board.js';
 export * from './model/comments.js';
 export * from './model/tags.js';
+export * from './model/drafts.js';
 export * from './model/constants.js';
 export * from './model/schema.js';
 export * from './board-io.js';

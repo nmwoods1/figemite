@@ -57,6 +57,7 @@ import {
   type Page,
   type Browser,
   type BrowserContext,
+  type APIRequestContext,
   type ConsoleMessage,
 } from '@playwright/test';
 import { readFileSync, readdirSync } from 'node:fs';
@@ -64,6 +65,41 @@ import path from 'node:path';
 import { seedSlug, BOARDS_ROOT } from './support/seed-boards.mjs';
 
 const SLUG = 'overlays-history';
+
+// ── Which features run on the live board vs. inside a draft ─────────────────
+//
+// The "board drafts + read-only live board" change made the live (prod) board
+// read-only for CONTENT edits: the toolbar shows only Comment + Annotation,
+// canvas gestures are inert, and the server never persists a prod room to disk
+// (App.tsx's `contentLocked`, yjs-ws.ts's persist guard). So:
+//   - Comments (feature 1) and Annotation (feature 3) still work on the LIVE
+//     board — comment is an allowed live tool (it writes comments.json, not
+//     board content) and annotations are ephemeral and never persist. These
+//     tests stay on the live board unchanged.
+//   - Pencil (feature 2) and History restore (feature 4) are content edits, so
+//     they now run inside a DRAFT — a byte-for-byte copy of prod nested at
+//     `boards/<slug>/.drafts/<draftId>/` (repository/paths.ts). Those two tests
+//     create a draft, navigate to `#/d/<slug>/<draftId>`, and read persistence
+//     off the DRAFT's own `board.json` / `.history/`.
+
+// Set by the pencil + history tests (the ones that edit board content);
+// undefined for the comment + annotation tests, which use the live board.
+let currentDraftId: string | undefined;
+
+/** Creates a draft off the current prod board via the real `POST /api/drafts`
+ * (copies prod into `.drafts/<id>/` + indexes it — api/handlers/drafts.ts),
+ * returning the new draft id. Same call the "New draft" button makes. */
+async function createDraft(request: APIRequestContext): Promise<string> {
+  const res = await request.post('/api/drafts', { data: { board: SLUG } });
+  if (!res.ok()) {
+    throw new Error(`POST /api/drafts failed (${res.status()}): ${await res.text()}`);
+  }
+  const body = (await res.json()) as { draftId?: string };
+  if (!body.draftId) {
+    throw new Error(`POST /api/drafts returned no draftId: ${JSON.stringify(body)}`);
+  }
+  return body.draftId;
+}
 
 // ── Types (minimal local shape — just what this spec reads off disk) ────────
 
@@ -126,9 +162,16 @@ interface CommentsFile {
 // ── Disk read helpers ────────────────────────────────────────────────────────
 
 function boardJsonPath(): string {
-  return path.join(BOARDS_ROOT, SLUG, 'board.json');
+  // Pencil + history tests read the DRAFT's board.json; the annotation test
+  // (on the live board) reads prod's. `currentDraftId` is set only by the
+  // draft-editing tests (see module doc).
+  return currentDraftId
+    ? path.join(BOARDS_ROOT, SLUG, '.drafts', currentDraftId, 'board.json')
+    : path.join(BOARDS_ROOT, SLUG, 'board.json');
 }
 function commentsJsonPath(): string {
+  // comments.json is board-level (not draft-scoped) — the comment test runs on
+  // the live board.
   return path.join(BOARDS_ROOT, SLUG, 'comments.json');
 }
 
@@ -148,7 +191,12 @@ function readCommentsJson(): CommentsFile {
  * this file already has a raw filesystem path (`BOARDS_ROOT`) to the same
  * dir the server itself resolves via `historyDir`. */
 function listHistoryIds(): string[] {
-  const dir = path.join(BOARDS_ROOT, SLUG, '.history');
+  // The history test runs inside a draft, so its snapshots live under the
+  // draft's own `.history/` (repository/paths.ts's `historyDir` re-roots into
+  // `.drafts/<draftId>/` when a draft id is given).
+  const dir = currentDraftId
+    ? path.join(BOARDS_ROOT, SLUG, '.drafts', currentDraftId, '.history')
+    : path.join(BOARDS_ROOT, SLUG, '.history');
   let entries: string[];
   try {
     entries = readdirSync(dir);
@@ -245,6 +293,15 @@ async function gotoBoard(page: Page): Promise<void> {
   await expect(page.locator('.react-flow__node')).toHaveCount(1);
 }
 
+/** Like `gotoBoard`, but opens the current test's DRAFT (`#/d/<slug>/<draftId>`)
+ * — the editable route where pencil strokes and history restore actually
+ * persist (the live board is read-only for content). */
+async function gotoDraftBoard(page: Page): Promise<void> {
+  await page.goto(`/#/d/${SLUG}/${currentDraftId}`);
+  await page.locator('.react-flow').waitFor({ state: 'visible' });
+  await expect(page.locator('.react-flow__node')).toHaveCount(1);
+}
+
 function nodeLocator(page: Page, id: string) {
   return page.locator(`.react-flow__node[data-id="${id}"]`);
 }
@@ -287,6 +344,9 @@ async function drawStroke(
 test.describe('comments, pencil, annotation, history (Phase 6 gate)', () => {
   test.beforeEach(async ({ context }) => {
     seedSlug(SLUG);
+    // Reset per-test draft state; the pencil + history tests set it via
+    // createDraft. The comment + annotation tests leave it undefined (live).
+    currentDraftId = undefined;
     await context.addInitScript(
       (n) => window.localStorage.setItem('figemite:author', n),
       'Overlay Tester',
@@ -411,9 +471,11 @@ test.describe('comments, pencil, annotation, history (Phase 6 gate)', () => {
 
   test('drawing a pencil stroke creates a drawing node on screen and persists it to board.json', async ({
     page,
+    request,
   }) => {
     const capture = attachConsoleCapture(page);
-    await gotoBoard(page);
+    currentDraftId = await createDraft(request);
+    await gotoDraftBoard(page);
 
     const before = readBoardJson();
     const beforeIds = new Set(before.nodes.map((n) => n.id));
@@ -552,9 +614,11 @@ test.describe('comments, pencil, annotation, history (Phase 6 gate)', () => {
 
   test('previewing an older snapshot is read-only and isolated; Restore applies it to the canvas and board.json', async ({
     page,
+    request,
   }) => {
     const capture = attachConsoleCapture(page);
-    await gotoBoard(page);
+    currentDraftId = await createDraft(request);
+    await gotoDraftBoard(page);
 
     const original = readBoardJson();
     const originalStickyPos = original.nodes.find((n) => n.id === 'sticky1')!.pos;
@@ -617,9 +681,8 @@ test.describe('comments, pencil, annotation, history (Phase 6 gate)', () => {
       })
       .toBeGreaterThan(idsAfterEdit1.length);
 
-    // ── Open the History panel and preview the OLDEST snapshot (the one
-    // taken right after edit 1 — i.e. sticky1 at `midStickyPos`, NOT the
-    // current live position `liveStickyPos`). ─────────────────────────────
+    // ── Open the History panel and preview the pre-edit-2 snapshot (sticky1
+    // at `midStickyPos`, NOT the current live position `liveStickyPos`). ────
     await page.getByTitle('Version history', { exact: true }).click();
     // Two elements share the text "Version history" (the Toolbar's IconButton
     // AND the panel's own header span) — `.last()` is the panel's header
@@ -629,16 +692,23 @@ test.describe('comments, pencil, annotation, history (Phase 6 gate)', () => {
     await expect(panel).toBeVisible();
 
     // Version rows render oldest-appearing-last / newest-first per
-    // HistoryPanel.tsx — select the OLDEST (last) row so the preview target
-    // is unambiguously the pre-edit-2 snapshot, not whichever the newest
-    // happens to be. `relativeTime` renders "just now" for anything under 5s
-    // old (HistoryPanel.tsx) — both snapshots in this test are that fresh, so
-    // the filter must accept "just now" too, not just "Xs/Xm/Xh/Xd ago".
+    // HistoryPanel.tsx. Editing here happens in a DRAFT, and creating a draft
+    // writes an initial `save` snapshot of the as-copied prod board (see
+    // api/handlers/drafts.ts → persistBoard), so the OLDEST (last) row is that
+    // pristine pre-edit-1 state — NOT the pre-edit-2 (`midStickyPos`) state
+    // this test restores to. The pre-edit-2 snapshot is therefore the
+    // SECOND-oldest row (directly above the creation snapshot, since edit 1 is
+    // the very next write after creation); `nth(rowCount - 2)` selects it
+    // robustly regardless of any newest-side "Latest" row. `relativeTime`
+    // renders "just now" for anything under 5s old (HistoryPanel.tsx) — every
+    // snapshot here is that fresh, so the filter must accept "just now" too,
+    // not just "Xs/Xm/Xh/Xd ago".
     const rows = page.locator('button[title]').filter({ hasText: /ago|just now|Latest/ });
     await expect(rows.first()).toBeVisible();
     const rowCount = await rows.count();
-    expect(rowCount).toBeGreaterThanOrEqual(2);
-    await rows.nth(rowCount - 1).click();
+    // creation snapshot + edit-1 snapshot + edit-2 snapshot = at least 3 rows.
+    expect(rowCount).toBeGreaterThanOrEqual(3);
+    await rows.nth(rowCount - 2).click();
 
     // Preview renders READ-ONLY: the "Previewing ..." banner appears, and the
     // canvas shows sticky1 at the OLDER (mid) position — not the live one.

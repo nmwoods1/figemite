@@ -34,17 +34,29 @@ interface BoardReader {
 }
 
 /**
- * Decodes a `sessionKey` back into `{ slug, subPath }`. The key format
- * (`session-key.ts`) is `<slug>` for the root and `<slug>|<seg1>.<seg2>` for a
- * sub-board. A slug/segment can never contain `|` or `.` (the id grammar is
- * `[A-Za-z0-9_-]+`), so this split is unambiguous.
+ * Decodes a `sessionKey` back into `{ slug, subPath, draftId? }`. The key format
+ * (`session-key.ts`) is `<slug>` for the root, `<slug>|<seg1>.<seg2>` for a
+ * sub-board, and a `<draftId>~` prefix when the key is scoped to a draft. A
+ * slug/segment/draftId can never contain `~`, `|`, or `.` (the id grammar is
+ * `[A-Za-z0-9_-]+`), so these splits are unambiguous.
  */
-export function decodeSessionKey(key: string): { slug: string; subPath: string[] } {
-  const pipe = key.indexOf('|');
-  if (pipe === -1) return { slug: key, subPath: [] };
-  const slug = key.slice(0, pipe);
-  const rest = key.slice(pipe + 1);
-  return { slug, subPath: rest ? rest.split('.') : [] };
+export function decodeSessionKey(key: string): {
+  slug: string;
+  subPath: string[];
+  draftId?: string;
+} {
+  let draftId: string | undefined;
+  let rest = key;
+  const tilde = key.indexOf('~');
+  if (tilde !== -1) {
+    draftId = key.slice(0, tilde);
+    rest = key.slice(tilde + 1);
+  }
+  const pipe = rest.indexOf('|');
+  if (pipe === -1) return { slug: rest, subPath: [], draftId };
+  const slug = rest.slice(0, pipe);
+  const sub = rest.slice(pipe + 1);
+  return { slug, subPath: sub ? sub.split('.') : [], draftId };
 }
 
 /**
@@ -57,14 +69,14 @@ export function makeAiBroadcast(
   repo: BoardReader,
 ): (key: string, state: AiSessionState) => void {
   return (key, state) => {
-    const { slug, subPath } = decodeSessionKey(key);
+    const { slug, subPath, draftId } = decodeSessionKey(key);
     if (state.locked) {
-      sse.broadcast(slug, subPath, 'locked', { epoch: state.epoch });
+      sse.broadcast(slug, subPath, 'locked', { epoch: state.epoch }, draftId);
       return;
     }
     let board: unknown;
     try {
-      if (repo.exists(slug, subPath)) board = repo.read(slug, subPath);
+      if (repo.exists(slug, subPath, draftId)) board = repo.read(slug, subPath, draftId);
     } catch {
       board = undefined; // unreadable/corrupt — broadcast the unlock without it
     }
@@ -73,6 +85,7 @@ export function makeAiBroadcast(
       subPath,
       'unlocked',
       board === undefined ? { epoch: state.epoch } : { epoch: state.epoch, board },
+      draftId,
     );
   };
 }

@@ -89,9 +89,10 @@ export interface BoardStoreOptions {
    * When given (and `readonly` is false), the store joins this room instead
    * of seeding the doc locally from the passed-in `BoardFile` — see this
    * module's doc for the two-hydration-paths rationale. Omitted for
-   * read-only stores and for the unit-test local-seed convenience path.
+   * read-only stores and for the unit-test local-seed convenience path. A
+   * `draftId` scopes the room to a draft (`boards/<slug>/.drafts/<draftId>/`).
    */
-  room?: { slug: string; path: string[] };
+  room?: { slug: string; path: string[]; draftId?: string };
 }
 
 export interface BoardStore {
@@ -197,7 +198,9 @@ export function createBoardStore(initialBoard: BoardFile, opts: BoardStoreOption
 
   // ── Hydration (see module doc for the two-paths rationale) ──────────────────
   const room: BoardRoom | null =
-    !opts.readonly && opts.room ? joinBoardRoom(doc, opts.room.slug, opts.room.path) : null;
+    !opts.readonly && opts.room
+      ? joinBoardRoom(doc, opts.room.slug, opts.room.path, opts.room.draftId)
+      : null;
 
   if (!room) {
     // Read-only, or the no-`room` unit-test convenience path: hydrate

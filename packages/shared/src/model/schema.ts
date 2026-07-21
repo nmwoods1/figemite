@@ -18,6 +18,7 @@ import { z } from 'zod';
 import type { BoardFile, BoardNode, BoardEdge } from './board.js';
 import type { CommentsFile } from './comments.js';
 import type { TagsFile } from './tags.js';
+import type { DraftsFile } from './drafts.js';
 import { SHAPE_KINDS, FORMAT_VERSION } from './constants.js';
 
 // ── ID / slug grammar ────────────────────────────────────────────────────────
@@ -283,6 +284,24 @@ export const TagsFileSchema = z.object({
   tags: z.array(z.string()),
 });
 
+// ── Drafts schema ────────────────────────────────────────────────────────────
+
+export const DraftAuthorKindSchema = z.enum(['human', 'agent']);
+
+export const DraftMetaSchema = z.object({
+  // A draft id is used as a directory name (`.drafts/<id>/`) AND as a room
+  // coordinate, so it must obey the same grammar as slugs/path segments — this
+  // is what makes it traversal-safe.
+  id: IdStringSchema,
+  title: z.string(),
+  createdBy: DraftAuthorKindSchema,
+  createdAt: z.string(),
+});
+
+export const DraftsFileSchema = z.object({
+  drafts: z.array(DraftMetaSchema),
+});
+
 // ── Migration ────────────────────────────────────────────────────────────────
 
 /**
@@ -385,6 +404,15 @@ export function parseTagsFile(raw: unknown): TagsFile {
   const result = TagsFileSchema.safeParse(raw);
   if (!result.success) {
     throw new Error(formatZodError('Invalid tags file', result.error));
+  }
+  return result.data;
+}
+
+/** Validates a drafts index file. No versioning — drafts.json has no `formatVersion`. */
+export function parseDraftsFile(raw: unknown): DraftsFile {
+  const result = DraftsFileSchema.safeParse(raw);
+  if (!result.success) {
+    throw new Error(formatZodError('Invalid drafts file', result.error));
   }
   return result.data;
 }

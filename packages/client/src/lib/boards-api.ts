@@ -26,6 +26,7 @@ import {
   parseTagsFile,
   type BoardFile,
   type CommentsFile,
+  type DraftMeta,
 } from '@figemite/shared';
 import { READONLY } from '../app/mode.js';
 
@@ -120,10 +121,16 @@ export async function listBoards(): Promise<BoardListItem[]> {
 
 // ── Board read/write ──────────────────────────────────────────────────────────
 
-export async function getBoard(slug: string, path: string[]): Promise<BoardFile> {
+export async function getBoard(
+  slug: string,
+  path: string[],
+  draftId?: string,
+): Promise<BoardFile> {
+  // Drafts are dev-only (never in the static build), so READONLY ignores
+  // `draftId` and always resolves the prod static file.
   const url = READONLY
     ? staticBoardUrl(slug, path)
-    : apiUrl('/api/board', { board: slug, path: pathParam(path) });
+    : apiUrl('/api/board', { board: slug, path: pathParam(path), draft: draftId });
   const raw = await fetchJson(url);
   try {
     return parseBoardFile(raw);
@@ -163,6 +170,58 @@ export async function deleteSubBoard(slug: string, path: string[]): Promise<void
   if (READONLY) throw new ReadOnlyError('delete a sub-board');
   const url = apiUrl('/api/board', { board: slug, path: pathParam(path) });
   await fetchJson(url, { method: 'DELETE' });
+}
+
+// ── Drafts (dev only — never part of the static build) ───────────────────────
+
+export type { DraftMeta };
+
+/** Lists a board's drafts. Empty in READONLY mode (drafts aren't exported). */
+export async function listDrafts(slug: string): Promise<DraftMeta[]> {
+  if (READONLY) return [];
+  const data = (await fetchJson(apiUrl('/api/drafts', { board: slug }))) as {
+    drafts?: DraftMeta[];
+  };
+  return Array.isArray(data.drafts) ? data.drafts : [];
+}
+
+/** Creates a new (human-authored) draft of a board; returns its id. */
+export async function createDraft(slug: string, title?: string): Promise<string> {
+  if (READONLY) throw new ReadOnlyError('create a draft');
+  const data = (await fetchJson('/api/drafts', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ board: slug, title, createdBy: 'human' }),
+  })) as { draftId?: string };
+  if (!data.draftId) throw new ApiError(0, 'Server did not return a draft id');
+  return data.draftId;
+}
+
+/** Renames a draft (updates its title in the index; content untouched). */
+export async function renameDraft(slug: string, draftId: string, title: string): Promise<void> {
+  if (READONLY) throw new ReadOnlyError('rename a draft');
+  await fetchJson('/api/drafts', {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ board: slug, draft: draftId, title }),
+  });
+}
+
+/** Discards a draft (deletes it without touching prod). */
+export async function discardDraft(slug: string, draftId: string): Promise<void> {
+  if (READONLY) throw new ReadOnlyError('discard a draft');
+  const url = apiUrl('/api/drafts', { board: slug, draft: draftId });
+  await fetchJson(url, { method: 'DELETE' });
+}
+
+/** Approves a draft, overwriting prod with its content. Human-only. */
+export async function promoteDraft(slug: string, draftId: string): Promise<void> {
+  if (READONLY) throw new ReadOnlyError('approve a draft');
+  await fetchJson('/api/board/promote', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ board: slug, draft: draftId }),
+  });
 }
 
 // ── Comments ──────────────────────────────────────────────────────────────────
@@ -219,24 +278,40 @@ export interface HistoryVersion {
   trigger: 'save' | 'preai' | 'ai';
 }
 
-export async function fetchHistory(slug: string, path: string[]): Promise<HistoryVersion[]> {
+export async function fetchHistory(
+  slug: string,
+  path: string[],
+  draftId?: string,
+): Promise<HistoryVersion[]> {
   if (READONLY) {
     throw new Error(
       'History is not available in read-only mode (not included in the static build).',
     );
   }
-  const url = apiUrl('/api/history', { board: slug, path: pathParam(path) });
+  // `draft` scopes history to a draft's own `.history/` (undefined = prod).
+  // apiUrl drops undefined params, so prod calls are unchanged.
+  const url = apiUrl('/api/history', { board: slug, path: pathParam(path), draft: draftId });
   const data = (await fetchJson(url)) as { versions?: HistoryVersion[] };
   return Array.isArray(data.versions) ? data.versions : [];
 }
 
-export async function fetchVersion(slug: string, path: string[], id: string): Promise<BoardFile> {
+export async function fetchVersion(
+  slug: string,
+  path: string[],
+  id: string,
+  draftId?: string,
+): Promise<BoardFile> {
   if (READONLY) {
     throw new Error(
       'History is not available in read-only mode (not included in the static build).',
     );
   }
-  const url = apiUrl('/api/history/version', { board: slug, path: pathParam(path), id });
+  const url = apiUrl('/api/history/version', {
+    board: slug,
+    path: pathParam(path),
+    id,
+    draft: draftId,
+  });
   const raw = await fetchJson(url);
   try {
     return parseBoardFile(raw);

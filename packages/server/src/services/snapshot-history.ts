@@ -36,7 +36,7 @@ import crypto from 'node:crypto';
 import { boardFilePath, historyDir } from '../repository/paths.js';
 import { atomicWriteFileSync } from '../repository/atomic-write.js';
 
-export type SnapshotTrigger = 'save' | 'preai' | 'ai';
+export type SnapshotTrigger = 'save' | 'preai' | 'ai' | 'promote';
 
 export interface SnapshotMeta {
   /** The filename stem (without `.json`) — the id `read()` accepts. */
@@ -49,7 +49,7 @@ export interface SnapshotMeta {
 // Matches ids of the form `2026-07-06T12-34-56-789Z__save`, produced by
 // `stemFor()` below. Anchored full-string match: rejects path separators,
 // `..`, and anything that isn't exactly this shape.
-const SNAPSHOT_ID_RE = /^(\d{4}-\d{2}-\d{2}T\d{2})-(\d{2})-(\d{2})-(\d{3})Z__(save|preai|ai)$/;
+const SNAPSHOT_ID_RE = /^(\d{4}-\d{2}-\d{2}T\d{2})-(\d{2})-(\d{2})-(\d{3})Z__(save|preai|ai|promote)$/;
 
 function stemFor(date: Date, trigger: SnapshotTrigger): string {
   // toISOString() -> "2026-07-06T12-34-56.789Z" needs BOTH the `:` and the
@@ -113,8 +113,11 @@ export const RECENT_WINDOW_MS = 15 * 60 * 1000;
 export const BUCKET_MS = 30 * 60 * 1000;
 export const HARD_CAP = 200;
 
-function isAiBoundary(trigger: SnapshotTrigger): boolean {
-  return trigger === 'preai' || trigger === 'ai';
+function isBoundary(trigger: SnapshotTrigger): boolean {
+  // preai/ai bracket an AI session; promote is a "prod was overwritten by a
+  // draft" checkpoint. All three are meaningful restore points and are NEVER
+  // thinned or content-deduped away.
+  return trigger === 'preai' || trigger === 'ai' || trigger === 'promote';
 }
 
 export function thinSnapshots(
@@ -133,7 +136,7 @@ export function thinSnapshots(
   const seenBuckets = new Set<number>();
 
   for (const snap of sorted) {
-    if (isAiBoundary(snap.trigger)) {
+    if (isBoundary(snap.trigger)) {
       keep.push(snap);
       continue;
     }
@@ -155,12 +158,12 @@ export function thinSnapshots(
   // never dropping preai/ai (a deliberate hardening over legacy — see module
   // doc). `keep` is newest-first already; walk it in that order, keeping every
   // AI-boundary snapshot plus up to HARD_CAP non-AI-boundary ones.
-  const nonAiCount = keep.reduce((n, s) => n + (isAiBoundary(s.trigger) ? 0 : 1), 0);
+  const nonAiCount = keep.reduce((n, s) => n + (isBoundary(s.trigger) ? 0 : 1), 0);
   if (nonAiCount > HARD_CAP) {
     const capped: SnapshotMeta[] = [];
     let nonAiKept = 0;
     for (const snap of keep) {
-      if (isAiBoundary(snap.trigger)) {
+      if (isBoundary(snap.trigger)) {
         capped.push(snap);
       } else if (nonAiKept < HARD_CAP) {
         capped.push(snap);
@@ -195,8 +198,8 @@ export class SnapshotHistoryService {
    * checkpoint the history is meant to preserve. This mirrors the existing
    * "AI-boundary snapshots are never thinned" policy in `thinSnapshots`.
    */
-  snapshot(slug: string, subPath: string[], trigger: SnapshotTrigger): void {
-    const boardPath = boardFilePath(this.boardsRoot, slug, subPath);
+  snapshot(slug: string, subPath: string[], trigger: SnapshotTrigger, draftId?: string): void {
+    const boardPath = boardFilePath(this.boardsRoot, slug, subPath, draftId);
 
     let content: string;
     try {
@@ -205,7 +208,7 @@ export class SnapshotHistoryService {
       return;
     }
 
-    const dir = historyDir(this.boardsRoot, slug, subPath);
+    const dir = historyDir(this.boardsRoot, slug, subPath, draftId);
     const existing = listDir(dir);
 
     // Content-dedupe applies ONLY to plain `save` snapshots. `preai`/`ai`
@@ -251,9 +254,9 @@ export class SnapshotHistoryService {
     return stem;
   }
 
-  /** Lists snapshot metadata for a board (or sub-board), sorted newest-first. */
-  list(slug: string, subPath: string[]): SnapshotMeta[] {
-    const dir = historyDir(this.boardsRoot, slug, subPath);
+  /** Lists snapshot metadata for a board/sub-board (of prod, or of a draft), newest-first. */
+  list(slug: string, subPath: string[], draftId?: string): SnapshotMeta[] {
+    const dir = historyDir(this.boardsRoot, slug, subPath, draftId);
     return listDir(dir);
   }
 
@@ -262,11 +265,11 @@ export class SnapshotHistoryService {
    * `list()` produces (an anchored regex, so any path separator or `..`
    * fails to match and is rejected before ever touching the filesystem).
    */
-  read(slug: string, subPath: string[], id: string): string {
+  read(slug: string, subPath: string[], id: string, draftId?: string): string {
     if (!SNAPSHOT_ID_RE.test(id)) {
       throw new Error(`Invalid snapshot id ${JSON.stringify(id)}`);
     }
-    const dir = historyDir(this.boardsRoot, slug, subPath);
+    const dir = historyDir(this.boardsRoot, slug, subPath, draftId);
     try {
       return fs.readFileSync(path.join(dir, `${id}.json`), 'utf-8');
     } catch (err) {
