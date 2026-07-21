@@ -1237,4 +1237,57 @@ describe('BoardCanvas — history panel (time-travel, P6-T36)', () => {
     fireEvent.keyDown(window, { key: 'z', metaKey: true });
     expect(screen.getByText('old text from history')).toBeInTheDocument();
   });
+
+  it('renders a History button on the LIVE board (no draftId, content-locked)', async () => {
+    await act(async () => {
+      render(<BoardCanvas board={fixtureBoard()} readonly={false} slug="my-board" path={[]} />);
+    });
+    // Version history is browsable on the live board, not only in drafts.
+    expect(screen.getByTitle('Version history')).toBeInTheDocument();
+  });
+
+  it('lists the LIVE board history against prod (no draft id threaded)', async () => {
+    fetchHistoryMock.mockResolvedValue([
+      { id: 'v1', timestamp: '2026-07-06T08:00:00.000Z', trigger: 'save' },
+    ]);
+    await act(async () => {
+      render(<BoardCanvas board={fixtureBoard()} readonly={false} slug="my-board" path={[]} />);
+    });
+
+    fireEvent.click(screen.getByTitle('Version history'));
+
+    // No draftId on the live board → prod's own `.history/` is read (undefined
+    // trailing arg), not a draft's.
+    expect(fetchHistoryMock).toHaveBeenCalledWith('my-board', [], undefined);
+    await vi.waitFor(() => expect(screen.getByText('Human')).toBeInTheDocument());
+  });
+
+  it('previewing on the LIVE board offers no Restore — points to drafts instead', async () => {
+    fetchHistoryMock.mockResolvedValue([
+      { id: 'v1', timestamp: '2026-07-06T08:00:00.000Z', trigger: 'save' },
+    ]);
+    fetchVersionMock.mockResolvedValue(historySnapshotBoard());
+    // No draftId → this is the content-locked live board.
+    await act(async () => {
+      render(<BoardCanvas board={fixtureBoard()} readonly={false} slug="my-board" path={[]} />);
+    });
+
+    fireEvent.click(screen.getByTitle('Version history'));
+    await vi.waitFor(() => expect(screen.getByText(/Latest/)).toBeInTheDocument());
+    await act(async () => {
+      fireEvent.click(screen.getByText(/Latest/));
+      await Promise.resolve();
+    });
+
+    // The preview renders (read-only browsing is allowed on live)...
+    expect(screen.getByText(/Previewing/)).toBeInTheDocument();
+    expect(screen.getByText('old text from history')).toBeInTheDocument();
+    // ...but Restore is gated: no Restore button, a "create a draft" note, and
+    // Discard still available to exit the preview.
+    expect(screen.queryByTitle('Restore this version')).not.toBeInTheDocument();
+    expect(screen.getByText(/create a draft to restore/i)).toBeInTheDocument();
+    expect(
+      screen.getByTitle('Discard preview, return to current version'),
+    ).toBeInTheDocument();
+  });
 });

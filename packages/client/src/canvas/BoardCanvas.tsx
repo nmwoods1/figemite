@@ -265,13 +265,22 @@ function HistoryPreviewPane({ board }: { board: BoardFile }) {
 /** The "previewing an old version" banner (P6-T36) — a clear affordance that
  * what's on screen right now is a READ-ONLY snapshot, not the live board,
  * with Restore/Discard actions. Ported layout from the legacy prototype's
- * inline preview banner (src/components/BoardCanvas.tsx ~L1728-1751). */
+ * inline preview banner (src/components/BoardCanvas.tsx ~L1728-1751).
+ *
+ * `canRestore` gates the Restore button: version history is browsable on the
+ * live (content-locked) board, but restoring writes the snapshot back into the
+ * live doc — a prod content mutation the content-lock forbids (changes to live
+ * go through the human-gated promote flow, not a direct restore). So on the
+ * live board the banner shows a "create a draft to restore" note in place of
+ * the Restore button; Discard (exit preview) stays available everywhere. */
 function HistoryPreviewBanner({
   timestamp,
+  canRestore,
   onRestore,
   onDiscard,
 }: {
   timestamp: string;
+  canRestore: boolean;
   onRestore: () => void;
   onDiscard: () => void;
 }) {
@@ -309,23 +318,33 @@ function HistoryPreviewBanner({
       }}
     >
       <span>Previewing {formatted}</span>
-      <button
-        type="button"
-        onClick={onRestore}
-        style={{
-          background: '#92400e',
-          border: 'none',
-          cursor: 'pointer',
-          fontSize: 11,
-          color: '#fff',
-          fontWeight: 600,
-          padding: '3px 10px',
-          borderRadius: 4,
-        }}
-        title="Restore this version"
-      >
-        Restore
-      </button>
+      {canRestore ? (
+        <button
+          type="button"
+          onClick={onRestore}
+          style={{
+            background: '#92400e',
+            border: 'none',
+            cursor: 'pointer',
+            fontSize: 11,
+            color: '#fff',
+            fontWeight: 600,
+            padding: '3px 10px',
+            borderRadius: 4,
+          }}
+          title="Restore this version"
+        >
+          Restore
+        </button>
+      ) : (
+        // Live board: previewing is fine, but restoring would mutate prod
+        // content. Changes to live go through the promote flow, so point the
+        // user at drafts instead of offering a Restore that the content-lock
+        // forbids.
+        <span style={{ fontStyle: 'italic', opacity: 0.85 }} title="Create a draft to restore">
+          Read-only · create a draft to restore
+        </span>
+      )}
       <button
         type="button"
         onClick={onDiscard}
@@ -460,6 +479,12 @@ function EditableCanvas({
   // (the no-room unit-test convenience path) — the Toolbar's History button
   // is omitted entirely in that case (and, transitively, in READONLY mode:
   // the read-only pane never mounts this component at all).
+  //
+  // History is available on the LIVE board too, not only in drafts: on live,
+  // `draftId` is undefined so `useHistory` lists/reads prod's own `.history/`.
+  // Listing and previewing are read-only, so they're safe on the content-frozen
+  // live board; only Restore mutates prod, and it's gated to drafts via the
+  // preview banner's `canRestore={!contentLocked}` below.
   const history = useHistory({ slug, path: path ?? [], draftId, store, undo: undoRedo });
 
   // ── P6-T34: comments (comments.json — separate from the Yjs doc) ───────────
@@ -643,6 +668,7 @@ function EditableCanvas({
         <HistoryPreviewPane board={history.previewedBoard} />
         <HistoryPreviewBanner
           timestamp={previewVersion?.timestamp ?? new Date().toISOString()}
+          canRestore={!contentLocked}
           onRestore={history.restore}
           onDiscard={history.discard}
         />

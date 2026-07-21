@@ -64,6 +64,13 @@
 // convenience path), so the button is naturally absent there too, on top of
 // the Toolbar-wide `readonly` early-return already hiding every write
 // affordance (including this one) in READONLY mode.
+//
+// The History button is deliberately OUTSIDE the `!contentLocked` gate: version
+// history is visible on the live board as well as in drafts. Browsing and
+// previewing a past version is read-only (it never touches the live doc — see
+// hooks/useHistory.ts), so it's safe on the content-frozen live board. Only the
+// Restore action mutates prod content, and that stays gated to drafts in
+// BoardCanvas's HistoryPreviewBanner (not here).
 
 import { useCallback, useState } from 'react';
 import { useRef } from 'react';
@@ -131,8 +138,11 @@ export interface ToolbarProps {
   syncStatus: SyncStatus;
   readonly: boolean;
   /** The live board is content-frozen: only comment + annotation are allowed.
-   * Hides every node/edge creation + styling affordance, the pencil (which
-   * creates a persisted drawing node), and history (restore mutates prod). */
+   * Hides every node/edge creation + styling affordance and the pencil (which
+   * creates a persisted drawing node). Version history stays VISIBLE here
+   * (viewing/previewing past versions is read-only) — only its Restore action
+   * is gated to drafts, in BoardCanvas's preview banner, since restoring
+   * mutates prod content. */
   contentLocked?: boolean;
   /** Which of comment/pencil/annotation mode (if any) is currently active. */
   activeMode: ToolbarMode;
@@ -394,12 +404,16 @@ export function Toolbar({
         <IconButton icon={Trash2} label="Wipe all annotations" onClick={onWipeAnnotations} />
       )}
 
-      {/* Selection-styling + history — all mutate board content, so hidden on
-          the live board (content-locked). */}
+      {/* Divider before the selection-styling + history cluster — shown
+          whenever any of it will render: the selection-styling controls
+          (draft-only, they mutate content) or the History button (available
+          on the live board too — see below). */}
+      {(!contentLocked || onOpenHistory) && <Divider />}
+
+      {/* Selection-styling — mutates board content, so hidden on the live
+          board (content-locked). */}
       {!contentLocked && (
         <>
-          <Divider />
-
           {showColorCycle && (
             <IconButton icon={Palette} label="Cycle colour" onClick={handleCycleColor} />
           )}
@@ -420,11 +434,15 @@ export function Toolbar({
               <LineStyleToggle value={selectedLineStyle} onChange={setLineStyleOnSelection} />
             </>
           )}
-
-          {onOpenHistory && (
-            <IconButton icon={History} label="Version history" onClick={onOpenHistory} />
-          )}
         </>
+      )}
+
+      {/* Version history — VISIBLE on both drafts and the live board.
+          Listing/previewing past versions is read-only; the Restore action is
+          gated to drafts (it mutates prod content) in BoardCanvas's preview
+          banner, not here. */}
+      {onOpenHistory && (
+        <IconButton icon={History} label="Version history" onClick={onOpenHistory} />
       )}
 
       <Divider />
