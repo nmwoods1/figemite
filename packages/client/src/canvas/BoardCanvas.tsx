@@ -436,6 +436,7 @@ function EditableCanvas({
   slug,
   path,
   contentLocked,
+  draftId,
   subBoard,
 }: EditablePaneProps) {
   const [descNodeId, setDescNodeId] = useState<string | null>(null);
@@ -459,7 +460,7 @@ function EditableCanvas({
   // (the no-room unit-test convenience path) — the Toolbar's History button
   // is omitted entirely in that case (and, transitively, in READONLY mode:
   // the read-only pane never mounts this component at all).
-  const history = useHistory({ slug, path: path ?? [], store, undo: undoRedo });
+  const history = useHistory({ slug, path: path ?? [], draftId, store, undo: undoRedo });
 
   // ── P6-T34: comments (comments.json — separate from the Yjs doc) ───────────
   // `reloadCommentsRef` bridges useAiLock's single `onExternalChange`
@@ -775,6 +776,10 @@ interface EditablePaneProps extends PaneProps {
    * allowed. True whenever this pane edits prod (no `draftId`). Blocks every
    * node/edge gesture + the content-creation Toolbar tools, same as `aiLocked`. */
   contentLocked: boolean;
+  /** Draft scope for this editable pane — threaded into `useHistory` so the
+   * History panel lists/reads the DRAFT's own `.history/` (editing, and thus
+   * snapshots, happen in a draft; prod is read-only). Undefined = prod. */
+  draftId?: string;
   /** Drill-in (sub-board) adapter — see BoardCanvasProps.onDrillIn's doc. */
   subBoard?: SubBoardAdapter;
 }
@@ -1069,6 +1074,7 @@ export function BoardCanvas({
             slug={slug}
             path={path}
             contentLocked={contentLocked}
+            draftId={draftId}
             subBoard={subBoard}
           />
         )}

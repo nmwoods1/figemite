@@ -122,7 +122,9 @@ describe('useHistory', () => {
 
     expect(result.current.panelOpen).toBe(true);
     await vi.waitFor(() => expect(result.current.versions).toEqual(versionList));
-    expect(boardsApiMock.fetchHistory).toHaveBeenCalledWith('spend', ['nodeA']);
+    // Trailing `undefined` = prod scope (no draftId) — history threads a draft
+    // scope through now (undefined on the live board).
+    expect(boardsApiMock.fetchHistory).toHaveBeenCalledWith('spend', ['nodeA'], undefined);
   });
 
   it('is loading synchronously after openPanel, then resolves', async () => {
@@ -167,7 +169,7 @@ describe('useHistory', () => {
       await result.current.preview('v2');
     });
 
-    expect(boardsApiMock.fetchVersion).toHaveBeenCalledWith('spend', [], 'v2');
+    expect(boardsApiMock.fetchVersion).toHaveBeenCalledWith('spend', [], 'v2', undefined);
     expect(result.current.previewId).toBe('v2');
     expect(result.current.previewedBoard).toEqual(snapshotBoard());
   });

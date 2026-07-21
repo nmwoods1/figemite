@@ -63,6 +63,10 @@ export interface UseHistoryOptions {
    * available in READONLY" requirement regardless of caller wiring. */
   slug: string | undefined;
   path: string[];
+  /** Draft scope: when set, history lists/reads the draft's own `.history/`
+   * rather than prod's (editing — and therefore snapshots — happen in a draft;
+   * the live board is read-only). Undefined = prod. */
+  draftId?: string;
   store: BoardStore;
   undo: Pick<UndoRedo, 'clear'>;
 }
@@ -95,7 +99,7 @@ export interface UseHistory {
   discard(): void;
 }
 
-export function useHistory({ slug, path, store, undo }: UseHistoryOptions): UseHistory {
+export function useHistory({ slug, path, draftId, store, undo }: UseHistoryOptions): UseHistory {
   const [panelOpen, setPanelOpen] = useState(false);
   const [versions, setVersions] = useState<HistoryVersion[]>([]);
   const [versionsLoading, setVersionsLoading] = useState(false);
@@ -108,7 +112,7 @@ export function useHistory({ slug, path, store, undo }: UseHistoryOptions): UseH
     setPanelOpen(true);
     setVersionsLoading(true);
     setVersionsError(null);
-    fetchHistory(slug, path)
+    fetchHistory(slug, path, draftId)
       .then((list) => {
         setVersions(list);
         setVersionsLoading(false);
@@ -117,7 +121,7 @@ export function useHistory({ slug, path, store, undo }: UseHistoryOptions): UseH
         setVersionsError(err instanceof Error ? err.message : String(err));
         setVersionsLoading(false);
       });
-  }, [slug, path]);
+  }, [slug, path, draftId]);
 
   const closePanel = useCallback(() => setPanelOpen(false), []);
 
@@ -126,10 +130,10 @@ export function useHistory({ slug, path, store, undo }: UseHistoryOptions): UseH
       if (!slug) return;
       setPreviewId(id);
       setPanelOpen(false);
-      const board = await fetchVersion(slug, path, id);
+      const board = await fetchVersion(slug, path, id, draftId);
       setPreviewedBoard(board);
     },
-    [slug, path],
+    [slug, path, draftId],
   );
 
   const restore = useCallback(() => {

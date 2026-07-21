@@ -1127,7 +1127,9 @@ describe('BoardCanvas — history panel (time-travel, P6-T36)', () => {
 
     fireEvent.click(screen.getByTitle('Version history'));
 
-    expect(fetchHistoryMock).toHaveBeenCalledWith('my-board', ['sub']);
+    // History is draft-aware: this pane is mounted in draft "d1", so the draft
+    // id is threaded through as the trailing arg (was silently dropped before).
+    expect(fetchHistoryMock).toHaveBeenCalledWith('my-board', ['sub'], 'd1');
     await vi.waitFor(() => expect(screen.getByText('Human')).toBeInTheDocument());
     expect(screen.getAllByText('AI')).toHaveLength(2);
     expect(screen.getByText('Before AI changes')).toBeInTheDocument();
@@ -1162,7 +1164,7 @@ describe('BoardCanvas — history panel (time-travel, P6-T36)', () => {
       await Promise.resolve();
     });
 
-    expect(fetchVersionMock).toHaveBeenCalledWith('my-board', [], 'v1');
+    expect(fetchVersionMock).toHaveBeenCalledWith('my-board', [], 'v1', 'd1');
     // The preview banner + Restore/Discard actions are visible...
     expect(screen.getByText(/Previewing/)).toBeInTheDocument();
     expect(screen.getByTitle('Restore this version')).toBeInTheDocument();

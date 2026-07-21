@@ -41,12 +41,57 @@
 // Console-error gate: every test captures the browser console and fails on a
 // ReactFlow error code / uncaught page error, same contract as
 // render-parity.spec.ts.
-import { test, expect, type Page, type ConsoleMessage } from '@playwright/test';
+import {
+  test,
+  expect,
+  type Page,
+  type APIRequestContext,
+  type ConsoleMessage,
+} from '@playwright/test';
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { seedSlug, BOARDS_ROOT } from './support/seed-boards.mjs';
 
 const SLUG = 'interaction';
+
+// ── Editing now happens inside a DRAFT, not on the live board (P?-T — the
+// "board drafts + read-only live board" change) ─────────────────────────────
+//
+// The live (prod) board is read-only: its toolbar shows only Comment +
+// Annotation, canvas gestures are inert, and the server never persists a prod
+// room to disk (see App.tsx's `contentLocked` and yjs-ws.ts's persist-on-
+// update guard). ALL real editing — and therefore every persistence assertion
+// in this file — happens in a draft, which is a byte-for-byte copy of prod
+// nested at `boards/<slug>/.drafts/<draftId>/` (see repository/paths.ts). So
+// each test here creates a fresh draft off the freshly-seeded prod board
+// (`createDraft`, via the real `POST /api/drafts`), navigates the editable
+// canvas to that draft's route (`#/d/<slug>/<draftId>`, see app/router.ts),
+// and reads persistence back off the DRAFT's own `board.json`
+// (`.drafts/<draftId>/board.json`) rather than prod's. Everything else — the
+// gestures, the node ids (`sticky1`/`shape1`), the pinned zoom-1 viewport — is
+// identical, because a draft IS a normal board, just one directory deeper.
+
+// The current test's draft id, set in `beforeEach` (one fresh draft per test,
+// since every test here mutates the board and the suite runs serially —
+// `workers: 1`). Read by `boardJsonPath` and `gotoBoard` below.
+let currentDraftId: string;
+
+/** Creates a draft off the current prod board via the real `POST /api/drafts`
+ * (copies prod into `.drafts/<id>/` and indexes it — see api/handlers/
+ * drafts.ts), returning the new draft id. This is the same call the "New
+ * draft" button makes; using the API (rather than seeding a draft dir by hand)
+ * keeps the draft byte-identical to what the app itself would create. */
+async function createDraft(request: APIRequestContext): Promise<string> {
+  const res = await request.post('/api/drafts', { data: { board: SLUG } });
+  if (!res.ok()) {
+    throw new Error(`POST /api/drafts failed (${res.status()}): ${await res.text()}`);
+  }
+  const body = (await res.json()) as { draftId?: string };
+  if (!body.draftId) {
+    throw new Error(`POST /api/drafts returned no draftId: ${JSON.stringify(body)}`);
+  }
+  return body.draftId;
+}
 
 // ── Types (minimal local shape — just what this spec reads off board.json) ──
 
@@ -87,7 +132,9 @@ interface PersistedBoard {
 // ── Disk read helpers ────────────────────────────────────────────────────────
 
 function boardJsonPath(): string {
-  return path.join(BOARDS_ROOT, SLUG, 'board.json');
+  // The DRAFT's own board.json (editing happens in the draft — see module
+  // doc), at boards/<slug>/.drafts/<draftId>/board.json.
+  return path.join(BOARDS_ROOT, SLUG, '.drafts', currentDraftId, 'board.json');
 }
 
 function readBoardJson(): PersistedBoard {
@@ -163,7 +210,9 @@ function assertNoReactFlowErrors(capture: ConsoleCapture) {
 // ── Shared navigation / gesture helpers ───────────────────────────────────────
 
 async function gotoBoard(page: Page): Promise<void> {
-  await page.goto(`/#/${SLUG}`);
+  // Navigate the editable canvas to the current test's DRAFT (`beforeEach`
+  // created it) — the live board is read-only, so all editing happens here.
+  await page.goto(`/#/d/${SLUG}/${currentDraftId}`);
   await page.locator('.react-flow').waitFor({ state: 'visible' });
   // Let RF finish its initial measurement pass before any gesture —
   // dragging/resizing against a not-yet-settled layout is exactly the kind of
@@ -319,12 +368,17 @@ async function waitForSaved(page: Page): Promise<void> {
 }
 
 test.describe('single-user editing parity + persistence (Phase 4 gate)', () => {
-  test.beforeEach(async ({ context }) => {
+  test.beforeEach(async ({ context, request }) => {
     // Fresh on-disk board before every test — see module doc. Tests run
     // serially (`workers: 1`) against one shared dev server, so re-seeding
     // between tests (rather than per-worker isolation) is what keeps every
     // test's starting state pristine regardless of run order.
     seedSlug(SLUG);
+
+    // A fresh draft off that pristine prod board — editing is draft-only now
+    // (see module doc). Every test's `gotoBoard`/`boardJsonPath` targets this
+    // draft. Created AFTER `seedSlug` so it copies the pristine fixture.
+    currentDraftId = await createDraft(request);
 
     // P5-T33 found this suite pre-existingly broken (independent of anything
     // in that task's own changes — reproduced from a clean worktree at the

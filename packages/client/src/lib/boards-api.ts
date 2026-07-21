@@ -278,24 +278,40 @@ export interface HistoryVersion {
   trigger: 'save' | 'preai' | 'ai';
 }
 
-export async function fetchHistory(slug: string, path: string[]): Promise<HistoryVersion[]> {
+export async function fetchHistory(
+  slug: string,
+  path: string[],
+  draftId?: string,
+): Promise<HistoryVersion[]> {
   if (READONLY) {
     throw new Error(
       'History is not available in read-only mode (not included in the static build).',
     );
   }
-  const url = apiUrl('/api/history', { board: slug, path: pathParam(path) });
+  // `draft` scopes history to a draft's own `.history/` (undefined = prod).
+  // apiUrl drops undefined params, so prod calls are unchanged.
+  const url = apiUrl('/api/history', { board: slug, path: pathParam(path), draft: draftId });
   const data = (await fetchJson(url)) as { versions?: HistoryVersion[] };
   return Array.isArray(data.versions) ? data.versions : [];
 }
 
-export async function fetchVersion(slug: string, path: string[], id: string): Promise<BoardFile> {
+export async function fetchVersion(
+  slug: string,
+  path: string[],
+  id: string,
+  draftId?: string,
+): Promise<BoardFile> {
   if (READONLY) {
     throw new Error(
       'History is not available in read-only mode (not included in the static build).',
     );
   }
-  const url = apiUrl('/api/history/version', { board: slug, path: pathParam(path), id });
+  const url = apiUrl('/api/history/version', {
+    board: slug,
+    path: pathParam(path),
+    id,
+    draft: draftId,
+  });
   const raw = await fetchJson(url);
   try {
     return parseBoardFile(raw);
