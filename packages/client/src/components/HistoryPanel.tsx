@@ -13,7 +13,9 @@
 // right before an AI session started editing, and right after it finished) —
 // both render an "AI" chip, with a distinguishing sub-label ("Before AI
 // changes" / "After AI changes") so the two AI-boundary triggers read
-// distinctly from each other, not just from 'save'.
+// distinctly from each other, not just from 'save'. 'promote' (a draft
+// approved onto Live) renders a "Promote" chip with the draft's title
+// (`label`) and any commit-style `message` — never as an AI/Human change.
 import { useEffect, useRef } from 'react';
 import type { HistoryVersion } from '../lib/boards-api.js';
 
@@ -72,11 +74,32 @@ const CHIP_AI: React.CSSProperties = {
   color: '#92400e',
 };
 
+const CHIP_PROMOTE: React.CSSProperties = {
+  ...CHIP_HUMAN,
+  background: '#ede9fe',
+  color: '#6d28d9',
+};
+
 const SUB_LABEL: React.CSSProperties = {
   fontSize: 10,
   color: '#94a3b8',
   marginTop: 1,
 };
+
+const PROMOTE_MESSAGE: React.CSSProperties = {
+  fontSize: 11,
+  color: '#475569',
+  marginTop: 1,
+  fontStyle: 'italic',
+};
+
+/** The right-hand badge for a snapshot: Human (autosave), AI (session
+ * boundary), or Promote (a draft approved to Live). */
+function TriggerChip({ trigger }: { trigger: HistoryVersion['trigger'] }) {
+  if (trigger === 'save') return <span style={CHIP_HUMAN}>Human</span>;
+  if (trigger === 'promote') return <span style={CHIP_PROMOTE}>Promote</span>;
+  return <span style={CHIP_AI}>AI</span>;
+}
 
 export function HistoryPanel({ versions, loading, error, onSelect, onClose }: HistoryPanelProps) {
   const panelRef = useRef<HTMLDivElement>(null);
@@ -183,15 +206,22 @@ export function HistoryPanel({ versions, loading, error, onSelect, onClose }: Hi
                   {i === 0 ? <span style={{ fontWeight: 600 }}>Latest — </span> : null}
                   {relativeTime(v.timestamp)}
                 </span>
-                {v.trigger !== 'save' && (
-                  <span style={SUB_LABEL}>
-                    {v.trigger === 'preai' ? 'Before AI changes' : 'After AI changes'}
-                  </span>
+                {v.trigger === 'promote' ? (
+                  <>
+                    <span style={SUB_LABEL}>
+                      {v.label ? `Promoted “${v.label}”` : 'Promoted from a draft'}
+                    </span>
+                    {v.message && <span style={PROMOTE_MESSAGE}>{v.message}</span>}
+                  </>
+                ) : (
+                  v.trigger !== 'save' && (
+                    <span style={SUB_LABEL}>
+                      {v.trigger === 'preai' ? 'Before AI changes' : 'After AI changes'}
+                    </span>
+                  )
                 )}
               </span>
-              <span style={v.trigger === 'save' ? CHIP_HUMAN : CHIP_AI}>
-                {v.trigger === 'save' ? 'Human' : 'AI'}
-              </span>
+              <TriggerChip trigger={v.trigger} />
             </button>
           ))}
       </div>

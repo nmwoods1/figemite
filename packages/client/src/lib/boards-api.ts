@@ -232,12 +232,13 @@ export async function promoteDraft(
   slug: string,
   draftId: string,
   deleteDraft = false,
+  message?: string,
 ): Promise<void> {
   if (READONLY) throw new ReadOnlyError('approve a draft');
   await fetchJson('/api/board/promote', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ board: slug, draft: draftId, deleteDraft }),
+    body: JSON.stringify({ board: slug, draft: draftId, deleteDraft, message }),
   });
 }
 
@@ -298,7 +299,11 @@ export async function saveTags(slug: string, tags: string[]): Promise<void> {
 export interface HistoryVersion {
   id: string;
   timestamp: string;
-  trigger: 'save' | 'preai' | 'ai';
+  trigger: 'save' | 'preai' | 'ai' | 'promote';
+  /** Human-facing version name (promote snapshots only — the draft's title). */
+  label?: string;
+  /** Optional freeform note explaining the version (promote snapshots only). */
+  message?: string;
 }
 
 export async function fetchHistory(

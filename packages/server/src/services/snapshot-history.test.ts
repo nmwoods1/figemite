@@ -45,6 +45,35 @@ describe('snapshot + list + read round-trip', () => {
     expect(snaps[0].timestamp).toBeInstanceOf(Date);
   });
 
+  it('records and returns a label + message when meta is supplied', () => {
+    repo.seedBoard('my-board', 'My Board');
+    service.snapshot('my-board', [], 'promote', undefined, {
+      label: 'Draft #1',
+      message: 'Ship it',
+    });
+
+    const snaps = service.list('my-board', []);
+    expect(snaps).toHaveLength(1); // the sidecar is not itself listed as a snapshot
+    expect(snaps[0].trigger).toBe('promote');
+    expect(snaps[0].label).toBe('Draft #1');
+    expect(snaps[0].message).toBe('Ship it');
+    expect(fsSync.existsSync(path.join(historyDir(tmpRoot, 'my-board', []), '_labels.json'))).toBe(
+      true,
+    );
+  });
+
+  it('leaves label/message undefined for a plain snapshot and writes no sidecar', () => {
+    repo.seedBoard('my-board', 'My Board');
+    service.snapshot('my-board', [], 'save');
+
+    const snaps = service.list('my-board', []);
+    expect(snaps[0].label).toBeUndefined();
+    expect(snaps[0].message).toBeUndefined();
+    expect(fsSync.existsSync(path.join(historyDir(tmpRoot, 'my-board', []), '_labels.json'))).toBe(
+      false,
+    );
+  });
+
   it('read returns the snapshot content, matching the board file on disk at snapshot time', () => {
     repo.seedBoard('my-board', 'My Board');
     service.snapshot('my-board', [], 'save');
