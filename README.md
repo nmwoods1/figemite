@@ -15,18 +15,38 @@ lock-in.
 
 ## Quickstart (60 seconds)
 
-Requires Node 20+ (see `.nvmrc`).
+**Prerequisites:** Node 20+ (see `.nvmrc`) and git. Nothing else — no
+database, no Docker, no cloud account. Figemite is local-first and stores
+boards as plain JSON on disk.
 
 ```bash
 git clone https://github.com/nmwoods1/figemite.git && cd figemite
 nvm use          # if you use nvm — picks up Node 20 from .nvmrc
-npm ci
+npm ci           # clean, reproducible install from the lockfile
 npm run dev
 ```
 
-Open the dashboard URL Vite prints (defaults to `http://localhost:5173`),
-then create a board from the dashboard. That's it — edits autosave to
-`boards/<slug>/board.json` on disk.
+Then open the URL Vite prints — **http://localhost:5173** by default — and
+**create a board** from the dashboard. Edits autosave to
+`boards/<slug>/board.json` on disk: plain, git-diffable JSON, no lock-in.
+
+`npm run dev` is the whole thing — it starts **both** the whiteboard UI (port
+`5173`) and the backend, which runs in-process and listens on port `5400`.
+There is no separate server to launch.
+
+> **Two things worth knowing on a first checkout:**
+> - Use `npm ci`, not `npm install` — this is an npm-workspaces monorepo with
+>   a committed lockfile, so `ci` gives a reproducible install.
+> - Don't be surprised by the backend on port `5400` — it's started for you by
+>   `npm run dev`.
+
+### Verify the checkout (optional)
+
+```bash
+npm run typecheck && npm run lint && npm test
+```
+
+All green (~1,600 tests) confirms a healthy install.
 
 ## Multiplayer
 
@@ -44,16 +64,16 @@ Figemite ships an MCP server (`@figemite/mcp`) that connects to a running
 board as a multiplayer peer: the AI gets its own visible cursor and name
 pill, and its edits sync live and persist just like a human's.
 
-`@figemite/mcp` isn't published to npm yet, so run it from your clone: build
-it once with `npm run -w @figemite/mcp build`, then add it to Claude Code,
-Cursor, or any MCP-compatible client, pointing at the built bundle:
+`@figemite/mcp` is published to npm, so there's no build step — point your MCP
+client at it with `npx`. Add it to Claude Code, Cursor, or any MCP-compatible
+client:
 
 ```json
 {
   "mcpServers": {
     "figemite": {
-      "command": "node",
-      "args": ["/absolute/path/to/figemite/packages/mcp/dist/index.js"],
+      "command": "npx",
+      "args": ["-y", "@figemite/mcp"],
       "env": {
         "FIGEMITE_HTTP_URL": "http://localhost:5400",
         "FIGEMITE_NAME": "Claude Code",
@@ -64,8 +84,10 @@ Cursor, or any MCP-compatible client, pointing at the built bundle:
 }
 ```
 
-> Once `@figemite/mcp` is published to npm, this simplifies to
-> `"command": "npx"` with `"args": ["-y", "@figemite/mcp"]`.
+> **Hacking on Figemite itself?** To run the MCP server from your clone
+> instead of npm, build it once with `npm run -w @figemite/mcp build` and use
+> `"command": "node"` with `"args":
+> ["/absolute/path/to/figemite/packages/mcp/dist/index.js"]`.
 
 All three env vars are optional. `FIGEMITE_HTTP_URL` defaults to
 `http://localhost:5400`; `FIGEMITE_NAME` is the display name shown in the

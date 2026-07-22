@@ -5,9 +5,9 @@ name: Release
 # prepublish reference audit), builds the `@figemite/mcp` bundle, and cuts a
 # GitHub Release.
 #
-# npm publishing is DEFERRED: the publish step below is commented out. To
-# publish `@figemite/mcp` to npm later, create the `@figemite` npm org, add an
-# `NPM_TOKEN` GitHub Actions secret, and uncomment that step.
+# On a tag push it also publishes `@figemite/mcp` to npm, authenticating with
+# the `NPM_TOKEN` Actions secret. Bump the package version before tagging —
+# npm rejects re-publishing an existing version.
 # `@figemite/{server,client,shared}` are never published (run from a clone —
 # see CONTRIBUTING.md).
 on:
@@ -59,13 +59,14 @@ jobs:
       - name: Build @figemite/mcp publish bundle
         run: npm run -w @figemite/mcp build
 
-      # Deferred: npm publishing is intentionally disabled for now. To enable,
-      # create the `@figemite` npm org + an `NPM_TOKEN` Actions secret, then
-      # uncomment this step (the bundle above is already built/verified).
-      # - name: Publish @figemite/mcp to npm
-      #   run: npm publish -w @figemite/mcp
-      #   env:
-      #     NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+      # Publishes the bundle built/verified above. Authenticates via the
+      # NPM_TOKEN Actions secret (an npm automation / bypass-2FA token with
+      # publish rights to the `@figemite` scope). `publishConfig.access` in
+      # packages/mcp/package.json makes the scoped package public.
+      - name: Publish @figemite/mcp to npm
+        run: npm publish -w @figemite/mcp
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
