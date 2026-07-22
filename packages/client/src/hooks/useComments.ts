@@ -1,12 +1,15 @@
 // ── useComments: comments.json state + mutations ─────────────────────────────
 //
-// Comments live in boards/<slug>/comments.json — a file SEPARATE from the Yjs
-// board doc (@figemite/shared's model/comments.ts module doc: "the AI loop can
-// rewrite board.json wholesale without touching human discussion"). They do
-// NOT sync via Yjs; this hook fetches the file on mount via `lib/boards-api.ts`'s
-// `fetchComments` and persists every mutation immediately via `saveComments`
-// (save-on-each-change, simplest correct option for a low-frequency, file-based
-// resource — no debouncing needed).
+// Comments live in a per-version comments.json — Live's `boards/<slug>/
+// comments.json`, or a draft's `boards/<slug>/.drafts/<draftId>/comments.json`
+// — a file SEPARATE from the Yjs board doc (@figemite/shared's model/comments.ts
+// module doc: "the AI loop can rewrite board.json wholesale without touching
+// human discussion"). The `draftId` argument selects which version's thread this
+// hook reads/writes (undefined = Live). Comments do NOT sync via Yjs; this hook
+// fetches the file on mount via `lib/boards-api.ts`'s `fetchComments` and
+// persists every mutation immediately via `saveComments` (save-on-each-change,
+// simplest correct option for a low-frequency, file-based resource — no
+// debouncing needed).
 //
 // Ported mutation semantics from the original prototype's `src/lib/
 // comment-io.ts` (addComment/addReply/toggleResolved/deleteComment), with two
@@ -67,7 +70,11 @@ function allCommentIds(file: CommentsFile): Set<string> {
   return ids;
 }
 
-export function useComments(slug: string | undefined, opts: UseCommentsOptions): UseComments {
+export function useComments(
+  slug: string | undefined,
+  draftId: string | undefined,
+  opts: UseCommentsOptions,
+): UseComments {
   const [file, setFile] = useState<CommentsFile>({ comments: [] });
 
   // Read through a ref so `mutate` always persists the LATEST state without
@@ -78,10 +85,13 @@ export function useComments(slug: string | undefined, opts: UseCommentsOptions):
     fileRef.current = file;
   }, [file]);
 
+  // `draftId` scopes every read/write to the version being viewed (undefined =
+  // Live). Changing it re-loads and re-targets writes, so a draft's thread and
+  // Live's thread stay independent.
   const load = useCallback(() => {
     if (!slug) return;
-    fetchComments(slug).then((next) => setFile(next));
-  }, [slug]);
+    fetchComments(slug, draftId).then((next) => setFile(next));
+  }, [slug, draftId]);
 
   useEffect(() => {
     load();
@@ -90,21 +100,21 @@ export function useComments(slug: string | undefined, opts: UseCommentsOptions):
   useEffect(() => {
     if (!slug || !opts.onExternalChange) return;
     opts.onExternalChange(load);
-    // `opts.onExternalChange`/`load` are re-registered whenever `slug` changes
-    // (a fresh subscription target) — a caller that always passes the same
-    // stable subscribe function is the expected shape (mirrors useAiLock's
-    // own single-registration contract).
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- registering `opts.onExternalChange` on every render would re-subscribe repeatedly for callers (e.g. useAiLock) that construct a fresh subscribe function each render; `slug` is the intentional re-registration trigger.
-  }, [slug]);
+    // `opts.onExternalChange`/`load` are re-registered whenever the version
+    // (`slug`/`draftId`) changes — a fresh subscription target. A caller that
+    // always passes the same stable subscribe function is the expected shape
+    // (mirrors useAiLock's own single-registration contract).
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- registering `opts.onExternalChange` on every render would re-subscribe repeatedly for callers (e.g. useAiLock) that construct a fresh subscribe function each render; `slug`/`draftId` are the intentional re-registration triggers.
+  }, [slug, draftId]);
 
   const mutate = useCallback(
     (updater: (prev: CommentsFile) => CommentsFile) => {
       if (!slug || opts.readonly) return;
       const next = updater(fileRef.current);
       setFile(next);
-      void saveComments(slug, next);
+      void saveComments(slug, next, draftId);
     },
-    [slug, opts.readonly],
+    [slug, draftId, opts.readonly],
   );
 
   const addComment = useCallback(

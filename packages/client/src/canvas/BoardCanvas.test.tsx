@@ -901,7 +901,16 @@ describe('BoardCanvas — comments (P6-T34)', () => {
     await act(async () => {
       render(<BoardCanvas board={fixtureBoard()} readonly={false} slug="my-board" path={[]} />);
     });
-    expect(fetchCommentsMock).toHaveBeenCalledWith('my-board');
+    expect(fetchCommentsMock).toHaveBeenCalledWith('my-board', undefined);
+  });
+
+  it('scopes comments to the draft when a draftId is set (version isolation)', async () => {
+    await act(async () => {
+      render(
+        <BoardCanvas board={fixtureBoard()} readonly={false} slug="my-board" path={[]} draftId="d1" />,
+      );
+    });
+    expect(fetchCommentsMock).toHaveBeenCalledWith('my-board', 'd1');
   });
 
   it('renders a pin for an existing comment', async () => {
@@ -961,6 +970,7 @@ describe('BoardCanvas — comments (P6-T34)', () => {
       expect.objectContaining({
         comments: [expect.objectContaining({ text: 'a new comment' })],
       }),
+      undefined,
     );
   });
 
@@ -981,7 +991,7 @@ describe('BoardCanvas — comments (P6-T34)', () => {
     await act(async () => {
       render(<BoardCanvas board={fixtureBoard()} readonly={true} slug="my-board" path={[]} />);
     });
-    expect(fetchCommentsMock).toHaveBeenCalledWith('my-board');
+    expect(fetchCommentsMock).toHaveBeenCalledWith('my-board', undefined);
     expect(screen.getByTestId('comment-pin-c1')).toBeInTheDocument();
     // No Toolbar (and thus no comment-mode toggle) in read-only mode.
     expect(screen.queryByRole('button', { name: /comment/i })).not.toBeInTheDocument();

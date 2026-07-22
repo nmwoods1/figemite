@@ -163,15 +163,17 @@ function ReadOnlyCanvas({
   fitView,
   viewport,
   slug,
+  draftId,
   subBoard,
-}: PaneProps & { slug?: string; subBoard?: SubBoardAdapter }) {
+}: PaneProps & { slug?: string; draftId?: string; subBoard?: SubBoardAdapter }) {
   const { nodes, edges } = useBoardStore(store);
   const rf = useMemo(
     () => boardToRf({ nodes, edges }, true, undefined, undefined, subBoard),
     [nodes, edges, subBoard],
   );
   const containerRef = useRef<HTMLDivElement>(null);
-  const comments = useComments(slug, { readonly: true });
+  // `draftId` scopes comments to the version being viewed (undefined = Live).
+  const comments = useComments(slug, draftId, { readonly: true });
 
   return (
     <div ref={containerRef} style={{ width: '100%', height: '100%', position: 'relative' }}>
@@ -508,7 +510,10 @@ function EditableCanvas({
   // post-submit exit) keeps working unchanged.
   const [activeMode, setActiveMode] = useState<ToolbarMode>('none');
   const commentMode = activeMode === 'comment';
-  const comments = useComments(slug, {
+  // `draftId` scopes comments to the version being edited (undefined = Live), so
+  // a draft's thread and Live's thread stay independent — matching `useHistory`
+  // above and the realtime room, which are already draft-scoped.
+  const comments = useComments(slug, draftId, {
     readonly: false,
     onExternalChange: (reload) => {
       reloadCommentsRef.current = reload;
@@ -1101,6 +1106,7 @@ export function BoardCanvas({
             fitView={fitView}
             viewport={board.viewport}
             slug={slug}
+            draftId={draftId}
             subBoard={subBoard}
           />
         ) : (

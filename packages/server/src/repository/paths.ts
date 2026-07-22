@@ -9,12 +9,13 @@
 //   <boardsRoot>/<slug>/board.<seg1>.<seg2>....json     — sub-board (dotted path)
 //   <boardsRoot>/<slug>/.history/                       — root board history
 //   <boardsRoot>/<slug>/.history/<seg1>.<seg2>/         — sub-board history
-//   <boardsRoot>/<slug>/comments.json
+//   <boardsRoot>/<slug>/comments.json                  — prod (Live) comments
 //   <boardsRoot>/<slug>/tags.json
 //   <boardsRoot>/<slug>/drafts.json                    — draft index (sidecar)
 //   <boardsRoot>/<slug>/.drafts/<draftId>/…            — a draft: a full board
-//     directory (board.json, dotted sub-boards, .history/) nested under its
-//     parent. Passing `draftId` to a path builder re-roots the board file
+//     directory (board.json, dotted sub-boards, .history/, comments.json)
+//     nested under its parent. Passing `draftId` to a path builder re-roots the
+//     board file
 //     layout into this directory, so a draft is stored byte-for-byte like a
 //     prod board — just one level deeper. `draftId` obeys the same id grammar
 //     as a path segment (validated below), so `.drafts/<draftId>/` is as
@@ -142,13 +143,31 @@ export function historyDir(
   return assertInsideRoot(boardsRoot, dir);
 }
 
-/** The comments.json file path for a board. Comments are prod-only (human-owned). */
-export function commentsPath(boardsRoot: string, slug: string): string {
+/**
+ * The comments.json file path for a board version — prod when `draftId` is
+ * omitted, or a specific draft when given. Re-roots into `.drafts/<draftId>/`
+ * exactly like `boardFilePath`/`historyDir` so each version owns its own
+ * comment thread (prod -> `<slug>/comments.json`, draft ->
+ * `<slug>/.drafts/<draftId>/comments.json`).
+ */
+export function commentsPath(boardsRoot: string, slug: string, draftId?: string): string {
   validateSlugAndPath(slug, []);
-  return assertInsideRoot(boardsRoot, path.join(boardsRoot, slug, 'comments.json'));
+  if (draftId !== undefined) validateDraftId(draftId);
+  return assertInsideRoot(boardsRoot, path.join(contentDir(boardsRoot, slug, draftId), 'comments.json'));
 }
 
-/** The tags.json file path for a board. Tags are prod-only (human-owned). */
+/**
+ * The tags.json file path for a board. Tags are INTENTIONALLY Live-only — NOT
+ * version-scoped like `commentsPath` (which re-roots into `.drafts/<draftId>/`).
+ * Tags are dashboard categorization: they're only ever edited from the Dashboard
+ * (always the Live board — there is no tag editor in the draft/board view) and
+ * only ever displayed on the Live board's dashboard card. A draft is never shown
+ * on the dashboard, so a per-draft tags file would never surface anywhere, and
+ * carrying draft tags across promote would only ever revert Live's dashboard
+ * tags to the draft's creation-time snapshot. So tags deliberately stay at the
+ * Live root, no `draftId` parameter. (Comments differ: they're placed on the
+ * canvas per version, so they ARE version-scoped — see `commentsPath`.)
+ */
 export function tagsPath(boardsRoot: string, slug: string): string {
   validateSlugAndPath(slug, []);
   return assertInsideRoot(boardsRoot, path.join(boardsRoot, slug, 'tags.json'));

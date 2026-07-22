@@ -206,6 +206,48 @@ describe('comments', () => {
     const bad = await postJson('/api/comments', { board: 'my-board', data: { comments: 'nope' } });
     expect(bad.status).toBe(400);
   });
+
+  it('scopes comments by version — a draft thread is independent of Live', async () => {
+    await postJson('/api/boards', { slug: 'my-board' });
+
+    const live = {
+      comments: [
+        {
+          id: 'live1',
+          target: { type: 'canvas' as const, pos: { x: 1, y: 1 } },
+          author: 'nick',
+          createdAt: '2026-07-06T00:00:00.000Z',
+          text: 'on live',
+          replies: [],
+        },
+      ],
+    };
+    const draft = {
+      comments: [
+        {
+          id: 'draft1',
+          target: { type: 'canvas' as const, pos: { x: 2, y: 2 } },
+          author: 'nick',
+          createdAt: '2026-07-06T00:00:00.000Z',
+          text: 'on draft',
+          replies: [],
+        },
+      ],
+    };
+
+    // Write Live and a draft thread; each POST targets a different version.
+    expect((await postJson('/api/comments', { board: 'my-board', data: live })).status).toBe(200);
+    expect(
+      (await postJson('/api/comments', { board: 'my-board', draft: 'd1', data: draft })).status,
+    ).toBe(200);
+
+    // Each GET reads only its own version — no leak either direction.
+    expect((await getJson('/api/comments?board=my-board')).body).toEqual(live);
+    expect((await getJson('/api/comments?board=my-board&draft=d1')).body).toEqual(draft);
+
+    // A traversal-shaped draft id is rejected.
+    expect((await getJson('/api/comments?board=my-board&draft=..')).status).toBe(400);
+  });
 });
 
 describe('tags', () => {
