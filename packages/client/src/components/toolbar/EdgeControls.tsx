@@ -4,7 +4,7 @@
 // `LineStyleToggle`. Shown only when the current selection is edge-only
 // (Toolbar.tsx gates rendering this whole group); each control commits
 // through the P4-T24 edge-style store methods for every selected edge.
-import type { ArrowStyle, Cardinality, EdgeKind, LineStyle } from '@figemite/shared';
+import type { ArrowStyle, Cardinality, EdgeKind, EdgeRouting, LineStyle } from '@figemite/shared';
 import { LINE_BTN_BASE, SELECT } from './styles.js';
 
 const ARROW_OPTIONS: { value: ArrowStyle; label: string }[] = [
@@ -196,6 +196,115 @@ export function LineStyleToggle({
         }}
       >
         <LineSwatch dashed={true} />
+      </button>
+    </div>
+  );
+}
+
+function RoutingSwatch({ kind }: { kind: EdgeRouting }) {
+  return (
+    <svg width={20} height={10} viewBox="0 0 20 10" aria-hidden>
+      {kind === 'bezier' && (
+        <path
+          d="M1 8 C 7 8, 13 2, 19 2"
+          fill="none"
+          stroke="#1e293b"
+          strokeWidth={1.6}
+          strokeLinecap="round"
+        />
+      )}
+      {kind === 'straight' && (
+        <line
+          x1={1}
+          y1={8}
+          x2={19}
+          y2={2}
+          stroke="#1e293b"
+          strokeWidth={1.6}
+          strokeLinecap="round"
+        />
+      )}
+      {kind === 'elbow' && (
+        <path
+          d="M1 8 L 10 8 L 10 2 L 19 2"
+          fill="none"
+          stroke="#1e293b"
+          strokeWidth={1.6}
+          strokeLinecap="round"
+        />
+      )}
+    </svg>
+  );
+}
+
+export function RoutingToggle({
+  value,
+  onChange,
+}: {
+  value: EdgeRouting | null;
+  onChange: (next: EdgeRouting) => void;
+}) {
+  const bezierActive = value === 'bezier';
+  const straightActive = value === 'straight';
+  const elbowActive = value === 'elbow';
+  return (
+    <div
+      role="group"
+      aria-label="Edge routing"
+      style={{ display: 'inline-flex', borderRadius: 6, overflow: 'hidden' }}
+    >
+      <button
+        type="button"
+        onClick={() => onChange('bezier')}
+        title="Curved"
+        aria-pressed={bezierActive}
+        style={{
+          ...LINE_BTN_BASE,
+          borderTopRightRadius: 0,
+          borderBottomRightRadius: 0,
+          borderTopLeftRadius: 6,
+          borderBottomLeftRadius: 6,
+          background: bezierActive ? '#e0e7ff' : '#fff',
+          borderColor: bezierActive ? '#6366f1' : '#cbd5e1',
+          zIndex: bezierActive ? 1 : 0,
+        }}
+      >
+        <RoutingSwatch kind="bezier" />
+      </button>
+      <button
+        type="button"
+        onClick={() => onChange('straight')}
+        title="Straight"
+        aria-pressed={straightActive}
+        style={{
+          ...LINE_BTN_BASE,
+          marginLeft: -1,
+          borderRadius: 0,
+          background: straightActive ? '#e0e7ff' : '#fff',
+          borderColor: straightActive ? '#6366f1' : '#cbd5e1',
+          zIndex: straightActive ? 1 : 0,
+        }}
+      >
+        <RoutingSwatch kind="straight" />
+      </button>
+      <button
+        type="button"
+        onClick={() => onChange('elbow')}
+        title="Elbow"
+        aria-pressed={elbowActive}
+        style={{
+          ...LINE_BTN_BASE,
+          marginLeft: -1,
+          borderTopLeftRadius: 0,
+          borderBottomLeftRadius: 0,
+          borderTopRightRadius: 6,
+          borderBottomRightRadius: 6,
+          background: elbowActive ? '#e0e7ff' : '#fff',
+          borderColor: elbowActive ? '#6366f1' : '#cbd5e1',
+          zIndex: elbowActive ? 1 : 0,
+        }}
+      >
+        <RoutingSwatch kind="elbow" />
       </button>
     </div>
   );
