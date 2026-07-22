@@ -68,6 +68,7 @@ import type {
   BoardNode,
   Cardinality,
   EdgeKind,
+  EdgeRouting,
   LineStyle,
   WH,
   XY,
@@ -162,6 +163,8 @@ export interface BoardStore {
   setEdgeArrow(id: string, arrow: ArrowStyle): void;
   /** Set an edge's line style (solid/dashed). No-op if read-only. */
   setEdgeLineStyle(id: string, style: LineStyle): void;
+  /** Set an edge's routing style (bezier/straight/elbow). No-op if read-only. */
+  setEdgeRouting(id: string, routing: EdgeRouting): void;
   /** Set an edge's cardinality value (meaningful when kind === 'cardinality'). No-op if read-only. */
   setEdgeCardinality(id: string, cardinality: Cardinality): void;
   /**
@@ -324,6 +327,11 @@ export function createBoardStore(initialBoard: BoardFile, opts: BoardStoreOption
     setEdgeLineStyle(id: string, style: LineStyle) {
       if (opts.readonly) return;
       updateEdgeOp(doc, id, { style });
+    },
+
+    setEdgeRouting(id: string, routing: EdgeRouting) {
+      if (opts.readonly) return;
+      updateEdgeOp(doc, id, { routing });
     },
 
     setEdgeCardinality(id: string, cardinality: Cardinality) {

@@ -476,6 +476,20 @@ describe('useEditableCanvas', () => {
       store.destroy();
     });
 
+    it("wires an edge's onRoutingChange to commit via setEdgeRouting", () => {
+      const store = createBoardStore(fixtureBoard(), { readonly: false });
+      const { result } = renderHook(() => useEditableCanvas(store));
+      const e1 = result.current.edges.find((e) => e.id === 'e1');
+      const onRoutingChange = e1?.data?.onRoutingChange as (id: string, routing: string) => void;
+      expect(onRoutingChange).toBeTypeOf('function');
+      act(() => {
+        onRoutingChange('e1', 'elbow');
+      });
+      const snap = store.getSnapshot().edges.find((e) => e.id === 'e1');
+      expect(snap?.routing).toBe('elbow');
+      store.destroy();
+    });
+
     it("wires a cardinality edge's onCardinalityChange to commit via setEdgeCardinality", () => {
       const board = fixtureBoard();
       board.edges.push({
@@ -528,6 +542,7 @@ describe('useEditableCanvas', () => {
       expect(e1?.data?.onLabelChange).toBeUndefined();
       expect(e1?.data?.onArrowChange).toBeUndefined();
       expect(e1?.data?.onStyleChange).toBeUndefined();
+      expect(e1?.data?.onRoutingChange).toBeUndefined();
       store.destroy();
     });
 

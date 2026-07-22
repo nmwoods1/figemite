@@ -119,6 +119,7 @@ function useEdgeCallbacks(store: BoardStore): EdgeCallbacks {
       onStyleChange: (id: string, style) => store.setEdgeLineStyle(id, style ?? 'solid'),
       onCardinalityChange: (id: string, cardinality) =>
         store.setEdgeCardinality(id, cardinality ?? '1:N'),
+      onRoutingChange: (id: string, routing) => store.setEdgeRouting(id, routing ?? 'bezier'),
     }),
     [store],
   );
