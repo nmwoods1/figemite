@@ -16,3 +16,6 @@ public/
 /packages/client/test-results/
 /packages/client/playwright-report/
 /packages/client/blob-report/
+
+# git worktrees (isolated dev workspaces)
+.worktrees/
