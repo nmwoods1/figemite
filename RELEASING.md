@@ -5,6 +5,64 @@ Figemite version. It covers the mechanical steps, the manual prerequisites
 a human must do before the first real release, and the known follow-ups
 intentionally deferred past v1.0.
 
+## Versioning policy
+
+Figemite follows [Semantic Versioning](https://semver.org): given a
+`MAJOR.MINOR.PATCH` version, we bump
+
+- **MAJOR** when we break a **public contract** (existing boards, connected
+  agents, or configs stop working without a migration),
+- **MINOR** when we **add** backward-compatible capability,
+- **PATCH** for backward-compatible bug fixes.
+
+**What is versioned.** The single released artifact is `@figemite/mcp` (and
+the matching `vX.Y.Z` git tag that triggers `release.yml`). The other three
+packages — `@figemite/{shared,server,client}` — are `"private": true`,
+workspace-internal, and are **not** versioned independently; the git tag is
+the version of the app as a whole.
+
+**Public contracts.** These are the surfaces a change can *break*. A break in
+any of them is a MAJOR bump; adding to any of them is a MINOR bump:
+
+1. **The MCP tool contract** (`AGENTS.md`) — tool names, their required
+   params, and return shapes. AI clients are wired directly to these. Tool
+   names and required params are stable within a major version (adding a new
+   tool, or a new *optional* param, is MINOR).
+2. **The on-disk format** — `board.json`, `comments.json`, `tags.json`,
+   `drafts.json`. Users commit these to git, so the format *is* an API. Note
+   `board.json` carries a `formatVersion` (see
+   `packages/shared/src/model/constants.ts`) with a migration path in
+   `schema.ts`: if an old file can be **auto-migrated on load**, the change
+   ships as MINOR; if old files would fail to load without user action, it's
+   MAJOR.
+3. **The `@figemite/mcp` package interface** — its env vars
+   (`FIGEMITE_HTTP_URL`, `FIGEMITE_NAME`, `FIGEMITE_CLIENT`, …), the
+   `figemite-mcp` bin/CLI, and (once published) the npm entry point.
+4. **The HTTP/WebSocket server API** — `/api/*` routes and the Yjs room /
+   sync protocol old clients depend on.
+5. **Config & security defaults** — e.g. "binds to `127.0.0.1` by default";
+   "LAN sharing and mDNS are off by default". Making a previously-off network
+   surface on-by-default is a MAJOR (and security-relevant) change.
+
+The **UI itself is not a versioned contract** — redesigning the toolbar,
+adding a minimap, restyling nodes, etc. are features (MINOR), never breaks.
+
+**Two tests that decide most cases.** Ask, before a release: *can a user
+upgrade and have their existing boards, connected agents, and config keep
+working untouched?* If yes → MINOR/PATCH; if they must migrate something →
+MAJOR. Concretely:
+
+- **The `board.json` test:** does a file written by the *old* version still
+  open cleanly in the *new* one (directly, or via `migrate` in `schema.ts`)?
+  If not → MAJOR.
+- **The agent test:** does an MCP client configured against the old tool list
+  still work? Removing/renaming/repurposing a tool → MAJOR; adding a tool →
+  MINOR.
+
+Prefer a migration over a break: when the on-disk format must change, add a
+`formatVersion` bump plus a `migrate` step so old boards upgrade silently and
+the release can stay MINOR.
+
 ## Release steps
 
 1. **Push `main`.** Releases are cut from `main`. Every phase branch is
