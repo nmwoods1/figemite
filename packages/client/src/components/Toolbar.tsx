@@ -105,6 +105,7 @@ import type {
   BoardNode,
   Cardinality,
   EdgeKind,
+  EdgeRouting,
   LineStyle,
   ShapeKind,
 } from '@figemite/shared';
@@ -122,6 +123,7 @@ import {
   CardinalitySelect,
   EdgeKindToggle,
   LineStyleToggle,
+  RoutingToggle,
 } from './toolbar/EdgeControls.js';
 import { SaveIndicator } from './toolbar/SaveIndicator.js';
 import { Divider } from './toolbar/styles.js';
@@ -217,6 +219,9 @@ export function Toolbar({
   const selectedCardinality: Cardinality | null = selectionIsEdgeOnly
     ? uniqueValue(selectedEdges.map((e) => e.cardinality ?? '1:N'))
     : null;
+  const selectedRouting: EdgeRouting | null = selectionIsEdgeOnly
+    ? uniqueValue(selectedEdges.map((e) => e.routing ?? 'bezier'))
+    : null;
 
   const handleCycleColor = useCallback(() => {
     for (const n of selectedNodes) {
@@ -247,6 +252,12 @@ export function Toolbar({
   const setCardinalityOnSelection = useCallback(
     (cardinality: Cardinality) => {
       for (const id of selectedEdgeIds) store.setEdgeCardinality(id, cardinality);
+    },
+    [selectedEdgeIds, store],
+  );
+  const setRoutingOnSelection = useCallback(
+    (routing: EdgeRouting) => {
+      for (const id of selectedEdgeIds) store.setEdgeRouting(id, routing);
     },
     [selectedEdgeIds, store],
   );
@@ -432,6 +443,8 @@ export function Toolbar({
               )}
 
               <LineStyleToggle value={selectedLineStyle} onChange={setLineStyleOnSelection} />
+
+              <RoutingToggle value={selectedRouting} onChange={setRoutingOnSelection} />
             </>
           )}
         </>

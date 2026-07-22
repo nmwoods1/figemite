@@ -338,6 +338,38 @@ describe('Toolbar — edge-style controls', () => {
     const { edges } = store.getSnapshot();
     expect(edges[0]).toMatchObject({ kind: 'cardinality', cardinality: '1:N' });
   });
+
+  it('hides the routing control when no edge is selected', () => {
+    const store = createBoardStore(boardWithEdge(), { readonly: false });
+    renderToolbar(store);
+    expect(screen.queryByRole('group', { name: /edge routing/i })).not.toBeInTheDocument();
+  });
+
+  it('shows the routing control when an edge is selected', () => {
+    const store = createBoardStore(boardWithEdge(), { readonly: false });
+    renderToolbar(store, { selectedEdgeIds: new Set(['e1']) });
+    expect(screen.getByRole('group', { name: /edge routing/i })).toBeInTheDocument();
+  });
+
+  it('sets the routing to elbow on the selected edge', () => {
+    const store = createBoardStore(boardWithEdge(), { readonly: false });
+    renderToolbar(store, { selectedEdgeIds: new Set(['e1']) });
+
+    fireEvent.click(screen.getByTitle('Elbow'));
+
+    const { edges } = store.getSnapshot();
+    expect(edges[0]).toMatchObject({ routing: 'elbow' });
+  });
+
+  it('sets the routing to straight on the selected edge', () => {
+    const store = createBoardStore(boardWithEdge(), { readonly: false });
+    renderToolbar(store, { selectedEdgeIds: new Set(['e1']) });
+
+    fireEvent.click(screen.getByTitle('Straight'));
+
+    const { edges } = store.getSnapshot();
+    expect(edges[0]).toMatchObject({ routing: 'straight' });
+  });
 });
 
 describe('Toolbar — sync-status indicator (P5-T29)', () => {
