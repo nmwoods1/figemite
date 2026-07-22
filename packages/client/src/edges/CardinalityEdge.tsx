@@ -17,15 +17,17 @@
 // faithfully from the legacy, which does the same so the pill offsets always
 // point "outward" from the edge regardless of which handles were connected.
 
-import { EdgeLabelRenderer, getBezierPath, Position } from '@xyflow/react';
+import { EdgeLabelRenderer, Position } from '@xyflow/react';
 import type { Edge, EdgeProps } from '@xyflow/react';
-import type { Cardinality, LineStyle } from '@figemite/shared';
+import type { Cardinality, EdgeRouting, LineStyle } from '@figemite/shared';
 import { useEditableText } from '../nodes/useEditableText.js';
+import { useEdgeGeometry } from './useEdgeGeometry.js';
 
 export interface CardinalityEdgeData extends Record<string, unknown> {
   label?: string;
   style: LineStyle;
   cardinality: Cardinality;
+  routing?: EdgeRouting;
   onLabelChange?: (id: string, label: string) => void;
   onCardinalityChange?: (id: string, cardinality: Cardinality) => void;
 }
@@ -70,6 +72,8 @@ function pillOffset(pos: Position): [number, number] {
 
 export function CardinalityEdge({
   id,
+  source,
+  target,
   sourceX,
   sourceY,
   targetX,
@@ -85,27 +89,36 @@ export function CardinalityEdge({
     (next) => data?.onLabelChange?.(id, next.trim()),
   );
 
-  // Auto-detect source/target positions from geometry (ported from the legacy).
+  // Auto-detect source/target positions from raw endpoint geometry (ported from
+  // the legacy). These are the FALLBACK sides — used until both nodes are
+  // measured, at which point useEdgeGeometry's floating clip supplies the real
+  // border sides instead.
   const dx = targetX - sourceX;
   const dy = targetY - sourceY;
-  let srcPos: Position;
-  let tgtPos: Position;
+  let fallbackSrcPos: Position;
+  let fallbackTgtPos: Position;
   if (Math.abs(dy) >= Math.abs(dx)) {
-    srcPos = dy >= 0 ? Position.Bottom : Position.Top;
-    tgtPos = dy >= 0 ? Position.Top : Position.Bottom;
+    fallbackSrcPos = dy >= 0 ? Position.Bottom : Position.Top;
+    fallbackTgtPos = dy >= 0 ? Position.Top : Position.Bottom;
   } else {
-    srcPos = dx >= 0 ? Position.Right : Position.Left;
-    tgtPos = dx >= 0 ? Position.Left : Position.Right;
+    fallbackSrcPos = dx >= 0 ? Position.Right : Position.Left;
+    fallbackTgtPos = dx >= 0 ? Position.Left : Position.Right;
   }
 
-  const [edgePath, labelX, labelY] = getBezierPath({
-    sourceX,
-    sourceY,
-    sourcePosition: srcPos,
-    targetX,
-    targetY,
-    targetPosition: tgtPos,
-  });
+  // Floating endpoints/sides + routing-aware path when both nodes are measured;
+  // otherwise the raw endpoints above with the auto-detected fallback sides.
+  const { edgePath, labelX, labelY, sx, sy, tx, ty, sourcePos: srcPos, targetPos: tgtPos } =
+    useEdgeGeometry({
+      source,
+      target,
+      routing: data?.routing,
+      sourceX,
+      sourceY,
+      targetX,
+      targetY,
+      sourcePosition: fallbackSrcPos,
+      targetPosition: fallbackTgtPos,
+    });
 
   const strokeColor = selected ? '#2563eb' : '#475569';
   const isDashed = data?.style === 'dashed';
@@ -136,7 +149,7 @@ export function CardinalityEdge({
           className="nodrag nopan"
           style={{
             position: 'absolute',
-            transform: `translate(-50%, -50%) translate(${sourceX + srcDx}px, ${sourceY + srcDy}px)`,
+            transform: `translate(-50%, -50%) translate(${sx + srcDx}px, ${sy + srcDy}px)`,
             pointerEvents: 'all',
             zIndex: 10,
           }}
@@ -169,7 +182,7 @@ export function CardinalityEdge({
           className="nodrag nopan"
           style={{
             position: 'absolute',
-            transform: `translate(-50%, -50%) translate(${targetX + tgtDx}px, ${targetY + tgtDy}px)`,
+            transform: `translate(-50%, -50%) translate(${tx + tgtDx}px, ${ty + tgtDy}px)`,
             pointerEvents: 'all',
             zIndex: 10,
           }}
