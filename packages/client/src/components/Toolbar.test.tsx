@@ -351,6 +351,22 @@ describe('Toolbar — edge-style controls', () => {
     expect(screen.getByRole('group', { name: /edge routing/i })).toBeInTheDocument();
   });
 
+  // Routing applies to both edge kinds, so the control must render for a
+  // cardinality edge too (guards against it being trapped inside the
+  // arrow/cardinality kind ternary next to Arrow/Cardinality selects).
+  it('shows the routing control for a cardinality edge too', () => {
+    const board = boardWithEdge();
+    board.edges[0] = {
+      ...board.edges[0],
+      kind: 'cardinality',
+      cardinality: '1:N',
+      arrow: undefined,
+    };
+    const store = createBoardStore(board, { readonly: false });
+    renderToolbar(store, { selectedEdgeIds: new Set(['e1']) });
+    expect(screen.getByRole('group', { name: /edge routing/i })).toBeInTheDocument();
+  });
+
   it('sets the routing to elbow on the selected edge', () => {
     const store = createBoardStore(boardWithEdge(), { readonly: false });
     renderToolbar(store, { selectedEdgeIds: new Set(['e1']) });
