@@ -394,6 +394,16 @@ test.describe('single-user editing parity + persistence (Phase 4 gate)', () => {
       (n) => window.localStorage.setItem('figemite:author', n),
       'Interaction Tester',
     );
+
+    // Grid snapping defaults ON, which rounds committed drag/resize positions
+    // and sizes to the 20px grid — shifting the EXACT deltas the persistence/
+    // parity tests below assert. Those tests predate snapping and verify the
+    // drag/resize -> store -> autosave -> disk loop, not snapping itself, so we
+    // turn snapping OFF here to keep their assertions exact. The dedicated
+    // "snaps a dragged node to the grid" test re-enables it, and snapping's own
+    // logic is unit-tested (coords / useSnapPreference / BoardCanvas /
+    // useEditableCanvas specs).
+    await context.addInitScript(() => window.localStorage.setItem('figemite:snap', '0'));
   });
 
   // ── 1. Create + text ────────────────────────────────────────────────────
@@ -1107,6 +1117,42 @@ test.describe('single-user editing parity + persistence (Phase 4 gate)', () => {
     const p = findNode(persisted, 'sticky1').pos;
     expect(Math.abs(p.x - (startPos.x + 60))).toBeLessThan(10);
     expect(Math.abs(p.y - (startPos.y + 30))).toBeLessThan(10);
+
+    assertNoReactFlowErrors(capture);
+  });
+
+  // ── 6. Grid snapping (default-on) ──────────────────────────────────────────
+
+  test('snaps a dragged node to the 20px grid when snapping is on', async ({ page, context }) => {
+    // Re-enable snapping (the suite's beforeEach disables it for the exact-
+    // delta persistence tests). GRID_SIZE mirrors canvas/coords.ts's 20px grid.
+    const GRID_SIZE = 20;
+    await context.addInitScript(() => window.localStorage.setItem('figemite:snap', '1'));
+
+    const capture = attachConsoleCapture(page);
+    await gotoBoard(page);
+
+    const before = readBoardJson();
+    const startPos = findNode(before, 'sticky1').pos;
+
+    // Drag by a deliberately OFF-grid delta so snapping visibly rounds it.
+    await dragNodeBy(page, 'sticky1', 63, 47);
+
+    // The committed position must land on the 20px grid on both axes (proof
+    // snapToGrid is wired end to end), and must actually have moved.
+    const nearestGridDist = (v: number) => Math.abs(v - Math.round(v / GRID_SIZE) * GRID_SIZE);
+    const persisted = await waitForPersisted((b) => {
+      const p = findNode(b, 'sticky1').pos;
+      return (
+        nearestGridDist(p.x) < 0.5 &&
+        nearestGridDist(p.y) < 0.5 &&
+        (p.x !== startPos.x || p.y !== startPos.y)
+      );
+    }, 'dragged node never snapped to a grid multiple in board.json');
+
+    const p = findNode(persisted, 'sticky1').pos;
+    expect(nearestGridDist(p.x)).toBeLessThan(0.5);
+    expect(nearestGridDist(p.y)).toBeLessThan(0.5);
 
     assertNoReactFlowErrors(capture);
   });
