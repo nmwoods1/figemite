@@ -500,6 +500,48 @@ describe('BoardCanvas', () => {
     expect(screen.queryByRole('button', { name: /^save$/i })).not.toBeInTheDocument();
   });
 
+  // The LIVE (content-locked) board — editable pane, a slug, no draftId — shows
+  // descriptions VIEW-ONLY: an existing description opens read-only (no Save/
+  // toolbar), and a node without one never surfaces the add-description badge.
+  it('on the LIVE board a node description opens READ-ONLY (view, no edit)', () => {
+    const board = fixtureBoard();
+    (board.nodes[0] as { description?: string }).description = 'Read this on live';
+    render(<BoardCanvas board={board} readonly={false} slug="my-board" path={[]} />);
+
+    // Badge is present because a description exists; clicking opens the modal.
+    fireEvent.click(screen.getByTitle('View description'));
+
+    // Read-only modal: content is shown, but there is no edit chrome.
+    expect(screen.getByText('Read this on live')).toBeInTheDocument();
+    expect(screen.queryByText('Edit description')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /^save$/i })).not.toBeInTheDocument();
+  });
+
+  it('on the LIVE board a node with no description shows no add-description affordance', () => {
+    render(<BoardCanvas board={fixtureBoard()} readonly={false} slug="my-board" path={[]} />);
+    const stickyNode = document.querySelector('[data-id="s1"]') as HTMLElement;
+    const rotationWrapper = stickyNode.querySelector(
+      '[data-testid="base-node-rotation"]',
+    ) as HTMLElement;
+    // Hovering must NOT reveal an "Add description" badge on the content-locked
+    // live board (you can only create/edit descriptions inside a draft).
+    fireEvent.mouseEnter(rotationWrapper);
+    expect(screen.queryByTitle('Add description')).not.toBeInTheDocument();
+  });
+
+  it('inside a DRAFT a node description opens in EDIT mode (Save present)', () => {
+    const board = fixtureBoard();
+    (board.nodes[0] as { description?: string }).description = 'Draft notes';
+    render(
+      <BoardCanvas board={board} readonly={false} slug="my-board" draftId="d1" path={[]} />,
+    );
+
+    fireEvent.click(screen.getByTitle('View description'));
+    // A draft is fully editable — the modal opens with the edit toolbar + Save.
+    expect(screen.getByText('Edit description')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /^save$/i })).toBeInTheDocument();
+  });
+
   // ── P5-T29: realtime room wiring (undo/keyboard + no client content-POST) ──
 
   it('an editable board with a slug joins the realtime room targeting the given slug/path', () => {
@@ -1236,5 +1278,58 @@ describe('BoardCanvas — history panel (time-travel, P6-T36)', () => {
     // Undo/redo was cleared as part of the hard reset — Cmd+Z should be a no-op now.
     fireEvent.keyDown(window, { key: 'z', metaKey: true });
     expect(screen.getByText('old text from history')).toBeInTheDocument();
+  });
+
+  it('renders a History button on the LIVE board (no draftId, content-locked)', async () => {
+    await act(async () => {
+      render(<BoardCanvas board={fixtureBoard()} readonly={false} slug="my-board" path={[]} />);
+    });
+    // Version history is browsable on the live board, not only in drafts.
+    expect(screen.getByTitle('Version history')).toBeInTheDocument();
+  });
+
+  it('lists the LIVE board history against prod (no draft id threaded)', async () => {
+    fetchHistoryMock.mockResolvedValue([
+      { id: 'v1', timestamp: '2026-07-06T08:00:00.000Z', trigger: 'save' },
+    ]);
+    await act(async () => {
+      render(<BoardCanvas board={fixtureBoard()} readonly={false} slug="my-board" path={[]} />);
+    });
+
+    fireEvent.click(screen.getByTitle('Version history'));
+
+    // No draftId on the live board → prod's own `.history/` is read (undefined
+    // trailing arg), not a draft's.
+    expect(fetchHistoryMock).toHaveBeenCalledWith('my-board', [], undefined);
+    await vi.waitFor(() => expect(screen.getByText('Human')).toBeInTheDocument());
+  });
+
+  it('previewing on the LIVE board offers no Restore — points to drafts instead', async () => {
+    fetchHistoryMock.mockResolvedValue([
+      { id: 'v1', timestamp: '2026-07-06T08:00:00.000Z', trigger: 'save' },
+    ]);
+    fetchVersionMock.mockResolvedValue(historySnapshotBoard());
+    // No draftId → this is the content-locked live board.
+    await act(async () => {
+      render(<BoardCanvas board={fixtureBoard()} readonly={false} slug="my-board" path={[]} />);
+    });
+
+    fireEvent.click(screen.getByTitle('Version history'));
+    await vi.waitFor(() => expect(screen.getByText(/Latest/)).toBeInTheDocument());
+    await act(async () => {
+      fireEvent.click(screen.getByText(/Latest/));
+      await Promise.resolve();
+    });
+
+    // The preview renders (read-only browsing is allowed on live)...
+    expect(screen.getByText(/Previewing/)).toBeInTheDocument();
+    expect(screen.getByText('old text from history')).toBeInTheDocument();
+    // ...but Restore is gated: no Restore button, a "create a draft" note, and
+    // Discard still available to exit the preview.
+    expect(screen.queryByTitle('Restore this version')).not.toBeInTheDocument();
+    expect(screen.getByText(/create a draft to restore/i)).toBeInTheDocument();
+    expect(
+      screen.getByTitle('Discard preview, return to current version'),
+    ).toBeInTheDocument();
   });
 });

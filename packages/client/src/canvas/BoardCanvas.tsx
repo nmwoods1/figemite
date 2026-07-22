@@ -73,6 +73,7 @@ import { boardToRf } from './rf-adapters.js';
 import type { SubBoardAdapter } from './rf-adapters.js';
 import { MultiSelectResizer } from './MultiSelectResizer.js';
 import { nodeTypes } from '../nodes/index.js';
+import { DescriptionReadOnlyContext } from '../nodes/description-mode.js';
 import { edgeTypes } from '../edges/index.js';
 import { Toolbar } from '../components/Toolbar.js';
 import type { ToolbarMode } from '../components/Toolbar.js';
@@ -265,13 +266,22 @@ function HistoryPreviewPane({ board }: { board: BoardFile }) {
 /** The "previewing an old version" banner (P6-T36) — a clear affordance that
  * what's on screen right now is a READ-ONLY snapshot, not the live board,
  * with Restore/Discard actions. Ported layout from the legacy prototype's
- * inline preview banner (src/components/BoardCanvas.tsx ~L1728-1751). */
+ * inline preview banner (src/components/BoardCanvas.tsx ~L1728-1751).
+ *
+ * `canRestore` gates the Restore button: version history is browsable on the
+ * live (content-locked) board, but restoring writes the snapshot back into the
+ * live doc — a prod content mutation the content-lock forbids (changes to live
+ * go through the human-gated promote flow, not a direct restore). So on the
+ * live board the banner shows a "create a draft to restore" note in place of
+ * the Restore button; Discard (exit preview) stays available everywhere. */
 function HistoryPreviewBanner({
   timestamp,
+  canRestore,
   onRestore,
   onDiscard,
 }: {
   timestamp: string;
+  canRestore: boolean;
   onRestore: () => void;
   onDiscard: () => void;
 }) {
@@ -309,23 +319,33 @@ function HistoryPreviewBanner({
       }}
     >
       <span>Previewing {formatted}</span>
-      <button
-        type="button"
-        onClick={onRestore}
-        style={{
-          background: '#92400e',
-          border: 'none',
-          cursor: 'pointer',
-          fontSize: 11,
-          color: '#fff',
-          fontWeight: 600,
-          padding: '3px 10px',
-          borderRadius: 4,
-        }}
-        title="Restore this version"
-      >
-        Restore
-      </button>
+      {canRestore ? (
+        <button
+          type="button"
+          onClick={onRestore}
+          style={{
+            background: '#92400e',
+            border: 'none',
+            cursor: 'pointer',
+            fontSize: 11,
+            color: '#fff',
+            fontWeight: 600,
+            padding: '3px 10px',
+            borderRadius: 4,
+          }}
+          title="Restore this version"
+        >
+          Restore
+        </button>
+      ) : (
+        // Live board: previewing is fine, but restoring would mutate prod
+        // content. Changes to live go through the promote flow, so point the
+        // user at drafts instead of offering a Restore that the content-lock
+        // forbids.
+        <span style={{ fontStyle: 'italic', opacity: 0.85 }} title="Create a draft to restore">
+          Read-only · create a draft to restore
+        </span>
+      )}
       <button
         type="button"
         onClick={onDiscard}
@@ -441,10 +461,14 @@ function EditableCanvas({
 }: EditablePaneProps) {
   const [descNodeId, setDescNodeId] = useState<string | null>(null);
   const openDescription = useCallback((id: string) => setDescNodeId(id), []);
-  // On the live board (content-locked) descriptions are view-frozen too — pass a
-  // no-op opener so nodes never surface the edit affordance.
+  // The opener is wired on the live board too — descriptions are VIEW-ONLY there
+  // (opened read-only, never edited), so nodes surface an existing description
+  // for reading. The read-only-ness is carried to the badge via
+  // `DescriptionReadOnlyContext` (suppressing hover-to-add) and to the modal via
+  // `readOnly={contentLocked}` below; the store's own no-op-when-content-locked
+  // is enforced by not passing `onSave` in that case.
   const editable = useEditableCanvas(store, {
-    onOpenDescription: contentLocked ? undefined : openDescription,
+    onOpenDescription: openDescription,
     subBoard,
   });
   const multiSelect = useMultiSelectResize(store, editable.selectedNodeIds);
@@ -460,6 +484,12 @@ function EditableCanvas({
   // (the no-room unit-test convenience path) — the Toolbar's History button
   // is omitted entirely in that case (and, transitively, in READONLY mode:
   // the read-only pane never mounts this component at all).
+  //
+  // History is available on the LIVE board too, not only in drafts: on live,
+  // `draftId` is undefined so `useHistory` lists/reads prod's own `.history/`.
+  // Listing and previewing are read-only, so they're safe on the content-frozen
+  // live board; only Restore mutates prod, and it's gated to drafts via the
+  // preview banner's `canRestore={!contentLocked}` below.
   const history = useHistory({ slug, path: path ?? [], draftId, store, undo: undoRedo });
 
   // ── P6-T34: comments (comments.json — separate from the Yjs doc) ───────────
@@ -643,6 +673,7 @@ function EditableCanvas({
         <HistoryPreviewPane board={history.previewedBoard} />
         <HistoryPreviewBanner
           timestamp={previewVersion?.timestamp ?? new Date().toISOString()}
+          canRestore={!contentLocked}
           onRestore={history.restore}
           onDiscard={history.discard}
         />
@@ -657,7 +688,11 @@ function EditableCanvas({
   const overlayModeActive = activeMode === 'pencil' || activeMode === 'annotation';
 
   return (
-    <div ref={containerRef} style={{ width: '100%', height: '100%', position: 'relative' }}>
+    // Provide the description read-only signal to every RF-rendered node so a
+    // content-locked (live) board's nodes show existing descriptions read-only
+    // without offering the hover-to-add affordance — see description-mode.ts.
+    <DescriptionReadOnlyContext.Provider value={contentLocked}>
+      <div ref={containerRef} style={{ width: '100%', height: '100%', position: 'relative' }}>
       <ReactFlow
         {...commonReactFlowProps}
         nodes={editable.nodes}
@@ -739,7 +774,8 @@ function EditableCanvas({
         <DescriptionModal
           nodeLabel={nodeLabel(descNode)}
           initialText={descNode.description ?? ''}
-          onSave={handleSaveDescription}
+          readOnly={contentLocked}
+          onSave={contentLocked ? undefined : handleSaveDescription}
           onClose={() => setDescNodeId(null)}
         />
       )}
@@ -756,7 +792,8 @@ function EditableCanvas({
           />
         </>
       )}
-    </div>
+      </div>
+    </DescriptionReadOnlyContext.Provider>
   );
 }
 

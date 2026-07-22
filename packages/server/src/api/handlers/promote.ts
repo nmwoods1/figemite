@@ -9,9 +9,15 @@
 // Flow (see the plan): gate on the prod AI-lock, snapshot prod first for
 // rollback, copy the draft board tree over prod (replace semantics — prod
 // sub-boards absent from the draft are removed), preserve prod's human-owned
-// comments/tags, then delete the draft. Prod content is pushed through the live
-// Yjs room when one exists (so connected browsers converge immediately) and
-// falls back to a direct disk write otherwise.
+// comments/tags, then OPTIONALLY delete the draft. Prod content is pushed
+// through the live Yjs room when one exists (so connected browsers converge
+// immediately) and falls back to a direct disk write otherwise.
+//
+// `deleteDraft` (body flag, default false) controls whether the draft is
+// removed after a successful promote. The browser surfaces this as an
+// unchecked-by-default "Delete this draft after promotion" checkbox, so by
+// default a promoted draft is KEPT (the user can keep iterating on it, or
+// discard it later); only an explicit opt-in deletes it.
 
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { SlugSchema, PathSegmentSchema, type BoardFile } from '@figemite/shared';
@@ -32,7 +38,11 @@ export async function handlePromoteDraft(
   req: IncomingMessage,
   res: ServerResponse,
 ): Promise<void> {
-  const body = (await readJsonBody(req)) as { board?: unknown; draft?: unknown };
+  const body = (await readJsonBody(req)) as {
+    board?: unknown;
+    draft?: unknown;
+    deleteDraft?: unknown;
+  };
   const slug = typeof body.board === 'string' ? body.board : '';
   if (!SlugSchema.safeParse(slug).success) {
     throw new ValidationError(`Invalid board: ${JSON.stringify(slug)}`);
@@ -41,6 +51,9 @@ export async function handlePromoteDraft(
   if (!PathSegmentSchema.safeParse(draftId).success) {
     throw new ValidationError(`Invalid draft id: ${JSON.stringify(draftId)}`);
   }
+  // Default: keep the draft after promotion. Only an explicit `deleteDraft:
+  // true` removes it (the browser's opt-in "delete after promotion" checkbox).
+  const deleteDraft = body.deleteDraft === true;
 
   // The draft must exist (its root board.json).
   if (!ctx.repo.exists(slug, [], draftId)) {
@@ -98,10 +111,15 @@ export async function handlePromoteDraft(
 
   // 4. Prod comments.json / tags.json are never touched (human-owned).
 
-  // 5. Delete the now-merged draft and de-index it.
-  ctx.repo.delete(slug, [], draftId);
-  const remaining = readDrafts(ctx.config.boardsRoot, slug).drafts.filter((d) => d.id !== draftId);
-  writeDrafts(ctx.config.boardsRoot, slug, { drafts: remaining });
+  // 5. Optionally delete the now-merged draft and de-index it. Default is to
+  //    KEEP it (deleteDraft === false); only an explicit opt-in removes it.
+  if (deleteDraft) {
+    ctx.repo.delete(slug, [], draftId);
+    const remaining = readDrafts(ctx.config.boardsRoot, slug).drafts.filter(
+      (d) => d.id !== draftId,
+    );
+    writeDrafts(ctx.config.boardsRoot, slug, { drafts: remaining });
+  }
 
-  sendJson(res, 200, { ok: true });
+  sendJson(res, 200, { ok: true, deletedDraft: deleteDraft });
 }

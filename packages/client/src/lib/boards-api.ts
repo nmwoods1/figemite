@@ -157,12 +157,21 @@ export async function createBoard(slug: string, label?: string): Promise<void> {
   });
 }
 
-export async function createSubBoard(slug: string, path: string[], label?: string): Promise<void> {
+export async function createSubBoard(
+  slug: string,
+  path: string[],
+  label?: string,
+  draftId?: string,
+): Promise<void> {
   if (READONLY) throw new ReadOnlyError('create a sub-board');
+  // `draft` scopes the seed into the draft's own directory (undefined = prod).
+  // Without it, drilling into a node inside a draft would seed the sub-board in
+  // PROD and then navigation (which stays in the draft) would 404 — the exact
+  // "failed to load board: not found" bug this fixes.
   await fetchJson('/api/create', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ board: slug, path, label }),
+    body: JSON.stringify({ board: slug, path, label, draft: draftId }),
   });
 }
 
@@ -214,13 +223,21 @@ export async function discardDraft(slug: string, draftId: string): Promise<void>
   await fetchJson(url, { method: 'DELETE' });
 }
 
-/** Approves a draft, overwriting prod with its content. Human-only. */
-export async function promoteDraft(slug: string, draftId: string): Promise<void> {
+/**
+ * Approves a draft, overwriting prod with its content. Human-only.
+ * `deleteDraft` (default false) opts into removing the draft after a successful
+ * promote; by default the draft is kept.
+ */
+export async function promoteDraft(
+  slug: string,
+  draftId: string,
+  deleteDraft = false,
+): Promise<void> {
   if (READONLY) throw new ReadOnlyError('approve a draft');
   await fetchJson('/api/board/promote', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ board: slug, draft: draftId }),
+    body: JSON.stringify({ board: slug, draft: draftId, deleteDraft }),
   });
 }
 

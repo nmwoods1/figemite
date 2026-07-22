@@ -158,7 +158,7 @@ describe('GET /api/board?draft=', () => {
 });
 
 describe('POST /api/board/promote', () => {
-  it('overwrites prod content with the draft, snapshots prod first, and deletes the draft', async () => {
+  it('overwrites prod content with the draft, snapshots prod first, and KEEPS the draft by default', async () => {
     h.ctx.repo.seedBoard('spend', 'Spend');
     h.ctx.repo.write('spend', [], boardWith('Spend', 'prodNode'));
 
@@ -172,6 +172,7 @@ describe('POST /api/board/promote', () => {
       body: JSON.stringify({ board: 'spend', draft: draftId }),
     });
     expect(res.status).toBe(200);
+    expect((await res.json()).deletedDraft).toBe(false);
 
     // Prod now has the draft's CONTENT but keeps its own label.
     const prod = h.ctx.repo.read('spend');
@@ -181,6 +182,25 @@ describe('POST /api/board/promote', () => {
     // A 'promote' snapshot of the pre-promote prod state exists.
     const versions = h.ctx.history.list('spend', []);
     expect(versions.some((v) => v.trigger === 'promote')).toBe(true);
+
+    // The draft is KEPT by default (dir + index entry both survive).
+    expect(h.ctx.repo.exists('spend', [], draftId)).toBe(true);
+    const list = await (await fetch(`${h.url}/api/drafts?board=spend`)).json();
+    expect(list.drafts.map((d: { id: string }) => d.id)).toEqual([draftId]);
+  });
+
+  it('deletes the draft after promotion when deleteDraft is true', async () => {
+    h.ctx.repo.seedBoard('spend', 'Spend');
+    const draftId = await createDraft('spend');
+    h.ctx.repo.write('spend', [], boardWith('Spend', 'draftNode'), draftId);
+
+    const res = await fetch(`${h.url}/api/board/promote`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ board: 'spend', draft: draftId, deleteDraft: true }),
+    });
+    expect(res.status).toBe(200);
+    expect((await res.json()).deletedDraft).toBe(true);
 
     // The draft is gone (dir + index entry).
     expect(h.ctx.repo.exists('spend', [], draftId)).toBe(false);

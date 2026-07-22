@@ -123,6 +123,22 @@ describe('Toolbar — content-locked (live board)', () => {
     expect(screen.getByTitle('Sticky note')).toBeInTheDocument();
     expect(screen.getByTitle('Pencil')).toBeInTheDocument();
   });
+
+  it('still shows the Version history button when locked (live board)', () => {
+    const store = createBoardStore(emptyBoard(), { readonly: false });
+    renderToolbar(store, { contentLocked: true, onOpenHistory: vi.fn() });
+    // Version history is browsable on the live board; only its Restore action
+    // is gated (in the preview banner, not the toolbar).
+    expect(screen.getByTitle('Version history')).toBeInTheDocument();
+  });
+
+  it('calls onOpenHistory when the history button is clicked on a locked board', () => {
+    const store = createBoardStore(emptyBoard(), { readonly: false });
+    const onOpenHistory = vi.fn();
+    renderToolbar(store, { contentLocked: true, onOpenHistory });
+    fireEvent.click(screen.getByTitle('Version history'));
+    expect(onOpenHistory).toHaveBeenCalled();
+  });
 });
 
 describe('Toolbar — add-node buttons', () => {

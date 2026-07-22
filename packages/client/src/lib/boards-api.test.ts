@@ -154,6 +154,18 @@ describe('boards-api', () => {
       });
     });
 
+    it('createSubBoard threads the draft id into the POST /api/create body', async () => {
+      fetchMock.mockResolvedValueOnce(jsonResponse({ ok: true, existed: false }));
+
+      await createSubBoard('spend', ['nodeA'], 'Node A', 'draft1');
+
+      expect(fetchMock).toHaveBeenCalledWith('/api/create', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ board: 'spend', path: ['nodeA'], label: 'Node A', draft: 'draft1' }),
+      });
+    });
+
     it('deleteSubBoard calls DELETE /api/board?board=&path=', async () => {
       fetchMock.mockResolvedValueOnce(jsonResponse({ ok: true, deleted: [] }));
 

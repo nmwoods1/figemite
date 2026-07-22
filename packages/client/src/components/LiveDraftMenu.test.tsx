@@ -53,13 +53,27 @@ describe('LiveDraftMenu', () => {
     expect(onOpenDraft).toHaveBeenCalledWith('d1');
   });
 
-  it('promote asks for confirmation then calls promoteDraft', async () => {
+  it('promote asks for confirmation then calls promoteDraft, keeping the draft by default', async () => {
     render(<LiveDraftMenu slug="spend" onOpenDraft={() => {}} onExitDraft={() => {}} />);
     fireEvent.click(screen.getByRole('button', { name: /Live/ }));
     await waitFor(() => expect(screen.getByText('New card limits')).toBeTruthy());
     fireEvent.click(screen.getByRole('button', { name: 'Promote draft New card limits to live' }));
+    // The "delete after promotion" checkbox is present and unchecked by default.
+    const checkbox = screen.getByRole('checkbox', { name: /delete this draft after promotion/i });
+    expect(checkbox).not.toBeChecked();
     fireEvent.click(screen.getByRole('button', { name: 'Promote to live' }));
-    await waitFor(() => expect(api.promoteDraft).toHaveBeenCalledWith('spend', 'd1'));
+    // deleteDraft defaults to false (draft kept).
+    await waitFor(() => expect(api.promoteDraft).toHaveBeenCalledWith('spend', 'd1', false));
+  });
+
+  it('promote deletes the draft when the "delete after promotion" checkbox is checked', async () => {
+    render(<LiveDraftMenu slug="spend" onOpenDraft={() => {}} onExitDraft={() => {}} />);
+    fireEvent.click(screen.getByRole('button', { name: /Live/ }));
+    await waitFor(() => expect(screen.getByText('New card limits')).toBeTruthy());
+    fireEvent.click(screen.getByRole('button', { name: 'Promote draft New card limits to live' }));
+    fireEvent.click(screen.getByRole('checkbox', { name: /delete this draft after promotion/i }));
+    fireEvent.click(screen.getByRole('button', { name: 'Promote to live' }));
+    await waitFor(() => expect(api.promoteDraft).toHaveBeenCalledWith('spend', 'd1', true));
   });
 
   it('does not double-submit promote when the confirm button is clicked twice', async () => {

@@ -5,6 +5,7 @@
 // LiveDraftMenu for the human-only Discard and Promote confirmations, replacing
 // the old DraftBanner's window.confirm() calls.
 import { useEffect } from 'react';
+import type { ReactNode } from 'react';
 
 export interface ConfirmModalProps {
   title: string;
@@ -16,6 +17,9 @@ export interface ConfirmModalProps {
   busy?: boolean;
   /** Inline error surfaced under the body (e.g. a failed API call). */
   error?: string | null;
+  /** Optional extra content rendered between the body and the action buttons —
+   * e.g. an opt-in checkbox for a per-action option. */
+  extra?: ReactNode;
   onConfirm: () => void;
   onCancel: () => void;
 }
@@ -27,6 +31,7 @@ export default function ConfirmModal({
   tone = 'primary',
   busy = false,
   error = null,
+  extra = null,
   onConfirm,
   onCancel,
 }: ConfirmModalProps) {
@@ -70,6 +75,8 @@ export default function ConfirmModal({
           {title}
         </h2>
         <p style={{ margin: '0 0 18px', fontSize: 13, color: '#475569', lineHeight: 1.5 }}>{body}</p>
+
+        {extra && <div style={{ marginBottom: 16 }}>{extra}</div>}
 
         {error && (
           <div
