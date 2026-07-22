@@ -500,6 +500,48 @@ describe('BoardCanvas', () => {
     expect(screen.queryByRole('button', { name: /^save$/i })).not.toBeInTheDocument();
   });
 
+  // The LIVE (content-locked) board — editable pane, a slug, no draftId — shows
+  // descriptions VIEW-ONLY: an existing description opens read-only (no Save/
+  // toolbar), and a node without one never surfaces the add-description badge.
+  it('on the LIVE board a node description opens READ-ONLY (view, no edit)', () => {
+    const board = fixtureBoard();
+    (board.nodes[0] as { description?: string }).description = 'Read this on live';
+    render(<BoardCanvas board={board} readonly={false} slug="my-board" path={[]} />);
+
+    // Badge is present because a description exists; clicking opens the modal.
+    fireEvent.click(screen.getByTitle('View description'));
+
+    // Read-only modal: content is shown, but there is no edit chrome.
+    expect(screen.getByText('Read this on live')).toBeInTheDocument();
+    expect(screen.queryByText('Edit description')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /^save$/i })).not.toBeInTheDocument();
+  });
+
+  it('on the LIVE board a node with no description shows no add-description affordance', () => {
+    render(<BoardCanvas board={fixtureBoard()} readonly={false} slug="my-board" path={[]} />);
+    const stickyNode = document.querySelector('[data-id="s1"]') as HTMLElement;
+    const rotationWrapper = stickyNode.querySelector(
+      '[data-testid="base-node-rotation"]',
+    ) as HTMLElement;
+    // Hovering must NOT reveal an "Add description" badge on the content-locked
+    // live board (you can only create/edit descriptions inside a draft).
+    fireEvent.mouseEnter(rotationWrapper);
+    expect(screen.queryByTitle('Add description')).not.toBeInTheDocument();
+  });
+
+  it('inside a DRAFT a node description opens in EDIT mode (Save present)', () => {
+    const board = fixtureBoard();
+    (board.nodes[0] as { description?: string }).description = 'Draft notes';
+    render(
+      <BoardCanvas board={board} readonly={false} slug="my-board" draftId="d1" path={[]} />,
+    );
+
+    fireEvent.click(screen.getByTitle('View description'));
+    // A draft is fully editable — the modal opens with the edit toolbar + Save.
+    expect(screen.getByText('Edit description')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /^save$/i })).toBeInTheDocument();
+  });
+
   // ── P5-T29: realtime room wiring (undo/keyboard + no client content-POST) ──
 
   it('an editable board with a slug joins the realtime room targeting the given slug/path', () => {

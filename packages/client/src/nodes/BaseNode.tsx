@@ -34,11 +34,12 @@
 // `onOpenDescription` is only ever passed down for an editable board's
 // describable node types, so this is a safe, read-only-callback-free signal.
 
-import { useState } from 'react';
+import { useContext, useState } from 'react';
 import type { CSSProperties, ReactNode, RefObject } from 'react';
 import type { DescriptionBadgeProps } from './DescriptionBadge.js';
 import { DescriptionBadge } from './DescriptionBadge.js';
 import { DrillInBadge } from './DrillInBadge.js';
+import { DescriptionReadOnlyContext } from './description-mode.js';
 
 export interface BaseNodeProps {
   nodeId: string;
@@ -95,13 +96,19 @@ export function BaseNode({
   style,
   rotationRef,
 }: BaseNodeProps) {
-  const editable = !!onOpenDescription;
+  // Descriptions can be opened whenever `onOpenDescription` is wired, but the
+  // hover-to-ADD affordance is suppressed when descriptions are read-only (the
+  // content-locked live board): there the badge appears only for a node that
+  // already HAS a description, and clicking it opens a read-only view. Drafts
+  // (and every provider-less render) default to editable, unchanged.
+  const descriptionReadOnly = useContext(DescriptionReadOnlyContext);
+  const canAddDescription = !!onOpenDescription && !descriptionReadOnly;
   const [hovered, setHovered] = useState(false);
 
   const descriptionBadgeProps: DescriptionBadgeProps = {
     nodeId,
     description,
-    editable,
+    editable: canAddDescription,
     hovered,
     onOpenDescription,
     style: descriptionBadgeStyle,

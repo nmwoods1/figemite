@@ -44,6 +44,9 @@ export default function LiveDraftMenu({
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState<Pending>(null);
   const [pendingError, setPendingError] = useState<string | null>(null);
+  // Promote-only option: delete the draft after a successful promote. Unchecked
+  // by default — a promoted draft is kept unless the user opts in.
+  const [deleteAfterPromote, setDeleteAfterPromote] = useState(false);
   // Inline rename: which draft's title is being edited, and the working value.
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editValue, setEditValue] = useState('');
@@ -109,7 +112,7 @@ export default function LiveDraftMenu({
     setBusy(true);
     setPendingError(null);
     try {
-      if (pending.kind === 'promote') await promoteDraft(slug, pending.draft.id);
+      if (pending.kind === 'promote') await promoteDraft(slug, pending.draft.id, deleteAfterPromote);
       else await discardDraft(slug, pending.draft.id);
       const actedCurrent = pending.draft.id === draftId;
       setPending(null);
@@ -340,6 +343,7 @@ export default function LiveDraftMenu({
                             title="Promote to Live"
                             onClick={() => {
                               setPendingError(null);
+                              setDeleteAfterPromote(false);
                               setPending({ kind: 'promote', draft: d });
                             }}
                             style={miniBtn}
@@ -409,6 +413,28 @@ export default function LiveDraftMenu({
           tone={pending.kind === 'promote' ? 'primary' : 'danger'}
           busy={busy}
           error={pendingError}
+          extra={
+            pending.kind === 'promote' ? (
+              <label
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 8,
+                  fontSize: 13,
+                  color: '#334155',
+                  cursor: busy ? 'default' : 'pointer',
+                }}
+              >
+                <input
+                  type="checkbox"
+                  checked={deleteAfterPromote}
+                  disabled={busy}
+                  onChange={(e) => setDeleteAfterPromote(e.target.checked)}
+                />
+                Delete this draft after promotion
+              </label>
+            ) : null
+          }
           onConfirm={runPending}
           onCancel={() => {
             if (!busy) {

@@ -217,15 +217,22 @@ function BoardRoute({
   const handleDrillIn = useCallback(
     async (nodeId: string) => {
       const nextPath = [...path, nodeId];
-      // Editable mode: auto-create an empty sub-board on first drill-in
-      // (POST /api/create is idempotent server-side and labels it from the
-      // node's own text). Skipped when one already exists, and in READONLY
-      // mode (where the badge only ever appears for existing sub-boards).
-      if (!READONLY && !subBoardChildIds.has(nodeId)) {
+      // Auto-create the sub-board on first drill-in, but ONLY inside a draft:
+      // the live (prod) board is content-locked, so sub-boards can only be
+      // created in a draft (and READONLY never creates at all — its badge only
+      // appears for existing sub-boards). The seed MUST target the SAME scope
+      // we're viewing (`draftId`), or navigation — which stays in the draft —
+      // would 404 on a sub-board that was seeded in prod instead. POST
+      // /api/create is idempotent (a no-op when the sub-board already exists),
+      // so we call it unconditionally in a draft rather than gating on the
+      // prod-scoped `subBoardChildIds`, which fixes drilling into a sub-board
+      // that prod gained after this draft was branched.
+      const inDraft = !READONLY && !!draftId;
+      if (inDraft) {
         const board = state.status === 'ready' ? state.board : undefined;
         const label = nodeLabel(board?.nodes.find((n) => n.id === nodeId));
         try {
-          await createSubBoard(slug, nextPath, label || undefined);
+          await createSubBoard(slug, nextPath, label || undefined, draftId);
         } catch {
           // Navigate anyway — the sub-board route's own getBoard surfaces any
           // real error there rather than swallowing the drill-in silently.
@@ -233,7 +240,7 @@ function BoardRoute({
       }
       onNavigate(nextPath);
     },
-    [slug, path, subBoardChildIds, state, onNavigate],
+    [slug, path, draftId, state, onNavigate],
   );
 
   // Breadcrumb label polish: show the current sub-board's own label (set from

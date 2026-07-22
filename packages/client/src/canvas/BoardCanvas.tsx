@@ -73,6 +73,7 @@ import { boardToRf } from './rf-adapters.js';
 import type { SubBoardAdapter } from './rf-adapters.js';
 import { MultiSelectResizer } from './MultiSelectResizer.js';
 import { nodeTypes } from '../nodes/index.js';
+import { DescriptionReadOnlyContext } from '../nodes/description-mode.js';
 import { edgeTypes } from '../edges/index.js';
 import { Toolbar } from '../components/Toolbar.js';
 import type { ToolbarMode } from '../components/Toolbar.js';
@@ -460,10 +461,14 @@ function EditableCanvas({
 }: EditablePaneProps) {
   const [descNodeId, setDescNodeId] = useState<string | null>(null);
   const openDescription = useCallback((id: string) => setDescNodeId(id), []);
-  // On the live board (content-locked) descriptions are view-frozen too — pass a
-  // no-op opener so nodes never surface the edit affordance.
+  // The opener is wired on the live board too — descriptions are VIEW-ONLY there
+  // (opened read-only, never edited), so nodes surface an existing description
+  // for reading. The read-only-ness is carried to the badge via
+  // `DescriptionReadOnlyContext` (suppressing hover-to-add) and to the modal via
+  // `readOnly={contentLocked}` below; the store's own no-op-when-content-locked
+  // is enforced by not passing `onSave` in that case.
   const editable = useEditableCanvas(store, {
-    onOpenDescription: contentLocked ? undefined : openDescription,
+    onOpenDescription: openDescription,
     subBoard,
   });
   const multiSelect = useMultiSelectResize(store, editable.selectedNodeIds);
@@ -683,7 +688,11 @@ function EditableCanvas({
   const overlayModeActive = activeMode === 'pencil' || activeMode === 'annotation';
 
   return (
-    <div ref={containerRef} style={{ width: '100%', height: '100%', position: 'relative' }}>
+    // Provide the description read-only signal to every RF-rendered node so a
+    // content-locked (live) board's nodes show existing descriptions read-only
+    // without offering the hover-to-add affordance — see description-mode.ts.
+    <DescriptionReadOnlyContext.Provider value={contentLocked}>
+      <div ref={containerRef} style={{ width: '100%', height: '100%', position: 'relative' }}>
       <ReactFlow
         {...commonReactFlowProps}
         nodes={editable.nodes}
@@ -765,7 +774,8 @@ function EditableCanvas({
         <DescriptionModal
           nodeLabel={nodeLabel(descNode)}
           initialText={descNode.description ?? ''}
-          onSave={handleSaveDescription}
+          readOnly={contentLocked}
+          onSave={contentLocked ? undefined : handleSaveDescription}
           onClose={() => setDescNodeId(null)}
         />
       )}
@@ -782,7 +792,8 @@ function EditableCanvas({
           />
         </>
       )}
-    </div>
+      </div>
+    </DescriptionReadOnlyContext.Provider>
   );
 }
 
