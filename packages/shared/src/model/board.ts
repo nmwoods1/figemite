@@ -11,6 +11,12 @@
 export type ArrowStyle = 'none' | 'end' | 'start' | 'both';
 export type LineStyle = 'solid' | 'dashed';
 
+// How an edge is drawn: 'bezier' = current default curved look, 'straight' =
+// a direct line, 'elbow' = orthogonal (right-angle) routing. Meaningful for
+// both edge kinds ('arrow' and 'cardinality'), like `style`. Defaults to
+// 'bezier' when absent, so existing board files stay valid.
+export type EdgeRouting = 'bezier' | 'straight' | 'elbow';
+
 // Edge kind: 'arrow' = directional arrows (existing behaviour); 'cardinality' =
 // ER-style 1/N pills at each endpoint with no arrowheads. Defaults to 'arrow'
 // when missing so old board files stay valid.
@@ -140,6 +146,8 @@ export interface BoardEdge {
   arrow?: ArrowStyle;
   // Meaningful when kind === 'cardinality'.
   cardinality?: Cardinality;
+  // How the edge is drawn. Defaults to 'bezier' when absent.
+  routing?: EdgeRouting;
 }
 
 export interface BoardFile {

@@ -91,6 +91,7 @@ export const ArrowStyleSchema = z.enum(['none', 'end', 'start', 'both']);
 export const LineStyleSchema = z.enum(['solid', 'dashed']);
 export const EdgeKindSchema = z.enum(['arrow', 'cardinality']);
 export const CardinalitySchema = z.enum(['1:1', '1:N', 'N:1', 'N:N']);
+export const EdgeRoutingSchema = z.enum(['bezier', 'straight', 'elbow']);
 
 // StickyColor is a free-form hex string (like ShapeNode/FrameNode's `color`)
 // — STICKY_COLORS is only the picker palette/default, not an exhaustive
@@ -195,6 +196,7 @@ export const BoardEdgeSchema = z.object({
   kind: EdgeKindSchema.optional(),
   arrow: ArrowStyleSchema.optional(),
   cardinality: CardinalitySchema.optional(),
+  routing: EdgeRoutingSchema.optional(),
 });
 
 // ── BoardFile schema (canonical v1) ─────────────────────────────────────────
