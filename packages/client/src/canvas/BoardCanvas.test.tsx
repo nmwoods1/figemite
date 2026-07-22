@@ -155,6 +155,9 @@ function lastReactFlowProps(): ComponentProps<typeof ReactFlow> {
 }
 
 beforeEach(() => {
+  // The snap preference (hooks/useSnapPreference.ts) persists to localStorage;
+  // clear it so each test starts from the default (ON) unless it sets otherwise.
+  localStorage.clear();
   vi.useFakeTimers();
   joinBoardRoomMock.mockReset();
   saveBoardSpy.mockReset();
@@ -275,6 +278,27 @@ describe('BoardCanvas', () => {
     expect(container.querySelector('.react-flow__controls-interactive')).toBeFalsy();
     expect(container.querySelector('.react-flow__controls-zoomin')).toBeTruthy();
     expect(container.querySelector('.react-flow__controls-fitview')).toBeTruthy();
+  });
+
+  // ── Grid snapping: native drag-snap on the editable pane ──────────────────
+  // The snap preference (hooks/useSnapPreference.ts) drives the editable
+  // <ReactFlow>'s native `snapToGrid`/`snapGrid`. Default ON; persisted
+  // per-browser under localStorage['figemite:snap'] ('1'/'0').
+
+  it('enables ReactFlow drag-snap by default (snapToGrid on, snapGrid [20,20])', () => {
+    render(<BoardCanvas board={fixtureBoard()} readonly={false} />);
+    const props = lastReactFlowProps();
+    expect(props.snapToGrid).toBe(true);
+    expect(props.snapGrid).toEqual([20, 20]);
+  });
+
+  it('disables ReactFlow drag-snap when the snap preference is off', () => {
+    localStorage.setItem('figemite:snap', '0');
+    render(<BoardCanvas board={fixtureBoard()} readonly={false} />);
+    const props = lastReactFlowProps();
+    expect(props.snapToGrid).toBe(false);
+    // The grid is still supplied — only snapping is disabled.
+    expect(props.snapGrid).toEqual([20, 20]);
   });
 
   // ── Editable path (P4-T22) ──────────────────────────────────────────────────

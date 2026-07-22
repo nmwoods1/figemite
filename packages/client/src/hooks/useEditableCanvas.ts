@@ -49,6 +49,7 @@ import type { BoardEdge } from '@figemite/shared';
 import type { BoardStore } from '../store/board-store.js';
 import { useBoardStore } from '../store/use-board-store.js';
 import { boardToRf } from '../canvas/rf-adapters.js';
+import { snapSize } from '../canvas/coords.js';
 import type {
   BoardRfEdge,
   BoardRfNode,
@@ -81,15 +82,28 @@ import type { SelectionParams } from './useSelection.js';
  * necessarily stable itself — the same ref-indirection technique the
  * (since-removed) content-autosave hook used for its scheduleSave/
  * performSave refs.
+ *
+ * `snapEnabled` (grid-snapping) is read through the SAME ref-indirection so
+ * flipping the snap preference never churns this memo (kept keyed on `store`
+ * alone) — otherwise every node's `data` bag would get fresh callback
+ * identities on each toggle, defeating rf-adapters.ts's shallow-diff
+ * stability. When on, a committed resize is rounded to the grid via
+ * `snapSize` (canvas/coords.ts); when off, the raw size passes through.
  */
 function useNodeCallbacks(
   store: BoardStore,
-  onOpenDescription?: (id: string) => void,
+  onOpenDescription: ((id: string) => void) | undefined,
+  snapEnabled: boolean,
 ): NodeCallbacks {
   const onOpenDescriptionRef = useRef(onOpenDescription);
   useEffect(() => {
     onOpenDescriptionRef.current = onOpenDescription;
   }, [onOpenDescription]);
+
+  const snapEnabledRef = useRef(snapEnabled);
+  useEffect(() => {
+    snapEnabledRef.current = snapEnabled;
+  }, [snapEnabled]);
 
   return useMemo<NodeCallbacks>(
     () => ({
@@ -97,8 +111,12 @@ function useNodeCallbacks(
       onTitleChange: (id: string, title: string) => store.setNodeText(id, title),
       onOpenDescription: (id: string) => onOpenDescriptionRef.current?.(id),
       onResizeEnd: (id: string, size: { width: number; height: number }) =>
-        store.resizeNode(id, size),
-      onResizeEndSquare: (id: string, size: number) => store.resizeNode(id, size),
+        store.resizeNode(id, snapEnabledRef.current ? snapSize(size) : size),
+      onResizeEndSquare: (id: string, size: number) =>
+        store.resizeNode(
+          id,
+          snapEnabledRef.current ? snapSize({ width: size, height: size }).width : size,
+        ),
       onRotate: (id: string, rotation: number) => store.rotateNode(id, rotation),
     }),
     [store],
@@ -186,6 +204,12 @@ export interface UseEditableCanvasOptions {
    * `boardToRf` result stays reference-stable across re-renders even if the
    * caller's handler closure isn't (same technique as `onOpenDescription`). */
   subBoard?: SubBoardAdapter;
+  /** Client-only view preference (hooks/useSnapPreference.ts): when true,
+   * committed drag/resize sizes are rounded to the grid (`snapSize`). Defaults
+   * to true (matching the hook's own default). Read through a ref inside
+   * `useNodeCallbacks` so toggling it never churns the memoized node-callbacks
+   * bag. */
+  snapEnabled?: boolean;
 }
 
 export function useEditableCanvas(
@@ -194,7 +218,11 @@ export function useEditableCanvas(
 ): EditableCanvasProps {
   const snapshot = useBoardStore(store);
   const selection = useSelection();
-  const nodeCallbacks = useNodeCallbacks(store, options.onOpenDescription);
+  const nodeCallbacks = useNodeCallbacks(
+    store,
+    options.onOpenDescription,
+    options.snapEnabled ?? true,
+  );
   const edgeCallbacks = useEdgeCallbacks(store);
   const subBoard = useStableSubBoard(options.subBoard);
 

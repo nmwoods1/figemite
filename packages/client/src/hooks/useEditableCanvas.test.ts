@@ -365,7 +365,10 @@ describe('useEditableCanvas', () => {
         size: 64,
       });
       const store = createBoardStore(board, { readonly: false });
-      const { result } = renderHook(() => useEditableCanvas(store));
+      // `snapEnabled: false` keeps this a pure "the numeric-size seam reaches
+      // resizeNode" wiring test — grid-snapping of the size is covered by the
+      // dedicated snap tests below (96 would otherwise round to 100).
+      const { result } = renderHook(() => useEditableCanvas(store, { snapEnabled: false }));
       const em1 = result.current.nodes.find((n) => n.id === 'em1');
       const onResizeEnd = em1?.data.onResizeEnd as (id: string, size: number) => void;
       expect(onResizeEnd).toBeTypeOf('function');
@@ -374,6 +377,92 @@ describe('useEditableCanvas', () => {
       });
       const snap = store.getSnapshot().nodes.find((n) => n.id === 'em1');
       expect(snap).toMatchObject({ size: 96 });
+      store.destroy();
+    });
+
+    // ── Grid-snap on committed resize sizes (client-only view pref) ──────────
+    // When `snapEnabled` is true, a committed resize is rounded to the grid
+    // via canvas/coords.ts's `snapSize`; when false, the raw size passes
+    // through. The flag is read through a ref so toggling it never churns the
+    // node-callbacks memo (asserted in the stability tests above).
+
+    it('snaps a committed resize to the grid when snapEnabled is true', () => {
+      const store = createBoardStore(fixtureBoard(), { readonly: false });
+      const { result } = renderHook(() => useEditableCanvas(store, { snapEnabled: true }));
+      const onResizeEnd = result.current.nodes.find((n) => n.id === 's1')?.data.onResizeEnd as (
+        id: string,
+        size: { width: number; height: number },
+      ) => void;
+      act(() => {
+        onResizeEnd('s1', { width: 137, height: 82 });
+      });
+      const snap = store.getSnapshot().nodes.find((n) => n.id === 's1');
+      // snapSize rounds to the nearest 20: 137 -> 140, 82 -> 80.
+      expect(snap).toMatchObject({ size: { width: 140, height: 80 } });
+      store.destroy();
+    });
+
+    it('commits the raw resize size unchanged when snapEnabled is false', () => {
+      const store = createBoardStore(fixtureBoard(), { readonly: false });
+      const { result } = renderHook(() => useEditableCanvas(store, { snapEnabled: false }));
+      const onResizeEnd = result.current.nodes.find((n) => n.id === 's1')?.data.onResizeEnd as (
+        id: string,
+        size: { width: number; height: number },
+      ) => void;
+      act(() => {
+        onResizeEnd('s1', { width: 137, height: 82 });
+      });
+      const snap = store.getSnapshot().nodes.find((n) => n.id === 's1');
+      expect(snap).toMatchObject({ size: { width: 137, height: 82 } });
+      store.destroy();
+    });
+
+    it('snaps a committed SQUARE resize to the grid when snapEnabled is true', () => {
+      const board = fixtureBoard();
+      board.nodes.push({
+        id: 'em1',
+        type: 'emoji',
+        pos: { x: 0, y: 0 },
+        order: 2,
+        text: '🎉',
+        size: 64,
+      });
+      const store = createBoardStore(board, { readonly: false });
+      const { result } = renderHook(() => useEditableCanvas(store, { snapEnabled: true }));
+      const onResizeEnd = result.current.nodes.find((n) => n.id === 'em1')?.data.onResizeEnd as (
+        id: string,
+        size: number,
+      ) => void;
+      act(() => {
+        onResizeEnd('em1', 137);
+      });
+      const snap = store.getSnapshot().nodes.find((n) => n.id === 'em1');
+      // Square: snapped as a square, width === height after snapSize -> 140.
+      expect(snap).toMatchObject({ size: 140 });
+      store.destroy();
+    });
+
+    it('commits the raw SQUARE resize size unchanged when snapEnabled is false', () => {
+      const board = fixtureBoard();
+      board.nodes.push({
+        id: 'em1',
+        type: 'emoji',
+        pos: { x: 0, y: 0 },
+        order: 2,
+        text: '🎉',
+        size: 64,
+      });
+      const store = createBoardStore(board, { readonly: false });
+      const { result } = renderHook(() => useEditableCanvas(store, { snapEnabled: false }));
+      const onResizeEnd = result.current.nodes.find((n) => n.id === 'em1')?.data.onResizeEnd as (
+        id: string,
+        size: number,
+      ) => void;
+      act(() => {
+        onResizeEnd('em1', 137);
+      });
+      const snap = store.getSnapshot().nodes.find((n) => n.id === 'em1');
+      expect(snap).toMatchObject({ size: 137 });
       store.destroy();
     });
 

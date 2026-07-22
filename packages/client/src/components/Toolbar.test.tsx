@@ -77,6 +77,8 @@ function renderToolbar(
     onSetActiveMode: (mode: 'none' | 'comment' | 'pencil' | 'annotation') => void;
     hasAnnotations: boolean;
     onWipeAnnotations: () => void;
+    snapEnabled: boolean;
+    onToggleSnap: () => void;
     onOpenHistory: (() => void) | undefined;
     contentLocked: boolean;
   }> = {},
@@ -94,6 +96,8 @@ function renderToolbar(
         onSetActiveMode={overrides.onSetActiveMode ?? (() => {})}
         hasAnnotations={overrides.hasAnnotations ?? false}
         onWipeAnnotations={overrides.onWipeAnnotations ?? (() => {})}
+        snapEnabled={overrides.snapEnabled ?? true}
+        onToggleSnap={overrides.onToggleSnap ?? (() => {})}
         onOpenHistory={overrides.onOpenHistory}
       />
     </ReactFlowProvider>,
@@ -478,6 +482,52 @@ describe('Toolbar — comment-mode toggle', () => {
     // background — asserting the computed background is the simplest way to
     // check "looks active" without depending on a CSS class name.
     expect(btn.style.background).toBe('rgb(30, 41, 59)'); // #1e293b
+  });
+});
+
+describe('Toolbar — grid-snap toggle', () => {
+  it('renders a snap-to-grid toggle button', () => {
+    const store = createBoardStore(emptyBoard(), { readonly: false });
+    renderToolbar(store);
+    expect(screen.getByTitle('Snap to grid')).toBeInTheDocument();
+  });
+
+  it('calls onToggleSnap when clicked', () => {
+    const store = createBoardStore(emptyBoard(), { readonly: false });
+    const onToggleSnap = vi.fn();
+    renderToolbar(store, { onToggleSnap });
+    fireEvent.click(screen.getByTitle('Snap to grid'));
+    expect(onToggleSnap).toHaveBeenCalled();
+  });
+
+  it('reflects snapEnabled=true via aria-pressed + active styling', () => {
+    const store = createBoardStore(emptyBoard(), { readonly: false });
+    renderToolbar(store, { snapEnabled: true });
+    const btn = screen.getByTitle('Snap to grid');
+    expect(btn).toHaveAttribute('aria-pressed', 'true');
+    // ICON_BTN_ACTIVE styling (components/toolbar/styles.tsx) — same "looks
+    // active" check the mode-toggle tests use.
+    expect(btn.style.background).toBe('rgb(30, 41, 59)'); // #1e293b
+  });
+
+  it('reflects snapEnabled=false via aria-pressed + inactive styling', () => {
+    const store = createBoardStore(emptyBoard(), { readonly: false });
+    renderToolbar(store, { snapEnabled: false });
+    const btn = screen.getByTitle('Snap to grid');
+    expect(btn).toHaveAttribute('aria-pressed', 'false');
+    expect(btn.style.background).not.toBe('rgb(30, 41, 59)');
+  });
+
+  it('is hidden on the content-locked live board (drag/resize disabled there)', () => {
+    const store = createBoardStore(emptyBoard(), { readonly: false });
+    renderToolbar(store, { contentLocked: true });
+    expect(screen.queryByTitle('Snap to grid')).not.toBeInTheDocument();
+  });
+
+  it('is hidden when readonly', () => {
+    const store = createBoardStore(emptyBoard(), { readonly: true });
+    renderToolbar(store, { readonly: true });
+    expect(screen.queryByTitle('Snap to grid')).not.toBeInTheDocument();
   });
 });
 
