@@ -2,7 +2,51 @@
 // smoothing + point-thinning for the freehand pencil tool.
 
 import { describe, it, expect } from 'vitest';
-import { smoothPath, thinPoints, computeBBox, translatePoints } from './draw-utils.js';
+import {
+  getStrokePath,
+  smoothPath,
+  thinPoints,
+  computeBBox,
+  translatePoints,
+} from './draw-utils.js';
+
+describe('getStrokePath', () => {
+  it('returns an empty string for no points', () => {
+    expect(getStrokePath([])).toBe('');
+  });
+
+  it('produces a closed, filled outline path for a stroke', () => {
+    const d = getStrokePath([
+      { x: 0, y: 0 },
+      { x: 10, y: 0 },
+      { x: 20, y: 10 },
+    ]);
+    // A perfect-freehand outline is a closed polygon: starts with a moveto and
+    // ends with a close-path, unlike the open centerline `smoothPath` emits.
+    expect(d.startsWith('M ')).toBe(true);
+    expect(d.endsWith(' Z')).toBe(true);
+    expect(d).toContain('Q');
+  });
+
+  it('scales the outline with the requested size', () => {
+    const points = [
+      { x: 0, y: 0 },
+      { x: 40, y: 0 },
+    ];
+    // A fatter stroke must yield a physically larger outline (more extent),
+    // so the two paths can never be identical.
+    expect(getStrokePath(points, { size: 2 })).not.toBe(getStrokePath(points, { size: 20 }));
+  });
+
+  it('is deterministic for the same input', () => {
+    const points = [
+      { x: 1, y: 2 },
+      { x: 5, y: 9 },
+      { x: 12, y: 3 },
+    ];
+    expect(getStrokePath(points, { size: 4 })).toBe(getStrokePath(points, { size: 4 }));
+  });
+});
 
 describe('smoothPath', () => {
   it('returns an empty string for no points', () => {

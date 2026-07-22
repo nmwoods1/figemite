@@ -7,11 +7,76 @@
 // thinning. Uses `@figemite/shared`'s `XY` instead of the legacy's local
 // `lib/types.ts` copy.
 
+import getStroke from 'perfect-freehand';
 import type { XY } from '@figemite/shared';
+
+// ── perfect-freehand outline rendering ───────────────────────────────────────
+//
+// The visible pencil/annotation stroke is drawn as a FILLED outline polygon
+// (via perfect-freehand's `getStroke`) instead of a stroked centerline. This
+// gives pressure/velocity-variable width — a real hand-drawn look — for free.
+//
+// We store no per-point pressure (the board model's `points` stay plain `XY`),
+// so `simulatePressure` derives width from pointer velocity: fast = thin,
+// slow = fat. That keeps the data model, MCP `add_drawing` contract, and
+// on-disk JSON unchanged — only rendering differs. `smoothPath` below is still
+// used for the invisible fat hit-target so thin strokes stay easy to click.
+
+export interface StrokePathOptions {
+  /** Stroke diameter, in the same units as `points` (maps to the board node's
+   *  `strokeWidth`). Defaults to 3. */
+  size?: number;
+  /** How much the stroke tapers with speed/pressure (0–1). */
+  thinning?: number;
+  /** Curve smoothing (0–1). */
+  smoothing?: number;
+  /** Input-point streamlining / jitter removal (0–1). */
+  streamline?: number;
+  /** Derive width from pointer velocity when no real pressure is captured. */
+  simulatePressure?: boolean;
+  /** Whether this is the final (settled) stroke vs. an in-progress preview.
+   *  Caps the tail so committed strokes end cleanly. */
+  last?: boolean;
+}
+
+// Build a filled-outline SVG path (`d`) for a freehand stroke. Delegates the
+// dot/short-stroke edge cases to perfect-freehand, which already handles 0/1/2
+// input points. The result is meant to be rendered with `fill`, not `stroke`.
+export function getStrokePath(points: XY[], options: StrokePathOptions = {}): string {
+  if (points.length === 0) return '';
+  const outline = getStroke(
+    points.map((p) => [p.x, p.y]),
+    {
+      size: options.size ?? 3,
+      thinning: options.thinning ?? 0.6,
+      smoothing: options.smoothing ?? 0.5,
+      streamline: options.streamline ?? 0.5,
+      simulatePressure: options.simulatePressure ?? true,
+      last: options.last ?? false,
+    },
+  );
+  return outlineToPath(outline);
+}
+
+// Turn perfect-freehand's outline points into a closed SVG path, using
+// quadratic segments through the midpoints of consecutive outline points for a
+// smooth boundary. (The standard perfect-freehand rendering recipe.)
+function outlineToPath(outline: number[][]): string {
+  if (outline.length === 0) return '';
+  const first = outline[0];
+  let d = `M ${first[0]} ${first[1]} Q`;
+  for (let i = 0; i < outline.length; i++) {
+    const [x0, y0] = outline[i];
+    const [x1, y1] = outline[(i + 1) % outline.length];
+    d += ` ${x0} ${y0} ${(x0 + x1) / 2} ${(y0 + y1) / 2}`;
+  }
+  return `${d} Z`;
+}
 
 // Quadratic-Bézier smoothing: connect midpoints between consecutive points
 // using each original point as the control point. Cheap, looks good, and
-// matches what most freehand tools do as a baseline.
+// matches what most freehand tools do as a baseline. Still used for the
+// invisible fat hit-target path (see `getStrokePath`'s note).
 export function smoothPath(points: XY[]): string {
   if (points.length === 0) return '';
   if (points.length === 1) {

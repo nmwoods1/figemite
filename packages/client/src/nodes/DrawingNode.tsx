@@ -13,7 +13,7 @@
 import type { NodeProps, Node } from '@xyflow/react';
 import { NodeResizer } from '@xyflow/react';
 import type { XY } from '@figemite/shared';
-import { smoothPath } from '../lib/draw-utils.js';
+import { getStrokePath, smoothPath } from '../lib/draw-utils.js';
 import { useIsMultiSelected } from './use-is-multi-selected.js';
 
 export interface DrawingNodeData extends Record<string, unknown> {
@@ -35,7 +35,11 @@ const MIN_HEIGHT = 20;
 export function DrawingNode({ id, data, selected }: NodeProps<Node<DrawingNodeData, 'drawing'>>) {
   const resizable = !!data.onResizeEnd;
   const multiSelected = useIsMultiSelected();
-  const d = smoothPath(data.points);
+  // Visible stroke: a filled perfect-freehand outline (pressure-simulated).
+  // Hit target: the plain centerline, fattened + transparent, so thin strokes
+  // stay easy to click.
+  const outline = getStrokePath(data.points, { size: data.strokeWidth, last: true });
+  const centerline = smoothPath(data.points);
 
   return (
     <div
@@ -75,17 +79,16 @@ export function DrawingNode({ id, data, selected }: NodeProps<Node<DrawingNodeDa
         style={{ display: 'block', position: 'absolute', inset: 0, overflow: 'visible' }}
       >
         <path
-          d={d}
-          fill="none"
-          stroke={data.color}
-          strokeWidth={data.strokeWidth}
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          style={{ pointerEvents: 'stroke' }}
+          data-testid="drawing-fill"
+          d={outline}
+          fill={data.color}
+          stroke="none"
+          style={{ pointerEvents: 'fill' }}
         />
         {/* Fat invisible hit-target for easier selection of thin strokes. */}
         <path
-          d={d}
+          data-testid="drawing-hit"
+          d={centerline}
           fill="none"
           stroke="transparent"
           strokeWidth={Math.max(data.strokeWidth + 10, 12)}
