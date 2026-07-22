@@ -13,20 +13,24 @@
 // either — those are toolbar-driven (P4-T25); this task only adds the store
 // ops (`board-store.ts`'s `setEdgeArrow`/`setEdgeLineStyle`) they'll call.
 
-import { BaseEdge, EdgeLabelRenderer, getBezierPath } from '@xyflow/react';
+import { BaseEdge, EdgeLabelRenderer } from '@xyflow/react';
 import type { Edge, EdgeProps } from '@xyflow/react';
-import type { ArrowStyle, LineStyle } from '@figemite/shared';
+import type { ArrowStyle, EdgeRouting, LineStyle } from '@figemite/shared';
 import { useEditableText } from '../nodes/useEditableText.js';
+import { useEdgeGeometry } from './useEdgeGeometry.js';
 
 export interface ArrowEdgeData extends Record<string, unknown> {
   label?: string;
   style: LineStyle;
   arrow: ArrowStyle;
+  routing?: EdgeRouting;
   onLabelChange?: (id: string, label: string) => void;
 }
 
 export function ArrowEdge({
   id,
+  source,
+  target,
   sourceX,
   sourceY,
   targetX,
@@ -42,12 +46,18 @@ export function ArrowEdge({
     (next) => data?.onLabelChange?.(id, next.trim()),
   );
 
-  const [edgePath, labelX, labelY] = getBezierPath({
+  // Floating endpoints + routing-aware path when both nodes are measured;
+  // otherwise the RF-provided geometry (fallback — keeps first paint and the
+  // isolated unit tests non-blank). See useEdgeGeometry for the precedence.
+  const { edgePath, labelX, labelY } = useEdgeGeometry({
+    source,
+    target,
+    routing: data?.routing,
     sourceX,
     sourceY,
-    sourcePosition,
     targetX,
     targetY,
+    sourcePosition,
     targetPosition,
   });
 
