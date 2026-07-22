@@ -63,7 +63,7 @@ describe('LiveDraftMenu', () => {
     expect(checkbox).not.toBeChecked();
     fireEvent.click(screen.getByRole('button', { name: 'Promote to live' }));
     // deleteDraft defaults to false (draft kept).
-    await waitFor(() => expect(api.promoteDraft).toHaveBeenCalledWith('spend', 'd1', false));
+    await waitFor(() => expect(api.promoteDraft).toHaveBeenCalledWith('spend', 'd1', false, undefined));
   });
 
   it('promote deletes the draft when the "delete after promotion" checkbox is checked', async () => {
@@ -73,7 +73,21 @@ describe('LiveDraftMenu', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Promote draft New card limits to live' }));
     fireEvent.click(screen.getByRole('checkbox', { name: /delete this draft after promotion/i }));
     fireEvent.click(screen.getByRole('button', { name: 'Promote to live' }));
-    await waitFor(() => expect(api.promoteDraft).toHaveBeenCalledWith('spend', 'd1', true));
+    await waitFor(() => expect(api.promoteDraft).toHaveBeenCalledWith('spend', 'd1', true, undefined));
+  });
+
+  it('passes the typed commit message through to promoteDraft', async () => {
+    render(<LiveDraftMenu slug="spend" onOpenDraft={() => {}} onExitDraft={() => {}} />);
+    fireEvent.click(screen.getByRole('button', { name: /Live/ }));
+    await waitFor(() => expect(screen.getByText('New card limits')).toBeTruthy());
+    fireEvent.click(screen.getByRole('button', { name: 'Promote draft New card limits to live' }));
+    fireEvent.change(screen.getByPlaceholderText(/what changed/i), {
+      target: { value: '  tightened the limits  ' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Promote to live' }));
+    await waitFor(() =>
+      expect(api.promoteDraft).toHaveBeenCalledWith('spend', 'd1', false, 'tightened the limits'),
+    );
   });
 
   it('does not double-submit promote when the confirm button is clicked twice', async () => {

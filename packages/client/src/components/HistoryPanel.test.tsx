@@ -67,6 +67,36 @@ describe('HistoryPanel', () => {
     expect(screen.getByText('Before AI changes')).toBeInTheDocument();
   });
 
+  it('labels a "promote" snapshot as "Promote" with the draft title + message, never AI/Human', () => {
+    const promote: HistoryVersion = {
+      id: 'p1',
+      timestamp: '2026-07-06T11:00:00.000Z',
+      trigger: 'promote',
+      label: 'Draft #1',
+      message: 'Ship the new hero',
+    };
+    renderPanel({ versions: [promote] });
+    expect(screen.getByText('Promote')).toBeInTheDocument();
+    expect(
+      screen.getByText((t) => t.includes('Promoted') && t.includes('Draft #1')),
+    ).toBeInTheDocument();
+    expect(screen.getByText('Ship the new hero')).toBeInTheDocument();
+    expect(screen.queryByText('AI')).not.toBeInTheDocument();
+    expect(screen.queryByText('Human')).not.toBeInTheDocument();
+    expect(screen.queryByText(/After AI changes/)).not.toBeInTheDocument();
+  });
+
+  it('renders a "promote" snapshot with no label/message gracefully', () => {
+    const promote: HistoryVersion = {
+      id: 'p2',
+      timestamp: '2026-07-06T11:00:00.000Z',
+      trigger: 'promote',
+    };
+    renderPanel({ versions: [promote] });
+    expect(screen.getByText('Promote')).toBeInTheDocument();
+    expect(screen.getByText(/Promoted from a draft/)).toBeInTheDocument();
+  });
+
   it('clicking a version row calls onSelect with that version id', () => {
     const { onSelect } = renderPanel();
     const rows = screen.getAllByRole('button').filter((b) => b.title !== 'Close');

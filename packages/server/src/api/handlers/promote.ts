@@ -1,19 +1,25 @@
 // ── POST /api/board/promote — approve a draft, overwriting prod ──────────────
 //
-// The human-only "approve" action. Body `{ board, draft }`. There is NO MCP
-// tool that reaches this endpoint — that omission is what makes promotion
-// human-only, exactly as comments/tags stay human-owned by having no MCP tools
-// (see AGENTS.md). An agent can create and edit drafts, but only a human,
-// through the browser, can promote one.
+// The human-only "approve" action. Body `{ board, draft, deleteDraft?,
+// message? }`. There is NO MCP tool that reaches this endpoint — that omission
+// is what makes promotion human-only, exactly as comments/tags stay human-owned
+// by having no MCP tools (see AGENTS.md). An agent can create and edit drafts,
+// but only a human, through the browser, can promote one.
 //
-// Flow (see the plan): gate on the prod AI-lock, snapshot prod first for
-// rollback, copy the draft board tree over prod (replace semantics — prod
-// sub-boards absent from the draft are removed), replace prod's comment thread
-// with the draft's (comments are a faithful fork, promoted like content; tags
-// stay human-owned and untouched), then OPTIONALLY delete the draft. Prod content
-// is pushed
+// Flow (see the plan): gate on the prod AI-lock, copy the draft board tree over
+// prod (replace semantics — prod sub-boards absent from the draft are removed),
+// recording ONE labeled `promote` snapshot per board so Live's history shows a
+// single "Promoted '<draft>'" entry (the draft title + optional `message`)
+// rather than a bare autosave; replace prod's comment thread with the draft's
+// (comments are a faithful fork, promoted like content; tags stay human-owned
+// and untouched), then OPTIONALLY delete the draft. Prod content is pushed
 // through the live Yjs room when one exists (so connected browsers converge
 // immediately) and falls back to a direct disk write otherwise.
+//
+// Reversibility: we no longer snapshot the pre-promote content separately — Live
+// content is frozen between promotes, so the prior history entry already IS the
+// pre-promote state (restore it to undo a promote). This also removes the
+// confusing "Human" + "AI" snapshot pair a promote used to leave in history.
 //
 // `deleteDraft` (body flag, default false) controls whether the draft is
 // removed after a successful promote. The browser surfaces this as an
@@ -45,6 +51,7 @@ export async function handlePromoteDraft(
     board?: unknown;
     draft?: unknown;
     deleteDraft?: unknown;
+    message?: unknown;
   };
   const slug = typeof body.board === 'string' ? body.board : '';
   if (!SlugSchema.safeParse(slug).success) {
@@ -75,15 +82,27 @@ export async function handlePromoteDraft(
     : ctx.repo.listSubBoardPaths(slug);
   const draftKeys = new Set(draftPaths.map(pathKey));
 
-  // 1. Snapshot every existing prod board (root + sub-boards) BEFORE we touch
-  //    it, so a promote is fully reversible from history.
-  for (const subPath of prodPaths) {
-    ctx.history.snapshot(slug, subPath, 'promote');
-  }
+  // The promoted version's history label: the draft's title (a human-facing
+  // name like "Draft #1") plus an optional freeform message from the request
+  // (git-commit style). Both ride on the single `promote` snapshot written per
+  // board below, so Live's history shows one clear "Promoted '<draft>'" entry.
+  const draftMeta = readDrafts(ctx.config.boardsRoot, slug).drafts.find((d) => d.id === draftId);
+  const promoteMeta = {
+    label: draftMeta?.title || draftId,
+    message:
+      typeof body.message === 'string' ? body.message.trim().slice(0, 500) || undefined : undefined,
+  };
 
-  // 2. Copy each draft board over prod. Preserve prod's own boardLabel/viewport
+  // 1. Copy each draft board over prod. Preserve prod's own boardLabel/viewport
   //    (promotion replaces CONTENT, not the board's identity/label); a brand-new
-  //    sub-board that only exists in the draft takes the draft's metadata.
+  //    sub-board that only exists in the draft takes the draft's metadata. Each
+  //    write records ONE labeled `promote` snapshot of the NEW content — the
+  //    single, meaningful "Promoted '<draft>'" entry in Live's history. We do
+  //    NOT also snapshot the OLD pre-promote content: Live content is frozen
+  //    between promotes (only promote/AI/restore change it, and AI records its
+  //    own boundary snapshot), so the prior history entry already IS the
+  //    pre-promote state — restoring it reverses a promote, without the
+  //    confusing "Human" + "AI" pair a promote used to leave behind.
   for (const subPath of draftPaths) {
     const draftBoard = ctx.repo.read(slug, subPath, draftId);
     const merged: BoardFile = ctx.repo.exists(slug, subPath)
@@ -97,22 +116,23 @@ export async function handlePromoteDraft(
     // regardless of whether a prod room is connected: a stale/lingering prod
     // connection can otherwise revert an in-memory `replaceRoomContent` before
     // any debounce fires, so the promoted content would never reach disk.
-    persistBoard(ctx, slug, subPath, merged, 'save');
+    persistBoard(ctx, slug, subPath, merged, 'promote', undefined, promoteMeta);
 
     // Best-effort: converge any OPEN prod browsers on the new content in memory
     // (this only mutates the live doc; it does not — and must not — persist).
     ctx.yjs.replaceRoomContent(slug, subPath, { nodes: merged.nodes, edges: merged.edges });
   }
 
-  // 3. Replace semantics: remove prod sub-boards the draft no longer has. Each
-  //    was already snapshotted in step 1, so this is reversible.
+  // 2. Replace semantics: remove prod sub-boards the draft no longer has. Each
+  //    removed sub-board's last saved state remains in its own history, so this
+  //    stays reversible.
   for (const subPath of prodPaths) {
     if (subPath.length > 0 && !draftKeys.has(pathKey(subPath))) {
       ctx.repo.delete(slug, subPath);
     }
   }
 
-  // 4. Replace prod's comment thread with the draft's — promotion carries the
+  // 3. Replace prod's comment thread with the draft's — promotion carries the
   //    draft's discussion over Live, mirroring the replace-semantics used for
   //    board content above (a draft is a faithful fork: its comments were seeded
   //    from Live at creation, so this promotes the draft's edits/resolves/replies
@@ -127,7 +147,7 @@ export async function handlePromoteDraft(
   // client's useAiLock turns into a comments reload (see BoardCanvas.tsx).
   ctx.sse.broadcast(slug, [], 'external-change', { board: slug });
 
-  // 5. Optionally delete the now-merged draft and de-index it. Default is to
+  // 4. Optionally delete the now-merged draft and de-index it. Default is to
   //    KEEP it (deleteDraft === false); only an explicit opt-in removes it.
   if (deleteDraft) {
     ctx.repo.delete(slug, [], draftId);

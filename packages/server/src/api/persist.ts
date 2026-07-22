@@ -36,7 +36,11 @@
 
 import type { BoardFile } from '@figemite/shared';
 import type { BoardRepository } from '../repository/board-repo.js';
-import type { SnapshotHistoryService, SnapshotTrigger } from '../services/snapshot-history.js';
+import type {
+  SnapshotHistoryService,
+  SnapshotTrigger,
+  SnapshotLabel,
+} from '../services/snapshot-history.js';
 
 /** The structural slice of the request context that `persistBoard` needs. */
 export interface PersistContext {
@@ -61,8 +65,9 @@ export function persistBoard(
   data: BoardFile,
   trigger: SnapshotTrigger,
   draftId?: string,
+  meta?: SnapshotLabel,
 ): void {
   ctx.watcher.suppress(slug, subPath, draftId);
   ctx.repo.write(slug, subPath, data, draftId);
-  ctx.history.snapshot(slug, subPath, trigger, draftId);
+  ctx.history.snapshot(slug, subPath, trigger, draftId, meta);
 }

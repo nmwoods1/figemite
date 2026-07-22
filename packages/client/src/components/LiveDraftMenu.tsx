@@ -47,6 +47,9 @@ export default function LiveDraftMenu({
   // Promote-only option: delete the draft after a successful promote. Unchecked
   // by default — a promoted draft is kept unless the user opts in.
   const [deleteAfterPromote, setDeleteAfterPromote] = useState(false);
+  // Promote-only: an optional commit-style message recorded on the new Live
+  // version (alongside the draft's title) in version history.
+  const [promoteMessage, setPromoteMessage] = useState('');
   // Inline rename: which draft's title is being edited, and the working value.
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editValue, setEditValue] = useState('');
@@ -112,7 +115,8 @@ export default function LiveDraftMenu({
     setBusy(true);
     setPendingError(null);
     try {
-      if (pending.kind === 'promote') await promoteDraft(slug, pending.draft.id, deleteAfterPromote);
+      if (pending.kind === 'promote')
+        await promoteDraft(slug, pending.draft.id, deleteAfterPromote, promoteMessage.trim() || undefined);
       else await discardDraft(slug, pending.draft.id);
       const actedCurrent = pending.draft.id === draftId;
       setPending(null);
@@ -344,6 +348,7 @@ export default function LiveDraftMenu({
                             onClick={() => {
                               setPendingError(null);
                               setDeleteAfterPromote(false);
+                              setPromoteMessage('');
                               setPending({ kind: 'promote', draft: d });
                             }}
                             style={miniBtn}
@@ -406,7 +411,7 @@ export default function LiveDraftMenu({
           title={pending.kind === 'promote' ? 'Promote to live?' : 'Discard draft?'}
           body={
             pending.kind === 'promote'
-              ? `This overwrites the live board with "${pending.draft.title}". The current live board is saved to history first, so you can roll back.`
+              ? `This overwrites the live board with "${pending.draft.title}". The live board's previous version stays in history, so you can roll back.`
               : `This permanently deletes the draft "${pending.draft.title}". The live board is not affected.`
           }
           confirmLabel={pending.kind === 'promote' ? 'Promote to live' : 'Discard'}
@@ -415,24 +420,47 @@ export default function LiveDraftMenu({
           error={pendingError}
           extra={
             pending.kind === 'promote' ? (
-              <label
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 8,
-                  fontSize: 13,
-                  color: '#334155',
-                  cursor: busy ? 'default' : 'pointer',
-                }}
-              >
-                <input
-                  type="checkbox"
-                  checked={deleteAfterPromote}
-                  disabled={busy}
-                  onChange={(e) => setDeleteAfterPromote(e.target.checked)}
-                />
-                Delete this draft after promotion
-              </label>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                  <span style={{ fontSize: 13, color: '#334155' }}>
+                    Message <span style={{ color: '#94a3b8' }}>(optional)</span>
+                  </span>
+                  <textarea
+                    value={promoteMessage}
+                    disabled={busy}
+                    onChange={(e) => setPromoteMessage(e.target.value)}
+                    placeholder="What changed in this version?"
+                    rows={2}
+                    maxLength={500}
+                    style={{
+                      resize: 'vertical',
+                      fontSize: 13,
+                      padding: '6px 8px',
+                      border: '1px solid #cbd5e1',
+                      borderRadius: 6,
+                      fontFamily: 'inherit',
+                    }}
+                  />
+                </label>
+                <label
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 8,
+                    fontSize: 13,
+                    color: '#334155',
+                    cursor: busy ? 'default' : 'pointer',
+                  }}
+                >
+                  <input
+                    type="checkbox"
+                    checked={deleteAfterPromote}
+                    disabled={busy}
+                    onChange={(e) => setDeleteAfterPromote(e.target.checked)}
+                  />
+                  Delete this draft after promotion
+                </label>
+              </div>
             ) : null
           }
           onConfirm={runPending}

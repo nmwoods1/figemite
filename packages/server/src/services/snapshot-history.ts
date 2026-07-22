@@ -44,6 +44,18 @@ export interface SnapshotMeta {
   /** The snapshot's timestamp, decoded from the filename. */
   timestamp: Date;
   trigger: SnapshotTrigger;
+  /** Human-facing version name (e.g. a promoted draft's title). Absent for
+   * plain autosave/AI snapshots — they carry no label. Stored in the
+   * `_labels.json` sidecar, not the filename (which only encodes time+trigger). */
+  label?: string;
+  /** Optional freeform note explaining the version (git-commit style). */
+  message?: string;
+}
+
+/** Optional metadata attached to a snapshot at write time (see the sidecar below). */
+export interface SnapshotLabel {
+  label?: string;
+  message?: string;
 }
 
 // Matches ids of the form `2026-07-06T12-34-56-789Z__save`, produced by
@@ -72,6 +84,36 @@ function parseId(id: string): { timestamp: Date; trigger: SnapshotTrigger } | nu
 
 function sha1(content: string): string {
   return crypto.createHash('sha1').update(content).digest('hex');
+}
+
+// ── Label sidecar ────────────────────────────────────────────────────────────
+//
+// Snapshot filenames encode only time + trigger, so a human-facing version
+// name / message (e.g. a promoted draft's title) lives in a single per-dir
+// sidecar `_labels.json`: `{ "<snapshotId>": { label?, message? } }`. Only
+// promote snapshots carry labels today, so this file is small and rarely
+// written. `listDir` skips it (its stem `_labels` fails SNAPSHOT_ID_RE).
+const LABELS_FILE = '_labels.json';
+
+function labelsPath(dir: string): string {
+  return path.join(dir, LABELS_FILE);
+}
+
+function readLabels(dir: string): Record<string, SnapshotLabel> {
+  try {
+    const parsed = JSON.parse(fs.readFileSync(labelsPath(dir), 'utf-8'));
+    return parsed && typeof parsed === 'object' ? (parsed as Record<string, SnapshotLabel>) : {};
+  } catch {
+    return {};
+  }
+}
+
+function writeLabels(dir: string, labels: Record<string, SnapshotLabel>): void {
+  if (Object.keys(labels).length === 0) {
+    fs.rmSync(labelsPath(dir), { force: true });
+    return;
+  }
+  atomicWriteFileSync(labelsPath(dir), JSON.stringify(labels, null, 2));
 }
 
 /** Lists raw `SnapshotMeta` for a history dir, sorted newest-first by timestamp. */
@@ -198,7 +240,13 @@ export class SnapshotHistoryService {
    * checkpoint the history is meant to preserve. This mirrors the existing
    * "AI-boundary snapshots are never thinned" policy in `thinSnapshots`.
    */
-  snapshot(slug: string, subPath: string[], trigger: SnapshotTrigger, draftId?: string): void {
+  snapshot(
+    slug: string,
+    subPath: string[],
+    trigger: SnapshotTrigger,
+    draftId?: string,
+    meta?: SnapshotLabel,
+  ): void {
     const boardPath = boardFilePath(this.boardsRoot, slug, subPath, draftId);
 
     let content: string;
@@ -228,10 +276,34 @@ export class SnapshotHistoryService {
     const id = this.uniqueStem(dir, new Date(), trigger);
     atomicWriteFileSync(path.join(dir, `${id}.json`), content);
 
+    // Attach an optional human-facing label/message (e.g. a promote's draft
+    // title). Only written when something meaningful was supplied.
+    const label = meta?.label?.trim() || undefined;
+    const message = meta?.message?.trim() || undefined;
+    if (label || message) {
+      const labels = readLabels(dir);
+      labels[id] = { label, message };
+      writeLabels(dir, labels);
+    }
+
     const all = listDir(dir);
     const { delete: toDelete } = thinSnapshots(all, new Date());
     for (const snap of toDelete) {
       fs.rmSync(path.join(dir, `${snap.id}.json`), { force: true });
+    }
+    // Prune sidecar entries for any snapshots thinning just removed, so the
+    // label file never outlives its snapshots (promote snapshots are boundaries
+    // and never thinned, so this is mostly housekeeping).
+    if (toDelete.length > 0) {
+      const labels = readLabels(dir);
+      let changed = false;
+      for (const snap of toDelete) {
+        if (labels[snap.id]) {
+          delete labels[snap.id];
+          changed = true;
+        }
+      }
+      if (changed) writeLabels(dir, labels);
     }
   }
 
@@ -254,10 +326,17 @@ export class SnapshotHistoryService {
     return stem;
   }
 
-  /** Lists snapshot metadata for a board/sub-board (of prod, or of a draft), newest-first. */
+  /** Lists snapshot metadata for a board/sub-board (of prod, or of a draft),
+   * newest-first, merging in any per-snapshot label/message from the sidecar. */
   list(slug: string, subPath: string[], draftId?: string): SnapshotMeta[] {
     const dir = historyDir(this.boardsRoot, slug, subPath, draftId);
-    return listDir(dir);
+    const metas = listDir(dir);
+    const labels = readLabels(dir);
+    if (Object.keys(labels).length === 0) return metas;
+    return metas.map((m) => {
+      const l = labels[m.id];
+      return l && (l.label || l.message) ? { ...m, label: l.label, message: l.message } : m;
+    });
   }
 
   /**

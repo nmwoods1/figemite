@@ -217,9 +217,13 @@ describe('POST /api/board/promote', () => {
     expect(prod.nodes.map((n) => n.id)).toEqual(['draftNode']);
     expect(prod.boardLabel).toBe('Spend');
 
-    // A 'promote' snapshot of the pre-promote prod state exists.
+    // Promotion records exactly ONE labeled 'promote' snapshot (the draft's
+    // title) — not the old confusing pre-promote 'promote' + new 'save' pair.
     const versions = h.ctx.history.list('spend', []);
-    expect(versions.some((v) => v.trigger === 'promote')).toBe(true);
+    expect(versions).toHaveLength(1);
+    expect(versions[0].trigger).toBe('promote');
+    expect(versions[0].label).toBe('Draft #1'); // the default draft title
+    expect(versions.some((v) => v.trigger === 'save')).toBe(false);
 
     // The draft is KEPT by default (dir + index entry both survive).
     expect(h.ctx.repo.exists('spend', [], draftId)).toBe(true);
@@ -345,6 +349,23 @@ describe('POST /api/board/promote', () => {
 
     expect(broadcast).toHaveBeenCalledWith('spend', [], 'external-change', { board: 'spend' });
     broadcast.mockRestore();
+  });
+
+  it('records the draft title + optional message on the promoted version', async () => {
+    h.ctx.repo.seedBoard('spend', 'Spend');
+    const draftId = await createDraft('spend', 'Redesign hero');
+    h.ctx.repo.write('spend', [], boardWith('Spend', 'n1'), draftId);
+
+    await fetch(`${h.url}/api/board/promote`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ board: 'spend', draft: draftId, message: '  Ship the new hero  ' }),
+    });
+
+    const versions = h.ctx.history.list('spend', []);
+    expect(versions[0].trigger).toBe('promote');
+    expect(versions[0].label).toBe('Redesign hero');
+    expect(versions[0].message).toBe('Ship the new hero'); // trimmed
   });
 
   it('409s when prod has an active AI lock', async () => {
