@@ -26,6 +26,11 @@ export interface IconButtonProps {
   caret?: boolean;
   /** Suppresses the hover tooltip while a picker popover is showing. */
   open?: boolean;
+  /** Renders `aria-pressed` on the button — for toggle buttons whose visual
+   * active state (via `active`) should be exposed to assistive tech as a
+   * pressed/unpressed state (e.g. the grid-snap toggle). Omitted for plain
+   * action buttons. */
+  ariaPressed?: boolean;
   buttonRef?: RefObject<HTMLButtonElement | null>;
   children?: ReactNode;
 }
@@ -40,6 +45,7 @@ export function IconButton({
   style,
   caret,
   open,
+  ariaPressed,
   buttonRef,
   children,
 }: IconButtonProps) {
@@ -62,6 +68,7 @@ export function IconButton({
         }}
         onClick={disabled ? undefined : onClick}
         disabled={disabled}
+        aria-pressed={ariaPressed}
         title={label}
       >
         <Icon size={16} strokeWidth={1.75} />

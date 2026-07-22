@@ -39,6 +39,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Background,
+  BackgroundVariant,
   ConnectionMode,
   Controls,
   ReactFlow,
@@ -69,6 +70,7 @@ import { useFollowMode } from '../hooks/useFollowMode.js';
 import { useEditingNodeTracker } from '../hooks/useEditingNodeTracker.js';
 import { useComments } from '../hooks/useComments.js';
 import { useHistory } from '../hooks/useHistory.js';
+import { useSnapPreference } from '../hooks/useSnapPreference.js';
 import { boardToRf } from './rf-adapters.js';
 import type { SubBoardAdapter } from './rf-adapters.js';
 import { MultiSelectResizer } from './MultiSelectResizer.js';
@@ -85,7 +87,7 @@ import { CommentLayer } from '../components/CommentLayer.js';
 import { PencilLayer } from '../components/PencilLayer.js';
 import { AnnotationLayer } from '../components/AnnotationLayer.js';
 import { nodeLabel } from './node-label.js';
-import { getFlowPointer } from './coords.js';
+import { getFlowPointer, SNAP_GRID, GRID_SIZE } from './coords.js';
 import { getLocalUser } from '../lib/identity.js';
 import { ANNOTATIONS } from '@figemite/shared';
 
@@ -185,7 +187,7 @@ function ReadOnlyCanvas({
         nodesConnectable={false}
         elementsSelectable={false}
       >
-        <Background />
+        <Background variant={BackgroundVariant.Dots} gap={GRID_SIZE} />
         <Controls showInteractive={false} />
       </ReactFlow>
       {slug && (
@@ -461,6 +463,11 @@ function EditableCanvas({
 }: EditablePaneProps) {
   const [descNodeId, setDescNodeId] = useState<string | null>(null);
   const openDescription = useCallback((id: string) => setDescNodeId(id), []);
+  // The SINGLE owner of the grid-snap preference (hooks/useSnapPreference.ts) —
+  // read ONCE here and drilled into all three consumers so they can't disagree:
+  // `snapToGrid` on the editable <ReactFlow> (native drag-snap), the
+  // `useEditableCanvas` option (committed-resize snap), and the Toolbar toggle.
+  const { snapEnabled, toggle } = useSnapPreference();
   // The opener is wired on the live board too — descriptions are VIEW-ONLY there
   // (opened read-only, never edited), so nodes surface an existing description
   // for reading. The read-only-ness is carried to the badge via
@@ -470,6 +477,7 @@ function EditableCanvas({
   const editable = useEditableCanvas(store, {
     onOpenDescription: openDescription,
     subBoard,
+    snapEnabled,
   });
   const multiSelect = useMultiSelectResize(store, editable.selectedNodeIds);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -710,13 +718,15 @@ function EditableCanvas({
         onMoveStart={followMode.notifyManualViewportChange}
         defaultViewport={fitView ? undefined : viewport}
         fitView={fitView}
+        snapToGrid={snapEnabled}
+        snapGrid={SNAP_GRID}
         nodesDraggable={!editsBlocked && !overlayModeActive}
         nodesConnectable={!editsBlocked && !overlayModeActive}
         elementsSelectable={!editsBlocked && !overlayModeActive}
         panOnDrag={!overlayModeActive}
         zoomOnScroll={!overlayModeActive}
       >
-        <Background />
+        <Background variant={BackgroundVariant.Dots} gap={GRID_SIZE} />
         <Controls showInteractive={false} />
       </ReactFlow>
       <MultiSelectResizer
@@ -736,6 +746,8 @@ function EditableCanvas({
         onSetActiveMode={setActiveMode}
         hasAnnotations={hasAnnotations}
         onWipeAnnotations={handleWipeAnnotations}
+        snapEnabled={snapEnabled}
+        onToggleSnap={toggle}
         onOpenHistory={history.available ? history.openPanel : undefined}
       />
       {history.panelOpen && (

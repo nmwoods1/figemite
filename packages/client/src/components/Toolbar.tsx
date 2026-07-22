@@ -87,6 +87,7 @@ import {
   Highlighter,
   Trash2,
   History,
+  Grid3x3,
 } from 'lucide-react';
 import { useReactFlow } from '@xyflow/react';
 import {
@@ -157,6 +158,12 @@ export interface ToolbarProps {
   hasAnnotations: boolean;
   /** Clear every annotation stroke for every peer (P6-T35). */
   onWipeAnnotations: () => void;
+  /** Whether grid-snapping is currently on (client-only view preference —
+   * see hooks/useSnapPreference.ts). Drives the snap toggle's active/pressed
+   * state. */
+  snapEnabled: boolean;
+  /** Flip the grid-snap preference on/off. */
+  onToggleSnap: () => void;
   /** Opens the history panel (P6-T36). Omitted (not just disabled) when
    * history isn't available — see this module's doc — which hides the button
    * entirely rather than rendering it disabled. */
@@ -176,6 +183,8 @@ export function Toolbar({
   onSetActiveMode,
   hasAnnotations,
   onWipeAnnotations,
+  snapEnabled,
+  onToggleSnap,
   onOpenHistory,
 }: ToolbarProps) {
   const { nodes, edges } = useBoardStore(store);
@@ -384,6 +393,21 @@ export function Toolbar({
             )}
           </IconButton>
         </>
+      )}
+
+      {/* Grid-snap toggle — a CLIENT-ONLY view preference (hooks/useSnapPreference.ts)
+          that rounds drag/resize to the grid. Hidden on the content-locked live
+          board: drag and resize are both disabled there (editsBlocked), so the
+          toggle would govern nothing — matching how the other editing
+          affordances (creation tools, pencil) are hidden when locked. */}
+      {!contentLocked && (
+        <IconButton
+          icon={Grid3x3}
+          label="Snap to grid"
+          active={snapEnabled}
+          ariaPressed={snapEnabled}
+          onClick={onToggleSnap}
+        />
       )}
 
       <IconButton
