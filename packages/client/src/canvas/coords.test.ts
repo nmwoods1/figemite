@@ -7,6 +7,9 @@ import {
   boundingBox,
   snapToGrid,
   viewCenter,
+  SNAP_GRID,
+  GRID_SIZE,
+  snapSize,
 } from './coords.js';
 import type { BoardNode } from '@figemite/shared';
 
@@ -199,5 +202,32 @@ describe('viewCenter', () => {
   it('defaults the offset to 200 (the legacy default)', () => {
     const vp = { x: 0, y: 0, zoom: 1 };
     expect(viewCenter(vp)).toEqual({ x: 200, y: 200 });
+  });
+});
+
+describe('SNAP_GRID', () => {
+  it('is a [x, y] tuple matching GRID_SIZE in both dimensions', () => {
+    expect(SNAP_GRID).toEqual([GRID_SIZE, GRID_SIZE]);
+    expect(SNAP_GRID).toEqual([20, 20]);
+  });
+});
+
+describe('snapSize', () => {
+  it('rounds width/height to the nearest grid multiple', () => {
+    // 47/20 = 2.35 -> rounds to 2 -> 40; 33/20 = 1.65 -> rounds to 2 -> 40.
+    expect(snapSize({ width: 47, height: 33 })).toEqual({ width: 40, height: 40 });
+  });
+
+  it('floors a too-small rounded dimension to one grid cell (min GRID_SIZE)', () => {
+    // width: 47/20 = 2.35 -> 2 -> 40. height: 12/20 = 0.6 -> rounds to 1 -> 20,
+    // which already clears the floor, but exercises the sub-one-cell rounding
+    // path landing right at the Math.max(GRID_SIZE, …) boundary.
+    expect(snapSize({ width: 47, height: 12 })).toEqual({ width: 40, height: 20 });
+  });
+
+  it('clamps both dimensions to GRID_SIZE when both round below one cell', () => {
+    // 3/20 = 0.15 -> rounds to 0 -> 0, clamped up to 20.
+    // 8/20 = 0.4 -> rounds to 0 -> 0, clamped up to 20.
+    expect(snapSize({ width: 3, height: 8 })).toEqual({ width: 20, height: 20 });
   });
 });
