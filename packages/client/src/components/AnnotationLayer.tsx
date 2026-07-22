@@ -46,7 +46,7 @@ import * as Y from 'yjs';
 import { ANNOTATIONS } from '@figemite/shared';
 import type { XY } from '@figemite/shared';
 import { getFlowPointer, snapToGrid } from '../canvas/coords.js';
-import { smoothPath, thinPoints } from '../lib/draw-utils.js';
+import { getStrokePath, thinPoints } from '../lib/draw-utils.js';
 
 /** Always-pink — matches the legacy's `ANNOTATION_COLOR`/`ANNOTATION_STROKE_WIDTH`. */
 export const ANNOTATION_COLOR = '#ec4899';
@@ -182,25 +182,17 @@ export function AnnotationLayer({ active, containerRef, doc }: AnnotationLayerPr
             <path
               key={i}
               data-testid={`annotation-stroke-${i}`}
-              d={smoothPath(s.points)}
-              fill="none"
-              stroke={s.color}
-              strokeWidth={s.strokeWidth}
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              vectorEffect="non-scaling-stroke"
+              d={getStrokePath(s.points, { size: s.strokeWidth, last: true })}
+              fill={s.color}
+              stroke="none"
               opacity={0.92}
             />
           ))}
           {drawing && drawing.length > 0 && (
             <path
-              d={smoothPath(drawing)}
-              fill="none"
-              stroke={ANNOTATION_COLOR}
-              strokeWidth={ANNOTATION_STROKE_WIDTH}
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              vectorEffect="non-scaling-stroke"
+              d={getStrokePath(drawing, { size: ANNOTATION_STROKE_WIDTH })}
+              fill={ANNOTATION_COLOR}
+              stroke="none"
               opacity={0.92}
             />
           )}

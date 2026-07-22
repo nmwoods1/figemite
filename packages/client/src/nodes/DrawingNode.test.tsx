@@ -53,23 +53,23 @@ function renderDrawing(data: Partial<DrawingNodeData> = {}, selected = false) {
 }
 
 describe('DrawingNode', () => {
-  it('renders an SVG path built from the given points', () => {
-    const { container } = renderDrawing({
+  it('renders a filled outline stroke plus a centerline hit-target', () => {
+    const { getByTestId } = renderDrawing({
       points: [
         { x: 0, y: 0 },
         { x: 10, y: 10 },
       ],
     });
-    const path = container.querySelector('path');
-    expect(path).toBeTruthy();
-    expect(path?.getAttribute('d')).toBe('M 0 0 L 10 10');
+    // Visible stroke: a filled perfect-freehand outline (non-empty path).
+    const fill = getByTestId('drawing-fill');
+    expect(fill.getAttribute('d')?.startsWith('M')).toBe(true);
+    // Invisible hit-target: the plain smoothed centerline.
+    expect(getByTestId('drawing-hit').getAttribute('d')).toBe('M 0 0 L 10 10');
   });
 
-  it('applies the stroke color and width', () => {
-    const { container } = renderDrawing({ color: '#ff0000', strokeWidth: 5 });
-    const path = container.querySelector('path[stroke="#ff0000"]');
-    expect(path).toBeTruthy();
-    expect(path?.getAttribute('stroke-width')).toBe('5');
+  it('fills the outline with the stroke color', () => {
+    const { getByTestId } = renderDrawing({ color: '#ff0000', strokeWidth: 5 });
+    expect(getByTestId('drawing-fill').getAttribute('fill')).toBe('#ff0000');
   });
 
   it('sizes the svg to the node bbox', () => {
