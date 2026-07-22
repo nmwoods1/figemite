@@ -436,6 +436,48 @@ describe('BoardEdgeSchema: kind', () => {
   });
 });
 
+// ── Edge routing ─────────────────────────────────────────────────────────────
+
+describe('BoardEdgeSchema: routing', () => {
+  it('validates an edge with routing "elbow"', () => {
+    const result = BoardEdgeSchema.safeParse({
+      id: 'e1',
+      source: 'a',
+      target: 'b',
+      style: 'solid',
+      routing: 'elbow',
+    });
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.routing).toBe('elbow');
+    }
+  });
+
+  it('rejects an invalid routing value', () => {
+    const result = BoardEdgeSchema.safeParse({
+      id: 'e2',
+      source: 'a',
+      target: 'b',
+      style: 'solid',
+      routing: 'zig',
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it("accepts a missing routing (schema allows it; defaulting is the consumer's job)", () => {
+    const result = BoardEdgeSchema.safeParse({
+      id: 'e3',
+      source: 'a',
+      target: 'b',
+      style: 'solid',
+    });
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.routing).toBeUndefined();
+    }
+  });
+});
+
 // ── comments / tags ──────────────────────────────────────────────────────────
 
 describe('parseCommentsFile / parseTagsFile', () => {

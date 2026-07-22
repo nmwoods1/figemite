@@ -359,7 +359,7 @@ describe('nextStickyColor', () => {
 // ── makeEdge ─────────────────────────────────────────────────────────────────
 
 describe('makeEdge', () => {
-  it('defaults to a solid arrow edge with arrow style "end"', () => {
+  it('defaults to a solid arrow edge with arrow style "end" and routing "bezier"', () => {
     const edge = makeEdge('e1', 'a', 'b');
     expect(edge).toEqual({
       id: 'e1',
@@ -368,6 +368,7 @@ describe('makeEdge', () => {
       style: 'solid',
       kind: 'arrow',
       arrow: 'end',
+      routing: 'bezier',
     });
   });
 
@@ -380,7 +381,25 @@ describe('makeEdge', () => {
       style: 'dashed',
       kind: 'cardinality',
       cardinality: '1:1',
+      routing: 'bezier',
     });
+  });
+
+  it('accepts an explicit routing, meaningful for either edge kind', () => {
+    const arrowEdge = makeEdge('e3', 'a', 'b', 'solid', 'arrow', 'end', '1:N', 'elbow');
+    expect(arrowEdge.routing).toBe('elbow');
+
+    const cardinalityEdge = makeEdge(
+      'e4',
+      'a',
+      'b',
+      'solid',
+      'cardinality',
+      'end',
+      '1:1',
+      'straight',
+    );
+    expect(cardinalityEdge.routing).toBe('straight');
   });
 });
 
@@ -518,6 +537,28 @@ describe('serialise', () => {
     const board = baseBoard();
     const result = deserialise(serialise(board));
     expect(result).toEqual(board);
+  });
+
+  it('round-trips a makeEdge-built edge with an explicit routing through serialise/deserialise', () => {
+    const edge = makeEdge('e1', 'a', 'b', 'solid', 'arrow', 'end', '1:N', 'elbow');
+    const board: BoardFile = { ...emptyBoard('x'), edges: [edge] };
+
+    const result = deserialise(serialise(board));
+
+    expect(result.edges[0]).toEqual(edge);
+    expect(result.edges[0]?.routing).toBe('elbow');
+  });
+
+  it('omits the routing key entirely for an edge built without one (no `routing: undefined` noise)', () => {
+    // Constructed as a plain object literal (not via makeEdge, which always
+    // supplies a routing default) so this exercises normalizeEdge's
+    // conditional-spread absent branch.
+    const edge: BoardEdge = { id: 'e1', source: 'a', target: 'b', style: 'solid' };
+    const board: BoardFile = { ...emptyBoard('x'), edges: [edge] };
+
+    const parsed = JSON.parse(serialise(board));
+
+    expect(parsed.edges[0]).not.toHaveProperty('routing');
   });
 });
 

@@ -18,6 +18,7 @@ import type {
   BoardNode,
   Cardinality,
   EdgeKind,
+  EdgeRouting,
   LineStyle,
   ShapeKind,
   StickyColor,
@@ -163,11 +164,12 @@ export function makeEdge(
   kind: EdgeKind = 'arrow',
   arrow: ArrowStyle = 'end',
   cardinality: Cardinality = '1:N',
+  routing: EdgeRouting = 'bezier',
 ): BoardEdge {
   if (kind === 'cardinality') {
-    return { id, source, target, style, kind, cardinality };
+    return { id, source, target, style, kind, cardinality, routing };
   }
-  return { id, source, target, style, kind, arrow };
+  return { id, source, target, style, kind, arrow, routing };
 }
 
 // ── Order helpers ─────────────────────────────────────────────────────────────
@@ -389,6 +391,7 @@ function normalizeEdge(edge: BoardEdge): Record<string, unknown> {
     ...(edge.kind !== undefined ? { kind: edge.kind } : {}),
     ...(edge.arrow !== undefined ? { arrow: edge.arrow } : {}),
     ...(edge.cardinality !== undefined ? { cardinality: edge.cardinality } : {}),
+    ...(edge.routing !== undefined ? { routing: edge.routing } : {}),
   };
 }
 
