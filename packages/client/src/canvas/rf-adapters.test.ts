@@ -463,6 +463,24 @@ describe('boardEdgeToRf', () => {
     expect(rf.data).toMatchObject({ label: 'flows to' });
   });
 
+  it('carries routing through to data', () => {
+    const edge: BoardEdge = {
+      id: 'e5',
+      source: 'a',
+      target: 'b',
+      style: 'solid',
+      routing: 'elbow',
+    };
+    const rf = boardEdgeToRf(edge);
+    expect(rf.data).toMatchObject({ routing: 'elbow' });
+  });
+
+  it('leaves routing undefined (not defaulted) when the edge has none', () => {
+    const edge: BoardEdge = { id: 'e6', source: 'a', target: 'b', style: 'solid' };
+    const rf = boardEdgeToRf(edge);
+    expect(rf.data?.routing).toBeUndefined();
+  });
+
   // ── P4-T24: edge-styling callback injection (editable path only) ───────────
 
   function fixtureEdgeCallbacks(): EdgeCallbacks {
@@ -471,20 +489,22 @@ describe('boardEdgeToRf', () => {
       onArrowChange: vi.fn(),
       onStyleChange: vi.fn(),
       onCardinalityChange: vi.fn(),
+      onRoutingChange: vi.fn(),
     };
   }
 
-  it('injects onLabelChange/onArrowChange/onStyleChange into an arrow edge', () => {
+  it('injects onLabelChange/onArrowChange/onStyleChange/onRoutingChange into an arrow edge', () => {
     const edge: BoardEdge = { id: 'e1', source: 'a', target: 'b', style: 'solid', kind: 'arrow' };
     const callbacks = fixtureEdgeCallbacks();
     const rf = boardEdgeToRf(edge, callbacks);
     expect(rf.data?.onLabelChange).toBe(callbacks.onLabelChange);
     expect(rf.data?.onArrowChange).toBe(callbacks.onArrowChange);
     expect(rf.data?.onStyleChange).toBe(callbacks.onStyleChange);
+    expect(rf.data?.onRoutingChange).toBe(callbacks.onRoutingChange);
     expect(rf.data?.onCardinalityChange).toBeUndefined();
   });
 
-  it('injects onLabelChange/onStyleChange/onCardinalityChange (not onArrowChange) into a cardinality edge', () => {
+  it('injects onLabelChange/onStyleChange/onCardinalityChange/onRoutingChange (not onArrowChange) into a cardinality edge', () => {
     const edge: BoardEdge = {
       id: 'e1',
       source: 'a',
@@ -497,6 +517,7 @@ describe('boardEdgeToRf', () => {
     expect(rf.data?.onLabelChange).toBe(callbacks.onLabelChange);
     expect(rf.data?.onStyleChange).toBe(callbacks.onStyleChange);
     expect(rf.data?.onCardinalityChange).toBe(callbacks.onCardinalityChange);
+    expect(rf.data?.onRoutingChange).toBe(callbacks.onRoutingChange);
     expect(rf.data?.onArrowChange).toBeUndefined();
   });
 
@@ -507,6 +528,7 @@ describe('boardEdgeToRf', () => {
     expect(rf.data?.onArrowChange).toBeUndefined();
     expect(rf.data?.onStyleChange).toBeUndefined();
     expect(rf.data?.onCardinalityChange).toBeUndefined();
+    expect(rf.data?.onRoutingChange).toBeUndefined();
   });
 
   it('boardToRf forwards edge callbacks to every edge via boardEdgeToRf', () => {

@@ -238,6 +238,29 @@ describe('createBoardStore', () => {
     });
   });
 
+  describe('setEdgeRouting', () => {
+    it('sets an edge routing, the snapshot reflects it, and a later getSnapshot call still has it', () => {
+      const store = createBoardStore(fixtureBoard(), { readonly: false });
+      store.setEdgeRouting('e1', 'elbow');
+
+      const edge = store.getSnapshot().edges.find((e) => e.id === 'e1');
+      expect(edge).toMatchObject({ id: 'e1', routing: 'elbow' });
+
+      // Persists: a subsequent, unrelated read still carries the mutation.
+      const edgeAgain = store.getSnapshot().edges.find((e) => e.id === 'e1');
+      expect(edgeAgain?.routing).toBe('elbow');
+      store.destroy();
+    });
+
+    it('is a no-op on a read-only store', () => {
+      const store = createBoardStore(fixtureBoard(), { readonly: true });
+      store.setEdgeRouting('e1', 'elbow');
+      const edge = store.getSnapshot().edges.find((e) => e.id === 'e1');
+      expect(edge?.routing).toBeUndefined();
+      store.destroy();
+    });
+  });
+
   describe('viewport', () => {
     it('getViewport returns the initial board viewport', () => {
       const store = createBoardStore(fixtureBoard(), { readonly: false });

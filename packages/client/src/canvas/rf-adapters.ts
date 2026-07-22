@@ -254,24 +254,27 @@ export function boardNodeToRf(
 // `useEditableCanvas` builds ONE `EdgeCallbacks` bag per store, and
 // `boardEdgeToRf` only picks which of its (already-stable) functions to
 // attach — never wraps/recreates one — so `data` doesn't churn on every
-// doc-driven rebuild. `onLabelChange`/`onStyleChange` apply to every edge
-// (ArrowEdge and CardinalityEdge both support inline label editing and are
-// both style-able); `onArrowChange` only makes sense for an 'arrow'-kind
-// edge, `onCardinalityChange` only for a 'cardinality'-kind edge.
+// doc-driven rebuild. `onLabelChange`/`onStyleChange`/`onRoutingChange` apply
+// to every edge (ArrowEdge and CardinalityEdge both support inline label
+// editing, are both style-able, and both route via `data.routing`);
+// `onArrowChange` only makes sense for an 'arrow'-kind edge,
+// `onCardinalityChange` only for a 'cardinality'-kind edge.
 export interface EdgeCallbacks {
   onLabelChange: (id: string, label: string) => void;
   onArrowChange: (id: string, arrow: BoardEdge['arrow']) => void;
   onStyleChange: (id: string, style: BoardEdge['style']) => void;
   onCardinalityChange: (id: string, cardinality: BoardEdge['cardinality']) => void;
+  onRoutingChange: (id: string, routing: BoardEdge['routing']) => void;
 }
 
 /**
  * Map a single {@link BoardEdge} to its ReactFlow edge. `type` is
  * `'cardinality'` when `edge.kind === 'cardinality'`, else `'arrow'`
  * (matching `kind`'s own default-to-'arrow' contract). `data` carries the
- * style/arrow/cardinality/label fields the edge component needs, plus (when
- * `callbacks` is given) the editing callbacks ArrowEdge/CardinalityEdge's
- * inline seams need — see `EdgeCallbacks`'s doc for the kind-specific split.
+ * style/arrow/cardinality/label/routing fields the edge component needs,
+ * plus (when `callbacks` is given) the editing callbacks ArrowEdge/
+ * CardinalityEdge's inline seams need — see `EdgeCallbacks`'s doc for the
+ * kind-specific split.
  */
 export function boardEdgeToRf(edge: BoardEdge, callbacks?: EdgeCallbacks): BoardRfEdge {
   const kind = edge.kind ?? 'arrow';
@@ -288,10 +291,12 @@ export function boardEdgeToRf(edge: BoardEdge, callbacks?: EdgeCallbacks): Board
       kind,
       arrow: edge.arrow ?? 'end',
       cardinality: edge.cardinality ?? '1:N',
+      routing: edge.routing,
       ...(callbacks
         ? {
             onLabelChange: callbacks.onLabelChange,
             onStyleChange: callbacks.onStyleChange,
+            onRoutingChange: callbacks.onRoutingChange,
             ...(kind === 'cardinality'
               ? { onCardinalityChange: callbacks.onCardinalityChange }
               : { onArrowChange: callbacks.onArrowChange }),
