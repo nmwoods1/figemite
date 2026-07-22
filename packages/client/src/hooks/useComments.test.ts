@@ -61,15 +61,15 @@ describe('useComments', () => {
   it('loads comments for the given slug via fetchComments', async () => {
     boardsApiMock.fetchComments.mockResolvedValue(fileWithOneComment());
 
-    const { result } = renderHook(() => useComments('spend', { readonly: false }));
+    const { result } = renderHook(() => useComments('spend', undefined, { readonly: false }));
 
     await vi.waitFor(() => expect(result.current.comments).toHaveLength(1));
-    expect(boardsApiMock.fetchComments).toHaveBeenCalledWith('spend');
+    expect(boardsApiMock.fetchComments).toHaveBeenCalledWith('spend', undefined);
     expect(result.current.comments[0].text).toBe('hello');
   });
 
   it('addComment with a canvas target updates state and persists via saveComments', async () => {
-    const { result } = renderHook(() => useComments('spend', { readonly: false }));
+    const { result } = renderHook(() => useComments('spend', undefined, { readonly: false }));
     await vi.waitFor(() => expect(boardsApiMock.fetchComments).toHaveBeenCalled());
 
     act(() => {
@@ -88,12 +88,13 @@ describe('useComments', () => {
       expect(boardsApiMock.saveComments).toHaveBeenCalledWith(
         'spend',
         expect.objectContaining({ comments: [expect.objectContaining({ text: 'a new comment' })] }),
+        undefined,
       ),
     );
   });
 
   it('addComment with a node target persists the node target shape', async () => {
-    const { result } = renderHook(() => useComments('spend', { readonly: false }));
+    const { result } = renderHook(() => useComments('spend', undefined, { readonly: false }));
     await vi.waitFor(() => expect(boardsApiMock.fetchComments).toHaveBeenCalled());
 
     act(() => {
@@ -113,7 +114,7 @@ describe('useComments', () => {
 
   it('generates comment ids that do not collide with existing ones', async () => {
     boardsApiMock.fetchComments.mockResolvedValue(fileWithOneComment());
-    const { result } = renderHook(() => useComments('spend', { readonly: false }));
+    const { result } = renderHook(() => useComments('spend', undefined, { readonly: false }));
     await vi.waitFor(() => expect(result.current.comments).toHaveLength(1));
 
     act(() => {
@@ -127,7 +128,7 @@ describe('useComments', () => {
 
   it('addReply appends a reply to the target comment and persists', async () => {
     boardsApiMock.fetchComments.mockResolvedValue(fileWithOneComment());
-    const { result } = renderHook(() => useComments('spend', { readonly: false }));
+    const { result } = renderHook(() => useComments('spend', undefined, { readonly: false }));
     await vi.waitFor(() => expect(result.current.comments).toHaveLength(1));
 
     act(() => {
@@ -145,12 +146,13 @@ describe('useComments', () => {
           expect.objectContaining({ replies: [expect.objectContaining({ text: 'a reply' })] }),
         ],
       }),
+      undefined,
     );
   });
 
   it('toggleResolved flips the resolved flag and persists', async () => {
     boardsApiMock.fetchComments.mockResolvedValue(fileWithOneComment());
-    const { result } = renderHook(() => useComments('spend', { readonly: false }));
+    const { result } = renderHook(() => useComments('spend', undefined, { readonly: false }));
     await vi.waitFor(() => expect(result.current.comments).toHaveLength(1));
 
     act(() => {
@@ -168,7 +170,7 @@ describe('useComments', () => {
 
   it('deleteComment removes the comment and persists', async () => {
     boardsApiMock.fetchComments.mockResolvedValue(fileWithOneComment());
-    const { result } = renderHook(() => useComments('spend', { readonly: false }));
+    const { result } = renderHook(() => useComments('spend', undefined, { readonly: false }));
     await vi.waitFor(() => expect(result.current.comments).toHaveLength(1));
 
     act(() => {
@@ -176,7 +178,7 @@ describe('useComments', () => {
     });
 
     await vi.waitFor(() => expect(result.current.comments).toHaveLength(0));
-    expect(boardsApiMock.saveComments).toHaveBeenCalledWith('spend', { comments: [] });
+    expect(boardsApiMock.saveComments).toHaveBeenCalledWith('spend', { comments: [] }, undefined);
   });
 
   it('refetches comments when the external-change signal fires', async () => {
@@ -187,7 +189,7 @@ describe('useComments', () => {
     };
 
     const { result } = renderHook(() =>
-      useComments('spend', { readonly: false, onExternalChange }),
+      useComments('spend', undefined, { readonly: false, onExternalChange }),
     );
     await vi.waitFor(() => expect(result.current.comments).toHaveLength(0));
 
@@ -202,7 +204,7 @@ describe('useComments', () => {
 
   it('read-only mode loads comments but disables mutations', async () => {
     boardsApiMock.fetchComments.mockResolvedValue(fileWithOneComment());
-    const { result } = renderHook(() => useComments('spend', { readonly: true }));
+    const { result } = renderHook(() => useComments('spend', undefined, { readonly: true }));
 
     await vi.waitFor(() => expect(result.current.comments).toHaveLength(1));
 
@@ -221,8 +223,39 @@ describe('useComments', () => {
   });
 
   it('does not fetch or expose mutations when slug is undefined', () => {
-    const { result } = renderHook(() => useComments(undefined, { readonly: false }));
+    const { result } = renderHook(() => useComments(undefined, undefined, { readonly: false }));
     expect(result.current.comments).toEqual([]);
     expect(boardsApiMock.fetchComments).not.toHaveBeenCalled();
+  });
+
+  it('scopes fetch and save to the given draftId (version isolation)', async () => {
+    boardsApiMock.fetchComments.mockResolvedValue(emptyFile());
+    const { result } = renderHook(() => useComments('spend', 'draft1', { readonly: false }));
+    await vi.waitFor(() => expect(boardsApiMock.fetchComments).toHaveBeenCalledWith('spend', 'draft1'));
+
+    act(() => {
+      result.current.addComment({ type: 'canvas', pos: { x: 1, y: 2 } }, 'draft-only');
+    });
+
+    await vi.waitFor(() =>
+      expect(boardsApiMock.saveComments).toHaveBeenCalledWith(
+        'spend',
+        expect.objectContaining({ comments: [expect.objectContaining({ text: 'draft-only' })] }),
+        'draft1',
+      ),
+    );
+  });
+
+  it('re-fetches when the draftId changes (switching versions)', async () => {
+    boardsApiMock.fetchComments.mockResolvedValue(emptyFile());
+    const { rerender } = renderHook(
+      ({ draftId }: { draftId: string | undefined }) =>
+        useComments('spend', draftId, { readonly: false }),
+      { initialProps: { draftId: undefined as string | undefined } },
+    );
+    await vi.waitFor(() => expect(boardsApiMock.fetchComments).toHaveBeenCalledWith('spend', undefined));
+
+    rerender({ draftId: 'draft1' });
+    await vi.waitFor(() => expect(boardsApiMock.fetchComments).toHaveBeenCalledWith('spend', 'draft1'));
   });
 });

@@ -205,6 +205,28 @@ describe('boards-api', () => {
       });
     });
 
+    it('fetchComments scopes to a draft via the draft query param', async () => {
+      const data: CommentsFile = { comments: [] };
+      fetchMock.mockResolvedValueOnce(jsonResponse(data));
+
+      await fetchComments('spend', 'draft1');
+
+      expect(fetchMock).toHaveBeenCalledWith('/api/comments?board=spend&draft=draft1', undefined);
+    });
+
+    it('saveComments includes the draft id in the POST body', async () => {
+      const data: CommentsFile = { comments: [] };
+      fetchMock.mockResolvedValueOnce(jsonResponse({ ok: true }));
+
+      await saveComments('spend', data, 'draft1');
+
+      expect(fetchMock).toHaveBeenCalledWith('/api/comments', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ board: 'spend', draft: 'draft1', data }),
+      });
+    });
+
     it('fetchTags calls GET /api/tags?board= and validates via parseTagsFile', async () => {
       const data: TagsFile = { tags: ['roadmap'] };
       fetchMock.mockResolvedValueOnce(jsonResponse(data));

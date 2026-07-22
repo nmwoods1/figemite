@@ -243,10 +243,12 @@ export async function promoteDraft(
 
 // ── Comments ──────────────────────────────────────────────────────────────────
 
-export async function fetchComments(slug: string): Promise<CommentsFile> {
+export async function fetchComments(slug: string, draftId?: string): Promise<CommentsFile> {
+  // Drafts are dev-only (never in the static build), so READONLY ignores
+  // `draftId` and always resolves the prod static file.
   const url = READONLY
     ? staticSlugFileUrl(slug, 'comments.json')
-    : apiUrl('/api/comments', { board: slug });
+    : apiUrl('/api/comments', { board: slug, draft: draftId });
   const raw = await fetchJson(url);
   try {
     return parseCommentsFile(raw);
@@ -255,12 +257,16 @@ export async function fetchComments(slug: string): Promise<CommentsFile> {
   }
 }
 
-export async function saveComments(slug: string, data: CommentsFile): Promise<void> {
+export async function saveComments(
+  slug: string,
+  data: CommentsFile,
+  draftId?: string,
+): Promise<void> {
   if (READONLY) throw new ReadOnlyError('save comments');
   await fetchJson('/api/comments', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ board: slug, data }),
+    body: JSON.stringify({ board: slug, draft: draftId, data }),
   });
 }
 

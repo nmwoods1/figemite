@@ -17,6 +17,7 @@ import type { IncomingMessage, ServerResponse } from 'node:http';
 import { SlugSchema, PathSegmentSchema, generateId, type DraftMeta } from '@figemite/shared';
 import { getQuery, readJsonBody, sendJson } from '../../http/body.js';
 import { readDrafts, writeDrafts } from '../../repository/drafts-repo.js';
+import { readComments, writeComments } from '../../repository/comments-repo.js';
 import { persistBoard } from '../persist.js';
 import { NotFoundError, ValidationError } from '../errors.js';
 import type { RequestContext } from '../router.js';
@@ -104,6 +105,11 @@ export async function handleCreateDraft(
   for (const subPath of ctx.repo.listSubBoardPaths(slug)) {
     persistBoard(ctx, slug, subPath, ctx.repo.read(slug, subPath), 'save', draftId);
   }
+
+  // Snapshot Live's comment thread into the draft so it opens as a faithful fork
+  // (matching how the board content above is copied). From here the two threads
+  // are independent: editing the draft's comments never touches Live's.
+  writeComments(ctx.config.boardsRoot, slug, readComments(ctx.config.boardsRoot, slug), draftId);
 
   const meta: DraftMeta = {
     id: draftId,

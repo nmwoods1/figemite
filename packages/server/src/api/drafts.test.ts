@@ -6,7 +6,7 @@
 // no relay running). A separate test overrides the replacer to prove the
 // live-room path is taken when a room exists.
 
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   emptyBoard,
   makeStickyNode,
@@ -56,6 +56,44 @@ describe('POST /api/drafts (create)', () => {
     const list = await (await fetch(`${h.url}/api/drafts?board=spend`)).json();
     expect(list.drafts).toHaveLength(1);
     expect(list.drafts[0]).toMatchObject({ id: draftId, title: 'My draft', createdBy: 'agent' });
+  });
+
+  it("copies Live's comment thread into the new draft (faithful fork)", async () => {
+    h.ctx.repo.seedBoard('spend', 'Spend');
+    const liveComments = {
+      comments: [
+        {
+          id: 'live1',
+          target: { type: 'canvas', pos: { x: 1, y: 1 } },
+          author: 'nick',
+          createdAt: '2026-07-06T00:00:00.000Z',
+          text: 'on live',
+          replies: [],
+        },
+      ],
+    };
+    await fetch(`${h.url}/api/comments`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ board: 'spend', data: liveComments }),
+    });
+
+    const draftId = await createDraft('spend');
+
+    // The draft opens with a snapshot of Live's thread...
+    const draftComments = await (
+      await fetch(`${h.url}/api/comments?board=spend&draft=${draftId}`)
+    ).json();
+    expect(draftComments).toEqual(liveComments);
+
+    // ...but the two are now independent: editing the draft never touches Live.
+    await fetch(`${h.url}/api/comments`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ board: 'spend', draft: draftId, data: { comments: [] } }),
+    });
+    const liveAfter = await (await fetch(`${h.url}/api/comments?board=spend`)).json();
+    expect(liveAfter).toEqual(liveComments);
   });
 
   it('404s when the board does not exist', async () => {
@@ -231,7 +269,7 @@ describe('POST /api/board/promote', () => {
     expect(h.ctx.repo.exists('spend', ['stale'])).toBe(false); // stale prod sub-board removed
   });
 
-  it('leaves prod comments/tags untouched', async () => {
+  it('replaces prod comments with the draft thread, but leaves prod tags untouched', async () => {
     h.ctx.repo.seedBoard('spend', 'Spend');
     // Seed human-owned sidecars via their endpoints.
     await fetch(`${h.url}/api/tags`, {
@@ -239,17 +277,74 @@ describe('POST /api/board/promote', () => {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ board: 'spend', tags: ['keepme'] }),
     });
+    const liveComments = {
+      comments: [
+        {
+          id: 'live1',
+          target: { type: 'canvas', pos: { x: 1, y: 1 } },
+          author: 'nick',
+          createdAt: '2026-07-06T00:00:00.000Z',
+          text: 'on live',
+          replies: [],
+        },
+      ],
+    };
+    await fetch(`${h.url}/api/comments`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ board: 'spend', data: liveComments }),
+    });
 
     const draftId = await createDraft('spend');
     h.ctx.repo.write('spend', [], boardWith('Spend', 'x'), draftId);
+    // Replace the draft's (copied) thread with a draft-only comment.
+    const draftComments = {
+      comments: [
+        {
+          id: 'draft1',
+          target: { type: 'canvas', pos: { x: 2, y: 2 } },
+          author: 'nick',
+          createdAt: '2026-07-06T00:00:00.000Z',
+          text: 'on draft',
+          replies: [],
+        },
+      ],
+    };
+    await fetch(`${h.url}/api/comments`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ board: 'spend', draft: draftId, data: draftComments }),
+    });
+
     await fetch(`${h.url}/api/board/promote`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ board: 'spend', draft: draftId }),
     });
 
+    // Comments: prod now carries the draft's thread (replace semantics).
+    const prodComments = await (await fetch(`${h.url}/api/comments?board=spend`)).json();
+    expect(prodComments).toEqual(draftComments);
+    // Tags: still human-owned and untouched by promotion.
     const tags = await (await fetch(`${h.url}/api/tags?board=spend`)).json();
     expect(tags.tags).toEqual(['keepme']);
+  });
+
+  it('broadcasts external-change on Live so connected clients re-fetch comments', async () => {
+    h.ctx.repo.seedBoard('spend', 'Spend');
+    const draftId = await createDraft('spend');
+
+    // comments.json is not in the Yjs doc and the file-watcher ignores it, so
+    // promote must explicitly nudge Live subscribers to reload the new thread.
+    const broadcast = vi.spyOn(h.ctx.sse, 'broadcast');
+    await fetch(`${h.url}/api/board/promote`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ board: 'spend', draft: draftId }),
+    });
+
+    expect(broadcast).toHaveBeenCalledWith('spend', [], 'external-change', { board: 'spend' });
+    broadcast.mockRestore();
   });
 
   it('409s when prod has an active AI lock', async () => {

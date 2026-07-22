@@ -8,8 +8,10 @@
 //
 // Flow (see the plan): gate on the prod AI-lock, snapshot prod first for
 // rollback, copy the draft board tree over prod (replace semantics — prod
-// sub-boards absent from the draft are removed), preserve prod's human-owned
-// comments/tags, then OPTIONALLY delete the draft. Prod content is pushed
+// sub-boards absent from the draft are removed), replace prod's comment thread
+// with the draft's (comments are a faithful fork, promoted like content; tags
+// stay human-owned and untouched), then OPTIONALLY delete the draft. Prod content
+// is pushed
 // through the live Yjs room when one exists (so connected browsers converge
 // immediately) and falls back to a direct disk write otherwise.
 //
@@ -23,6 +25,7 @@ import type { IncomingMessage, ServerResponse } from 'node:http';
 import { SlugSchema, PathSegmentSchema, type BoardFile } from '@figemite/shared';
 import { readJsonBody, sendJson } from '../../http/body.js';
 import { readDrafts, writeDrafts } from '../../repository/drafts-repo.js';
+import { readComments, writeComments } from '../../repository/comments-repo.js';
 import { persistBoard } from '../persist.js';
 import { LockedError, NotFoundError, ValidationError } from '../errors.js';
 import type { RequestContext } from '../router.js';
@@ -109,7 +112,20 @@ export async function handlePromoteDraft(
     }
   }
 
-  // 4. Prod comments.json / tags.json are never touched (human-owned).
+  // 4. Replace prod's comment thread with the draft's — promotion carries the
+  //    draft's discussion over Live, mirroring the replace-semantics used for
+  //    board content above (a draft is a faithful fork: its comments were seeded
+  //    from Live at creation, so this promotes the draft's edits/resolves/replies
+  //    back onto Live). Prod tags.json is still left untouched (human-owned).
+  writeComments(ctx.config.boardsRoot, slug, readComments(ctx.config.boardsRoot, slug, draftId));
+
+  // Nudge connected Live clients to re-fetch comments. The comment layer is not
+  // in the Yjs doc (so it doesn't converge with the content push above) and the
+  // file-watcher deliberately ignores comments.json (see file-watcher.ts), so
+  // without this a promoter watching Live would keep seeing the pre-promote
+  // thread until a manual reload. `external-change` is exactly the frame the
+  // client's useAiLock turns into a comments reload (see BoardCanvas.tsx).
+  ctx.sse.broadcast(slug, [], 'external-change', { board: slug });
 
   // 5. Optionally delete the now-merged draft and de-index it. Default is to
   //    KEEP it (deleteDraft === false); only an explicit opt-in removes it.

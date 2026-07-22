@@ -55,6 +55,46 @@ describe('missing comments file', () => {
   it('returns an empty comments file', () => {
     expect(readComments(tmpRoot, 'my-board')).toEqual({ comments: [] });
   });
+
+  it('a draft with no comments file yet reads back empty', () => {
+    expect(readComments(tmpRoot, 'my-board', 'd1')).toEqual({ comments: [] });
+  });
+});
+
+describe('version scoping (prod vs. draft)', () => {
+  it('writes a draft comment under .drafts/<draftId>/comments.json', () => {
+    writeComments(tmpRoot, 'my-board', sampleComments(), 'd1');
+    const filePath = path.join(tmpRoot, 'my-board', '.drafts', 'd1', 'comments.json');
+    expect(fsSync.existsSync(filePath)).toBe(true);
+    expect(readComments(tmpRoot, 'my-board', 'd1')).toEqual(sampleComments());
+  });
+
+  it('keeps prod and draft threads independent (no leak either direction)', () => {
+    const prod = sampleComments();
+    const draft: CommentsFile = {
+      comments: [
+        {
+          id: 'c2',
+          target: { type: 'canvas', pos: { x: 9, y: 9 } },
+          author: 'Ada',
+          createdAt: '2026-07-07T00:00:00.000Z',
+          text: 'draft-only',
+          replies: [],
+        },
+      ],
+    };
+    writeComments(tmpRoot, 'my-board', prod);
+    writeComments(tmpRoot, 'my-board', draft, 'd1');
+
+    // Each version reads back only its own thread.
+    expect(readComments(tmpRoot, 'my-board')).toEqual(prod);
+    expect(readComments(tmpRoot, 'my-board', 'd1')).toEqual(draft);
+
+    // Overwriting the draft never touches prod.
+    writeComments(tmpRoot, 'my-board', { comments: [] }, 'd1');
+    expect(readComments(tmpRoot, 'my-board')).toEqual(prod);
+    expect(readComments(tmpRoot, 'my-board', 'd1')).toEqual({ comments: [] });
+  });
 });
 
 describe('invalid comments file', () => {
