@@ -22,6 +22,7 @@ import {
   type EdgeKind,
   type ArrowStyle,
   type Cardinality,
+  type EdgeRouting,
   getSnapshot,
   addNode as addNodeOp,
   updateNode as updateNodeOp,
@@ -193,6 +194,7 @@ export interface AddEdgeInput {
   kind?: EdgeKind;
   arrow?: ArrowStyle;
   cardinality?: Cardinality;
+  routing?: EdgeRouting;
   label?: string;
   sourceHandle?: string | null;
   targetHandle?: string | null;
@@ -210,6 +212,7 @@ export function addEdge(peer: BoardPeer, input: AddEdgeInput): string {
     input.kind,
     input.arrow,
     input.cardinality,
+    input.routing,
   );
   if (input.label !== undefined) edge = { ...edge, label: input.label };
   if (input.sourceHandle !== undefined) edge = { ...edge, sourceHandle: input.sourceHandle };

@@ -35,7 +35,9 @@ in the UI).
 Edges connect two node ids (`source` -> `target`) and are either directional
 `arrow`s (with an `arrow` style: `none` | `end` | `both`) or ER-style
 `cardinality` connectors (`1:1` | `1:N` | `N:1` | `N:N`), each with a `solid`
-or `dashed` line style and an optional label.
+or `dashed` line style and an optional label. Either kind may set a `routing`
+of `bezier` (default) | `straight` | `elbow`, controlling how the connector is
+drawn between the two nodes.
 
 **Comments and tags are human-owned.** They live in separate files
 (`comments.json`, `tags.json`) precisely so that an AI agent rewriting board

@@ -700,6 +700,10 @@ export function createFigemiteMcpServer(options: FigemiteMcpServerOptions = {}):
         kind: z.enum(['arrow', 'cardinality']).optional(),
         arrow: z.enum(['none', 'end', 'both']).optional(),
         cardinality: z.enum(['1:1', '1:N', 'N:1', 'N:N']).optional(),
+        routing: z
+          .enum(['bezier', 'straight', 'elbow'])
+          .optional()
+          .describe('Edge routing style (default bezier); applies to both arrow and cardinality edges'),
         label: z.string().optional().describe('Label shown at the edge midpoint'),
         sourceHandle: z.enum(['t', 'r', 'b', 'l']).nullable().optional(),
         targetHandle: z.enum(['t', 'r', 'b', 'l']).nullable().optional(),

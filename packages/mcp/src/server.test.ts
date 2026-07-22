@@ -584,20 +584,30 @@ describe('node/edge tools operate on the connected peer', () => {
     const { id: edgeId } = jsonOf(
       await client.callTool({
         name: 'add_edge',
-        arguments: { instanceId: 'local', source: a, target: b },
+        arguments: { instanceId: 'local', source: a, target: b, routing: 'elbow' },
       }),
     ) as { id: string };
 
-    await client.callTool({
-      name: 'update_edge',
-      arguments: { instanceId: 'local', id: edgeId, patch: { label: 'x' } },
-    });
     let board = jsonOf(
       await client.callTool({ name: 'get_board', arguments: { instanceId: 'local' } }),
     ) as {
-      edges: Array<{ id: string; label?: string }>;
+      edges: Array<{ id: string; label?: string; routing?: string }>;
     };
-    expect(board.edges.find((e) => e.id === edgeId)?.label).toBe('x');
+    expect(board.edges.find((e) => e.id === edgeId)).toMatchObject({ routing: 'elbow' });
+
+    await client.callTool({
+      name: 'update_edge',
+      arguments: { instanceId: 'local', id: edgeId, patch: { label: 'x', routing: 'straight' } },
+    });
+    board = jsonOf(
+      await client.callTool({ name: 'get_board', arguments: { instanceId: 'local' } }),
+    ) as {
+      edges: Array<{ id: string; label?: string; routing?: string }>;
+    };
+    expect(board.edges.find((e) => e.id === edgeId)).toMatchObject({
+      label: 'x',
+      routing: 'straight',
+    });
 
     await client.callTool({ name: 'delete_edge', arguments: { instanceId: 'local', id: edgeId } });
     board = jsonOf(
