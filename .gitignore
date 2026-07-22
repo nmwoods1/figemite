@@ -9,6 +9,8 @@ public/
 *.tsbuildinfo
 .DS_Store
 .env*
+# npm auth — never versioned (a project .npmrc may hold a publish token)
+.npmrc
 # session tooling — never versioned
 .claude/
 .playwright-mcp/

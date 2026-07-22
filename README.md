@@ -64,16 +64,16 @@ Figemite ships an MCP server (`@figemite/mcp`) that connects to a running
 board as a multiplayer peer: the AI gets its own visible cursor and name
 pill, and its edits sync live and persist just like a human's.
 
-`@figemite/mcp` isn't published to npm yet, so run it from your clone: build
-it once with `npm run -w @figemite/mcp build`, then add it to Claude Code,
-Cursor, or any MCP-compatible client, pointing at the built bundle:
+`@figemite/mcp` is published to npm, so there's no build step — point your MCP
+client at it with `npx`. Add it to Claude Code, Cursor, or any MCP-compatible
+client:
 
 ```json
 {
   "mcpServers": {
     "figemite": {
-      "command": "node",
-      "args": ["/absolute/path/to/figemite/packages/mcp/dist/index.js"],
+      "command": "npx",
+      "args": ["-y", "@figemite/mcp"],
       "env": {
         "FIGEMITE_HTTP_URL": "http://localhost:5400",
         "FIGEMITE_NAME": "Claude Code",
@@ -84,8 +84,10 @@ Cursor, or any MCP-compatible client, pointing at the built bundle:
 }
 ```
 
-> Once `@figemite/mcp` is published to npm, this simplifies to
-> `"command": "npx"` with `"args": ["-y", "@figemite/mcp"]`.
+> **Hacking on Figemite itself?** To run the MCP server from your clone
+> instead of npm, build it once with `npm run -w @figemite/mcp build` and use
+> `"command": "node"` with `"args":
+> ["/absolute/path/to/figemite/packages/mcp/dist/index.js"]`.
 
 All three env vars are optional. `FIGEMITE_HTTP_URL` defaults to
 `http://localhost:5400`; `FIGEMITE_NAME` is the display name shown in the

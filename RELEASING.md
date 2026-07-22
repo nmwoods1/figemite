@@ -75,20 +75,22 @@ the release can stay MINOR.
      audit and the prepublish reference audit (`npm run audit:refs`) —
      the same non-negotiable gate as CI, run again on the tag itself;
    - builds the `@figemite/mcp` bundle (`npm run -w @figemite/mcp build`);
+   - **publishes `@figemite/mcp` to npm** via `npm publish`, authenticating
+     with the `NPM_TOKEN` Actions secret;
    - cuts a GitHub Release from the tag with auto-generated release notes.
 
-   **npm publishing is deferred:** the `npm publish` step in `release.yml`
-   is commented out, so a tag push does NOT publish to npm. To enable it
-   later, create the `@figemite` npm org, add an `NPM_TOKEN` GitHub Actions
-   secret, and uncomment the "Publish @figemite/mcp to npm" step.
+   **Bump the version before tagging.** npm rejects re-publishing an existing
+   version, so `packages/mcp/package.json`'s `version` must be new for each
+   release or the publish step fails. Keep the tag (`vX.Y.Z`) and the package
+   version in lockstep.
 
-4. **Verify the release.** Confirm the GitHub Release was cut from the tag.
-   (Once npm publishing is enabled, also confirm `@figemite/mcp` shows up on
-   npm and that `npx -y @figemite/mcp` works from a clean environment.)
+4. **Verify the release.** Confirm the GitHub Release was cut from the tag,
+   that `@figemite/mcp` shows the new version on npm (`npm view @figemite/mcp
+   version`), and that `npx -y @figemite/mcp` runs from a clean environment.
 
-`@figemite/mcp` is the only package intended for npm — `@figemite/{shared,
-server,client}` are `"private": true` and stay workspace-internal; users run
-them from a clone (see `CONTRIBUTING.md`).
+`@figemite/mcp` is the only package published to npm — `@figemite/{shared,
+server,client}` are `"private": true` and stay workspace-internal (run from a
+clone; see `CONTRIBUTING.md`).
 
 ## Manual prerequisites (one-time, before the first real release)
 
@@ -100,11 +102,11 @@ account access before step 2 above can succeed:
   push the `v1.0.0` tag when ready to cut the release.
 - **Repository URL is set.** `packages/mcp/package.json` and the READMEs point
   at `https://github.com/nmwoods1/figemite`.
-- **Create the npm org/account** that will own the `@figemite` scope, and
-  generate an `NPM_TOKEN` with publish rights to it.
-- **Add `NPM_TOKEN` as a GitHub Actions secret** on the repository (Settings
-  → Secrets and variables → Actions) so `release.yml` can authenticate to
-  npm.
+- **npm scope + token (done).** The `@figemite` npm scope exists and an
+  `NPM_TOKEN` Actions secret (an automation / bypass-2FA token with publish
+  rights to the scope) is configured, so `release.yml`'s publish step
+  authenticates on a tag push. Rotate the token before it expires, or CI
+  publishing will start failing.
 - **Add the hero GIF.** `README.md` references `docs/hero.gif` (a short
   screen-recording of the board in use) but the file doesn't exist yet —
   record one and drop it in `docs/` before the release is public-facing.
