@@ -384,7 +384,22 @@ describe('useEditableCanvas', () => {
     // When `snapEnabled` is true, a committed resize is rounded to the grid
     // via canvas/coords.ts's `snapSize`; when false, the raw size passes
     // through. The flag is read through a ref so toggling it never churns the
-    // node-callbacks memo (asserted in the stability tests above).
+    // node-callbacks memo — asserted directly by the identity test below.
+
+    it('keeps the node-callbacks bag reference-stable when snapEnabled toggles', () => {
+      const store = createBoardStore(fixtureBoard(), { readonly: false });
+      const { result, rerender } = renderHook(
+        ({ snap }: { snap: boolean }) => useEditableCanvas(store, { snapEnabled: snap }),
+        { initialProps: { snap: true } },
+      );
+      const before = result.current.nodes.find((n) => n.id === 's1')?.data.onResizeEnd;
+      // Flip the preference — the ref indirection means the memoized callbacks
+      // (keyed on [store]) must NOT be rebuilt, so node data stays identical.
+      rerender({ snap: false });
+      const after = result.current.nodes.find((n) => n.id === 's1')?.data.onResizeEnd;
+      expect(after).toBe(before);
+      store.destroy();
+    });
 
     it('snaps a committed resize to the grid when snapEnabled is true', () => {
       const store = createBoardStore(fixtureBoard(), { readonly: false });
