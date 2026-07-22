@@ -35,6 +35,16 @@ function isApiRequest(url: string | undefined): boolean {
 }
 
 /**
+ * mDNS is ON by default in dev so a locally-run MCP can discover this server as
+ * an instance (it was historically never advertised in the dev path). Opt out
+ * with `FIGEMITE_MDNS=0` / `false`.
+ */
+function devMdnsEnabled(): boolean {
+  const v = process.env.FIGEMITE_MDNS?.toLowerCase();
+  return v !== '0' && v !== 'false';
+}
+
+/**
  * Vite plugin: composes `@figemite/server` via `createServer` and mounts it on
  * the dev server's middleware chain + HTTP upgrade event, scoped to
  * `/api/*` only. `/yjs/*` websocket upgrades are handled by
@@ -47,7 +57,7 @@ export function figemiteServerPlugin(repoRoot: string): Plugin {
     name: 'figemite-server',
     configureServer(server) {
       const boardsRoot = resolveDevBoardsRoot(repoRoot);
-      const backend: ServerHandle = createServer({ boardsRoot });
+      const backend: ServerHandle = createServer({ boardsRoot, mdns: devMdnsEnabled() });
 
       server.middlewares.use((req, res, next) => {
         if (isApiRequest(req.url)) {
@@ -66,6 +76,19 @@ export function figemiteServerPlugin(repoRoot: string): Plugin {
         // expect.
         const httpServer = server.httpServer as http.Server;
         backend.attachUpgrade(httpServer);
+
+        // Advertise the real bound URL/port once Vite's server is listening, so
+        // the instance's `/api/instance` url and its mDNS record carry the true
+        // address (not the ephemeral placeholder).
+        const advertise = (): void => {
+          const address = httpServer.address();
+          if (address === null || typeof address === 'string') return;
+          const host = address.address === '::' ? '127.0.0.1' : address.address;
+          backend.advertise({ url: `http://${host}:${address.port}`, port: address.port });
+        };
+        if (httpServer.listening) advertise();
+        else httpServer.once('listening', advertise);
+
         httpServer.once('close', () => backend.dispose());
       }
     },

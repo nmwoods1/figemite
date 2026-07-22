@@ -47,6 +47,7 @@ import { handleEvents } from './handlers/events.js';
 import { handleListHistory, handleReadHistoryVersion } from './handlers/history.js';
 import { handleGetComments, handleSaveComments } from './handlers/comments.js';
 import { handleGetTags, handleSaveTags } from './handlers/tags.js';
+import { handleGetInstance } from './handlers/instance.js';
 
 /**
  * Everything an endpoint handler needs. Assembled by the composition layer
@@ -69,6 +70,19 @@ export interface RoomContentReplacer {
   ): boolean;
 }
 
+/**
+ * This instance's advertised identity, surfaced by `GET /api/instance` and the
+ * mDNS TXT record. `url` is mutable: it starts empty and is filled in by
+ * `ServerHandle.advertise(...)` once the HTTP server is bound and its real URL
+ * is known (see `startServer`).
+ */
+export interface InstanceIdentity {
+  id: string;
+  name: string;
+  version: string;
+  url: string;
+}
+
 export interface RequestContext {
   repo: BoardRepository;
   history: SnapshotHistoryService;
@@ -76,6 +90,8 @@ export interface RequestContext {
   sse: SseHub;
   watcher: FileWatcher;
   config: ServerConfig;
+  /** This server instance's advertised identity (see `InstanceIdentity`). */
+  instance: InstanceIdentity;
   /** Live-room content replacement, used by draft promotion. */
   yjs: RoomContentReplacer;
 }
@@ -88,6 +104,7 @@ type Handler = (
 
 // The dispatch table: `${METHOD} ${pathname}` -> handler. An unmatched key 404s.
 const ROUTES: Record<string, Handler> = {
+  'GET /api/instance': handleGetInstance,
   'GET /api/boards': handleListBoards,
   'POST /api/boards': handleCreateBoard,
   'GET /api/board': handleGetBoard,

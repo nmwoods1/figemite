@@ -14,15 +14,21 @@
 import { Bonjour } from 'bonjour-service';
 
 export interface PeerInfo {
+  /** Stable instance id from the mDNS TXT record (empty if a legacy server didn't advertise one). */
+  id: string;
   /** Display name from the mDNS TXT record, e.g. "nick". */
   name: string;
   /** mDNS hostname, e.g. "nick.local". */
   host: string;
+  /** Full HTTP base URL advertised in the TXT record, e.g. "http://10.0.0.5:5400" (empty if not advertised). */
+  url: string;
+  /** Advertised version string (empty if not advertised). */
+  version: string;
   /** IPv4 addresses resolved from the service record. */
   addresses: string[];
   /** TCP port the figemite server is listening on. */
   port: number;
-  /** Board slugs from the TXT record. */
+  /** Board slugs from the TXT record (a capped preview; the full list comes from /api/instance). */
   boards: string[];
   /** epoch ms of last 'up' event. */
   lastSeen: number;
@@ -86,8 +92,11 @@ export class PeerDiscovery {
       const name = txtName || service.name;
       const boards = txtBoards ? txtBoards.split(',').filter(Boolean) : [];
       const info: PeerInfo = {
+        id: service.txt?.id ?? '',
         name,
         host: service.host,
+        url: service.txt?.url ?? '',
+        version: service.txt?.version ?? '',
         addresses: service.addresses ?? [],
         port: service.port,
         boards,
@@ -133,10 +142,18 @@ export class PeerDiscovery {
   }
 
   /**
-   * Build WebSocket and HTTP URLs for a discovered peer. Prefers the first
-   * IPv4 address (more reliable on VPN) over the `.local` hostname.
+   * Build WebSocket and HTTP URLs for a discovered peer. Prefers the URL the
+   * server advertised in its TXT record (authoritative — it knows its own bound
+   * address); otherwise falls back to the first IPv4 address (more reliable on
+   * VPN) over the `.local` hostname.
    */
   buildUrls(peer: PeerInfo): { wsUrl: string; httpUrl: string } {
+    if (peer.url) {
+      return {
+        wsUrl: `${peer.url.replace(/^http/, 'ws')}/yjs`,
+        httpUrl: peer.url,
+      };
+    }
     const host = peer.addresses[0] ?? peer.host;
     return {
       wsUrl: `ws://${host}:${peer.port}/yjs`,

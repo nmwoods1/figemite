@@ -28,9 +28,11 @@ async function main(): Promise<void> {
   const port = process.env.FIGEMITE_PORT ? Number(process.env.FIGEMITE_PORT) : undefined;
   const host = process.env.FIGEMITE_HOST;
   const mdns = truthy(process.env.FIGEMITE_MDNS);
+  const instanceId = process.env.FIGEMITE_INSTANCE_ID;
+  const instanceName = process.env.FIGEMITE_INSTANCE_NAME;
 
-  const { url } = await startServer({ boardsRoot, port, host, mdns });
-  console.log(`figemite server listening on ${url}`);
+  const { url, handle } = await startServer({ boardsRoot, port, host, mdns, instanceId, instanceName });
+  console.log(`figemite server listening on ${url} (instance ${handle.instance.id})`);
 }
 
 main().catch((err) => {

@@ -210,4 +210,26 @@ describe('createServer composition', () => {
     h = await startHarness();
     expect(() => h.handle.dispose()).not.toThrow();
   });
+
+  it('generates a per-process instance id when none is configured', async () => {
+    h = await startHarness();
+    expect(h.handle.instance.id).toMatch(/[0-9a-f-]{36}/i);
+    const body = await (await fetch(`${h.url}/api/instance`)).json();
+    expect(body.id).toBe(h.handle.instance.id);
+  });
+
+  it('honors a configured instanceId/instanceName/version', async () => {
+    h = await startHarness({ instanceId: 'fixed-id', instanceName: 'alpha', version: '9.9.9' });
+    const body = await (await fetch(`${h.url}/api/instance`)).json();
+    expect(body).toMatchObject({ id: 'fixed-id', name: 'alpha', version: '9.9.9' });
+  });
+
+  it('advertise() records the real bound url on the instance identity', async () => {
+    h = await startHarness();
+    expect(h.handle.instance.url).toBe(''); // not yet advertised (no startServer)
+    h.handle.advertise({ url: h.url, port: 41234 });
+    expect(h.handle.instance.url).toBe(h.url);
+    const body = await (await fetch(`${h.url}/api/instance`)).json();
+    expect(body.url).toBe(h.url);
+  });
 });

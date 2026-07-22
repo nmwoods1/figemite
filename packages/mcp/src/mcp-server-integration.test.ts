@@ -26,6 +26,7 @@ import { getSnapshot, roomNameFor, type BoardFile, emptyBoard } from '@figemite/
 import { BoardRepository, startServer, type StartedServer } from '@figemite/server';
 import { BoardPeer } from './peer.js';
 import { addNode, getBoard } from './tools.js';
+import { InstanceRegistry } from './registry.js';
 
 /** Polls `check` until it returns true or `timeoutMs` elapses. */
 async function waitFor(check: () => boolean, timeoutMs = 5000): Promise<void> {
@@ -179,6 +180,36 @@ describe('BoardPeer -> real Yjs room -> real server (integration)', () => {
       } finally {
         globalThis.fetch = realFetch;
         peer.destroy();
+      }
+    },
+  );
+
+  it(
+    "the InstanceRegistry health-checks a real server via /api/instance and drops it once it's closed",
+    { retry: 2, timeout: 20_000 },
+    async () => {
+      harness = await startHarness();
+      harness.repo.write('spend', [], { ...emptyBoard('Spend'), nodes: [], edges: [] } as BoardFile);
+
+      const registry = new InstanceRegistry({ localUrl: harness.httpUrl });
+      try {
+        await registry.warmUp(0); // real GET /api/instance against the live server
+
+        const list = registry.list();
+        expect(list).toHaveLength(1);
+        expect(list[0]).toMatchObject({ id: 'local', httpUrl: harness.httpUrl, healthy: true });
+        expect(list[0].boards).toContain('spend');
+
+        // Stop the server; two failed health checks evict it.
+        await harness.handle.close();
+        await registry['tick']();
+        await registry['tick']();
+        expect(registry.healthyIds()).toEqual([]);
+      } finally {
+        registry.dispose();
+        // handle already closed above; stopHarness only needs to remove the dir.
+        await fs.rm(harness.boardsRoot, { recursive: true, force: true });
+        harness = undefined;
       }
     },
   );

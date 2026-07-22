@@ -6,11 +6,33 @@
 // layer (P1-T12) and later phases. Recorded here now so the intent is fixed
 // in one place as the config type grows.
 
+/**
+ * Version advertised for this server when `ServerConfig.version` is unset.
+ * Kept in sync with `packages/server/package.json`'s `version` field.
+ */
+export const SERVER_VERSION = '0.0.0';
+
 export interface ServerConfig {
   /** Absolute path to the directory containing one subdirectory per board. */
   boardsRoot: string;
   /** TCP port for the HTTP/WS server. */
   port?: number;
+  /**
+   * Stable identifier for this running instance, advertised over mDNS and
+   * returned by `GET /api/instance`. Generated as a per-process
+   * `crypto.randomUUID()` by `createServer` when unset — this disambiguates
+   * multiple servers on one host (the mDNS `instanceName` defaults to
+   * `os.hostname()` and would otherwise collide). A restarted server is a new
+   * instance; the MCP registry evicts the old id via its health check.
+   */
+  instanceId?: string;
+  /**
+   * Human-readable name advertised over mDNS / `/api/instance`. Defaults to
+   * `os.hostname()`.
+   */
+  instanceName?: string;
+  /** Version string advertised over mDNS / `/api/instance`. Defaults to `SERVER_VERSION`. */
+  version?: string;
   /**
    * Bind host for the HTTP server. Defaults to `127.0.0.1` — the plan's
    * local-first-safe-default: the server binds to loopback only unless a
