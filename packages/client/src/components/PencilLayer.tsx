@@ -11,9 +11,10 @@
 // (`canvas/coords.ts`'s `snapToGrid`) the rest of the canvas uses for new
 // nodes.
 //
-// The in-progress stroke renders as a live smoothed SVG path (`smoothPath`,
-// packages/client/src/lib/draw-utils.ts, ported from the legacy in P3). On
-// pointerup, the accumulated points are thinned (`thinPoints`, same module)
+// The in-progress stroke renders as a live filled-outline SVG path
+// (`getStrokePath`, packages/client/src/lib/draw-utils.ts — perfect-freehand
+// with simulated pressure). On pointerup, the accumulated points are thinned
+// (`thinPoints`, same module)
 // and committed via `@figemite/shared`'s `makeDrawingNode` (which computes the
 // bbox + rebases points to be relative to it) + `store.addNode` — a NORMAL,
 // PERSISTED node that syncs and survives a reload through the doc, unlike
@@ -32,7 +33,7 @@ import { useViewport } from '@xyflow/react';
 import { generateId, makeDrawingNode, nextOrder } from '@figemite/shared';
 import type { XY } from '@figemite/shared';
 import { getFlowPointer, snapToGrid } from '../canvas/coords.js';
-import { smoothPath, thinPoints } from '../lib/draw-utils.js';
+import { getStrokePath, thinPoints } from '../lib/draw-utils.js';
 import type { BoardStore } from '../store/board-store.js';
 
 export interface PencilLayerProps {
@@ -144,15 +145,7 @@ export function PencilLayer({
           style={{ position: 'absolute', inset: 0, overflow: 'visible', pointerEvents: 'none' }}
         >
           <g style={{ transform, transformOrigin: '0 0' }}>
-            <path
-              d={smoothPath(drawing)}
-              fill="none"
-              stroke={color}
-              strokeWidth={strokeWidth}
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              vectorEffect="non-scaling-stroke"
-            />
+            <path d={getStrokePath(drawing, { size: strokeWidth })} fill={color} stroke="none" />
           </g>
         </svg>
       )}
