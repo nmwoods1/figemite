@@ -185,7 +185,7 @@ export function createFigemiteMcpServer(options: FigemiteMcpServerOptions = {}):
     .string()
     .describe('Target figemite instance id (from list_instances). Required on every board/draft operation.');
 
-  const server = new McpServer({ name: 'figemite', version: '0.1.0' });
+  const server = new McpServer({ name: 'figemite', version: '2.0.0' });
 
   // ── connect_board / disconnect ───────────────────────────────────────────
 

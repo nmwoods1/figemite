@@ -5,6 +5,12 @@ This is the contract for AI agents collaborating on a Figemite board through
 `packages/mcp/src/server.ts` — if you're extending the MCP server, update
 this file to match; don't let it drift into aspirational documentation.
 
+**Stability.** Tool names and their required parameters are a public contract
+and are stable within a major version: they won't be removed, renamed, or
+repurposed except in a new MAJOR release. New tools and new *optional*
+parameters may be added in MINOR releases. See the versioning policy in
+[RELEASING.md](RELEASING.md).
+
 ## The board data model
 
 A board is a set of **nodes** and **edges**, synced live over a shared CRDT
