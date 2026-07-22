@@ -23,11 +23,13 @@
 
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { createFigemiteMcpServer } from './server.js';
+import { InstanceRegistry } from './registry.js';
 
 export const PACKAGE_NAME = '@figemite/mcp';
 export { createFigemiteMcpServer } from './server.js';
 export { BoardPeer } from './peer.js';
 export { PeerDiscovery, buildDirectUrls } from './discovery.js';
+export { InstanceRegistry, type Instance } from './registry.js';
 
 function arg(flag: string, envVar: string): string | undefined {
   const i = process.argv.indexOf(flag);
@@ -39,7 +41,18 @@ async function main(): Promise<void> {
   const defaultName = arg('--name', 'FIGEMITE_NAME') ?? 'AI';
   const defaultAgentClient = arg('--client', 'FIGEMITE_CLIENT') ?? 'claude-code';
 
-  const server = createFigemiteMcpServer({ defaultHttpUrl, defaultName, defaultAgentClient });
+  // One registry for the whole process: the configured localhost server is the
+  // synthetic "local" instance; mDNS discovers the rest. Start browsing +
+  // health-checking immediately so list_instances is populated by first call.
+  const registry = new InstanceRegistry({ localUrl: defaultHttpUrl });
+  registry.start();
+
+  const server = createFigemiteMcpServer({
+    defaultHttpUrl,
+    defaultName,
+    defaultAgentClient,
+    registry,
+  });
   const transport = new StdioServerTransport();
   await server.connect(transport);
 }

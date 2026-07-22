@@ -6,6 +6,32 @@
 // into their own module so they're testable with a mocked `fetch` without
 // touching MCP tool registration at all.
 
+export interface InstanceInfoResult {
+  id: string;
+  name: string;
+  url: string;
+  version: string;
+  boards: string[];
+}
+
+/**
+ * GET `${httpUrl}/api/instance`. Returns the server's identity + current boards.
+ * Used by the InstanceRegistry both to enrich a discovered instance and as its
+ * health probe (a thrown error / timeout means "unhealthy / stopped"). Pass an
+ * `AbortSignal` to bound the health-check wait.
+ */
+export async function getInstance(
+  httpUrl: string,
+  signal?: AbortSignal,
+): Promise<InstanceInfoResult> {
+  const res = await fetch(`${httpUrl}/api/instance`, { signal });
+  const data = (await res.json()) as InstanceInfoResult & { error?: string };
+  if (!res.ok) {
+    throw new Error(data?.error ?? `Failed to get instance: HTTP ${res.status}`);
+  }
+  return data;
+}
+
 export interface ListBoardsResult {
   boards: unknown[];
 }

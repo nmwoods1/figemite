@@ -29,14 +29,23 @@
 import os from 'node:os';
 import { Bonjour } from 'bonjour-service';
 
+/** The TXT record advertised for a figemite instance. All values are strings (mDNS TXT). */
+export interface InstanceTxt {
+  /** Stable per-process instance id — the registry keys on this. */
+  id: string;
+  /** Human-readable advertised name (defaults to `os.hostname()`). */
+  name: string;
+  /** Full HTTP base URL, e.g. `http://192.168.1.5:5400`. Empty until the port is known. */
+  url: string;
+  /** Advertised version string. */
+  version: string;
+  /** Comma-separated board-slug preview (capped — the full list comes from `/api/instance`). */
+  boards: string;
+}
+
 /** The minimal shape MdnsService needs from a Bonjour-service instance. */
 export interface BonjourLike {
-  publish(config: {
-    name: string;
-    type: string;
-    port: number;
-    txt: { name: string; boards: string };
-  }): unknown;
+  publish(config: { name: string; type: string; port: number; txt: InstanceTxt }): unknown;
   unpublishAll(callback?: () => void): void;
   destroy(callback?: () => void): void;
 }
@@ -44,10 +53,18 @@ export interface BonjourLike {
 export interface MdnsServiceOptions {
   /** Master switch. Defaults to `false` — mDNS is genuinely off unless enabled. */
   enabled?: boolean;
-  /** TCP port to advertise (the board server's listen port). */
-  port: number;
+  /**
+   * Fallback TCP port to advertise. The real bound port is normally supplied to
+   * `start({ port })` after `listen()` (see `startServer`); this is only used
+   * when `start()` is called with no runtime override.
+   */
+  port?: number;
   /** Returns the current board slugs; read fresh at every publish. */
   getBoards: () => string[];
+  /** Stable instance id advertised in the TXT record. */
+  id: string;
+  /** Version advertised in the TXT record. */
+  version: string;
   /** Advertised host name. Defaults to `os.hostname()`. */
   name?: string;
   /** Factory for the Bonjour instance. Defaults to the real `bonjour-service`. Overridable for tests. */
@@ -56,37 +73,73 @@ export interface MdnsServiceOptions {
 
 const SERVICE_TYPE = 'figemite'; // bonjour-service renders this as `_figemite._tcp`
 
+/**
+ * Cap the comma-joined board preview so the TXT record stays small (a single
+ * TXT string is bounded and the whole record shares one UDP packet). The full,
+ * authoritative board list is served by `GET /api/instance`.
+ */
+const TXT_BOARDS_MAX_LEN = 200;
+
+function capBoards(slugs: string[]): string {
+  const joined = slugs.join(',');
+  if (joined.length <= TXT_BOARDS_MAX_LEN) return joined;
+  return joined.slice(0, TXT_BOARDS_MAX_LEN).replace(/,[^,]*$/, '');
+}
+
 function defaultMakeBonjour(): BonjourLike {
   return new Bonjour();
 }
 
 export class MdnsService {
   private readonly enabled: boolean;
-  private readonly port: number;
   private readonly getBoards: () => string[];
+  private readonly id: string;
+  private readonly version: string;
   private readonly name: string;
   private readonly makeBonjour: () => BonjourLike;
 
+  private lastPort: number;
+  private lastUrl = '';
   private bonjour: BonjourLike | null = null;
 
   constructor(options: MdnsServiceOptions) {
     this.enabled = options.enabled ?? false;
-    this.port = options.port;
+    this.lastPort = options.port ?? 0;
     this.getBoards = options.getBoards;
+    this.id = options.id;
+    this.version = options.version;
     this.name = options.name ?? os.hostname();
     this.makeBonjour = options.makeBonjour ?? defaultMakeBonjour;
   }
 
-  /** Publishes the `_figemite._tcp` service. A no-op unless `enabled` was passed as `true`. */
-  start(): void {
+  /**
+   * Publishes (or re-publishes) the `_figemite._tcp` service. A no-op unless
+   * `enabled` was passed as `true`. Pass `{ port, url }` — normally the real
+   * values known only after `http.Server#listen()` — to advertise the true
+   * bound port and full URL; both persist across later re-publish calls (e.g.
+   * on a board-list change). `boards` is re-read on every call.
+   */
+  start(runtime?: { port?: number; url?: string }): void {
     if (!this.enabled) return;
+    if (runtime?.port !== undefined) this.lastPort = runtime.port;
+    if (runtime?.url !== undefined) this.lastUrl = runtime.url;
 
-    this.bonjour = this.makeBonjour();
+    // Re-publish path: drop the previous advertisement before re-announcing so
+    // stale port/board data never lingers on the network.
+    if (this.bonjour) this.bonjour.unpublishAll();
+    else this.bonjour = this.makeBonjour();
+
     this.bonjour.publish({
       name: this.name,
       type: SERVICE_TYPE,
-      port: this.port,
-      txt: { name: this.name, boards: this.getBoards().join(',') },
+      port: this.lastPort,
+      txt: {
+        id: this.id,
+        name: this.name,
+        url: this.lastUrl,
+        version: this.version,
+        boards: capBoards(this.getBoards()),
+      },
     });
   }
 

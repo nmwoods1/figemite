@@ -179,10 +179,70 @@ describe('PeerDiscovery.resolvePeer', () => {
   });
 });
 
+describe('PeerDiscovery peer identity TXT fields', () => {
+  it('parses id, url, and version from the TXT record', () => {
+    const { discovery, fake } = makeDiscovery();
+    discovery.start();
+    fake.browser.emitUp({
+      name: 'fallback-name',
+      host: 'nick.local',
+      port: 5400,
+      addresses: ['10.0.0.5'],
+      fqdn: 'nick._figemite._tcp.local',
+      txt: {
+        id: 'inst-abc',
+        name: 'nick',
+        url: 'http://10.0.0.5:5400',
+        version: '1.2.3',
+        boards: 'spend',
+      },
+    });
+    expect(discovery.getPeers()[0]).toMatchObject({
+      id: 'inst-abc',
+      url: 'http://10.0.0.5:5400',
+      version: '1.2.3',
+    });
+  });
+
+  it('defaults id/url/version to empty strings for a legacy server that omits them', () => {
+    const { discovery, fake } = makeDiscovery();
+    discovery.start();
+    fake.browser.emitUp({
+      name: 'nick',
+      host: 'nick.local',
+      port: 5400,
+      fqdn: 'nick._figemite._tcp.local',
+      txt: { name: 'nick', boards: '' },
+    });
+    expect(discovery.getPeers()[0]).toMatchObject({ id: '', url: '', version: '' });
+  });
+});
+
 describe('PeerDiscovery.buildUrls', () => {
-  it('prefers the first IPv4 address over the .local hostname', () => {
+  const base = { id: '', url: '', version: '' };
+
+  it('prefers the advertised TXT url when present', () => {
     const { discovery } = makeDiscovery();
     const urls = discovery.buildUrls({
+      ...base,
+      name: 'nick',
+      host: 'nick.local',
+      url: 'http://192.168.1.9:5400',
+      addresses: ['10.0.0.5'],
+      port: 5400,
+      boards: [],
+      lastSeen: Date.now(),
+    });
+    expect(urls).toEqual({
+      wsUrl: 'ws://192.168.1.9:5400/yjs',
+      httpUrl: 'http://192.168.1.9:5400',
+    });
+  });
+
+  it('prefers the first IPv4 address over the .local hostname when no url is advertised', () => {
+    const { discovery } = makeDiscovery();
+    const urls = discovery.buildUrls({
+      ...base,
       name: 'nick',
       host: 'nick.local',
       addresses: ['10.0.0.5', '10.0.0.6'],
@@ -199,6 +259,7 @@ describe('PeerDiscovery.buildUrls', () => {
   it('falls back to the .local hostname when no addresses were resolved', () => {
     const { discovery } = makeDiscovery();
     const urls = discovery.buildUrls({
+      ...base,
       name: 'nick',
       host: 'nick.local',
       addresses: [],

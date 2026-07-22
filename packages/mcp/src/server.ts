@@ -21,7 +21,7 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import { BoardPeer } from './peer.js';
-import { PeerDiscovery, buildDirectUrls, type PeerInfo } from './discovery.js';
+import { InstanceRegistry, type Instance } from './registry.js';
 import { listBoards, createBoard, listDrafts, createDraft } from './board-http.js';
 import {
   getBoard,
@@ -108,14 +108,14 @@ function jsonResult(value: unknown): { content: [{ type: 'text'; text: string }]
 // ── Config ────────────────────────────────────────────────────────────────────
 
 export interface FigemiteMcpServerOptions {
-  /** Default HTTP base URL used by board-mgmt tools before any connect_board call. Defaults to `http://localhost:5400`. */
+  /** URL of the synthetic "local" instance (your own localhost server). Defaults to `http://localhost:5400`. */
   defaultHttpUrl?: string;
   /** Default display name for the AI's presence. Defaults to "AI". */
   defaultName?: string;
   /** Default agent-client tag. Defaults to "claude-code". */
   defaultAgentClient?: string;
-  /** Injectable PeerDiscovery instance (tests can supply a fake-backed one). Defaults to a fresh PeerDiscovery. */
-  discovery?: PeerDiscovery;
+  /** Injectable InstanceRegistry (tests supply a fake-backed one). Defaults to one seeded with `defaultHttpUrl`. */
+  registry?: InstanceRegistry;
   /** Injectable BoardPeer factory. Defaults to `(opts) => new BoardPeer(opts)`. */
   makePeer?: (opts: ConstructorParameters<typeof BoardPeer>[0]) => BoardPeer;
 }
@@ -123,56 +123,53 @@ export interface FigemiteMcpServerOptions {
 const DEFAULT_HTTP_URL = 'http://localhost:5400';
 
 /**
- * Resolves `{ wsUrl, httpUrl }` for connect_board: no address -> this
- * machine's own local default server; an address that matches an
- * already-discovered mDNS peer's name/host -> that peer's resolved
- * addresses; anything else -> treated directly as a host / host:port / URL
- * (no discovery involved, and no blocking wait for a browse to complete —
- * `resolvePeer` only consults peers already seen by a `start()`/`warmUp()`
- * call made elsewhere, e.g. at process startup).
- */
-function resolveUrls(
-  discovery: PeerDiscovery,
-  defaultHttpUrl: string,
-  address?: string,
-): { wsUrl: string; httpUrl: string } {
-  if (address) {
-    // Non-blocking: starts browsing if not already started, but never waits
-    // for a broadcast wave — only peers already seen (e.g. from an earlier
-    // connect_board call, or a background warmUp) can resolve by name here.
-    discovery.start();
-    const peer = discovery.resolvePeer(address);
-    if (peer) return discovery.buildUrls(peer);
-    return buildDirectUrls(address);
-  }
-  return { wsUrl: `${defaultHttpUrl.replace(/^http/, 'ws')}/yjs`, httpUrl: defaultHttpUrl };
-}
-
-/**
  * Builds a fresh `McpServer` with every board tool registered. A factory
  * (not a module singleton) so tests can construct an isolated instance and
  * so `index.ts` stays a thin entry point.
+ *
+ * There is NO shared "active server": every board/draft tool addresses a
+ * specific figemite instance by `instanceId` (resolved through the
+ * `InstanceRegistry`), and connections are held per-instance in a map so an
+ * agent can be connected to several servers at once.
  */
 export function createFigemiteMcpServer(options: FigemiteMcpServerOptions = {}): McpServer {
   const defaultHttpUrl = options.defaultHttpUrl ?? DEFAULT_HTTP_URL;
   const defaultName = options.defaultName ?? 'AI';
   const defaultAgentClient = options.defaultAgentClient ?? 'claude-code';
-  const discovery = options.discovery ?? new PeerDiscovery();
+  const registry = options.registry ?? new InstanceRegistry({ localUrl: defaultHttpUrl });
   const makePeer = options.makePeer ?? ((opts) => new BoardPeer(opts));
 
-  let peer: BoardPeer | null = null;
-  let activeHttpUrl = defaultHttpUrl;
+  // One live connection per instance id — no shared "active" peer.
+  const peers = new Map<string, BoardPeer>();
 
-  function assertConnected(): BoardPeer {
-    if (!peer) throw new Error('Not connected. Call connect_board first.');
-    return peer;
+  /** Resolve a healthy instance by id, or throw a message listing what IS available. */
+  function resolveInstance(instanceId: string): Instance {
+    const instance = registry.get(instanceId);
+    if (instance) return instance;
+    const available = registry.healthyIds();
+    const hint = available.length
+      ? `Available instances: ${available.join(', ')}.`
+      : 'No instances are currently visible.';
+    throw new Error(
+      `Unknown or unhealthy instance "${instanceId}". Call list_instances to see live servers. ${hint}`,
+    );
+  }
+
+  function assertConnected(instanceId: string): BoardPeer {
+    const p = peers.get(instanceId);
+    if (!p) {
+      throw new Error(
+        `Not connected to instance "${instanceId}". Call connect_board with this instanceId first.`,
+      );
+    }
+    return p;
   }
 
   // Every board-CONTENT mutation goes through here: the live ("prod") board is
   // read-only, so editing requires a connection to a DRAFT. Reading and presence
   // (get_*, move_cursor, set_editing, set_viewport) stay on assertConnected().
-  function assertEditable(): BoardPeer {
-    const p = assertConnected();
+  function assertEditable(instanceId: string): BoardPeer {
+    const p = assertConnected(instanceId);
     if (!p.draftId) {
       throw new Error(
         'This is the live board and is read-only. Create a draft with create_draft, ' +
@@ -183,6 +180,11 @@ export function createFigemiteMcpServer(options: FigemiteMcpServerOptions = {}):
     return p;
   }
 
+  /** Zod field for the required instanceId, shared by every tool's inputSchema. */
+  const instanceIdField = z
+    .string()
+    .describe('Target figemite instance id (from list_instances). Required on every board/draft operation.');
+
   const server = new McpServer({ name: 'figemite', version: '0.1.0' });
 
   // ── connect_board / disconnect ───────────────────────────────────────────
@@ -191,9 +193,15 @@ export function createFigemiteMcpServer(options: FigemiteMcpServerOptions = {}):
     'connect_board',
     {
       description: [
-        'Connect to a figemite board as a multiplayer AI peer.',
-        'Call this first in every session. Returns the current board snapshot.',
-        'The AI gets a visible cursor and "AI" name pill in everyone\'s browser.',
+        'Connect to a figemite board on a specific instance as a multiplayer AI peer.',
+        'Call this before any read/presence/content tool for that instance.',
+        'Returns the current board snapshot. The AI gets a visible cursor and "AI"',
+        "name pill in everyone's browser.",
+        '',
+        'Pass `instanceId` (from list_instances) to choose WHICH server to connect to.',
+        'You can be connected to several instances at once — each holds its own',
+        'connection, addressed by its instanceId. Re-connecting to the same instanceId',
+        'replaces that instance\'s connection (e.g. to switch board or draft).',
         '',
         'IMPORTANT: the live ("prod") board is READ-ONLY. You can connect to it',
         'to read/observe, but every content edit (add/move/update/delete nodes',
@@ -201,11 +209,9 @@ export function createFigemiteMcpServer(options: FigemiteMcpServerOptions = {}):
         'list_drafts) to edit. A human reviews and approves the draft to update',
         'the live board; only a human can approve — there is deliberately no',
         'tool for that.',
-        '',
-        'To connect to your own local server, just pass `slug` (and `draft`).',
-        "To connect to someone else's board, pass `slug` AND `address` (their mDNS peer name, IP, or hostname).",
       ].join('\n'),
       inputSchema: {
+        instanceId: instanceIdField,
         slug: z.string().describe('Board slug, e.g. "spend"'),
         draft: z
           .string()
@@ -213,13 +219,6 @@ export function createFigemiteMcpServer(options: FigemiteMcpServerOptions = {}):
           .describe(
             'Draft id to edit (from create_draft / list_drafts). REQUIRED to make any ' +
               'content edit — the live board is read-only. Omit only to read/observe prod.',
-          ),
-        address: z
-          .string()
-          .optional()
-          .describe(
-            'mDNS peer name, IP, or hostname of the peer\'s figemite server, e.g. "nick", ' +
-              '"10.21.66.67", or "10.21.66.67:5400". Omit to connect to your own local server.',
           ),
         path: z
           .array(z.string())
@@ -233,22 +232,24 @@ export function createFigemiteMcpServer(options: FigemiteMcpServerOptions = {}):
       },
     },
     async (input) => {
-      if (peer) {
-        peer.destroy();
-        peer = null;
+      const instance = resolveInstance(input.instanceId);
+
+      // Replace any existing connection to this instance.
+      const existing = peers.get(input.instanceId);
+      if (existing) {
+        existing.destroy();
+        peers.delete(input.instanceId);
       }
 
-      const { wsUrl, httpUrl } = resolveUrls(discovery, defaultHttpUrl, input.address);
-      activeHttpUrl = httpUrl;
-
-      peer = makePeer({
-        wsUrl,
+      const peer = makePeer({
+        wsUrl: instance.wsUrl,
         slug: input.slug,
         path: input.path ?? [],
         draftId: input.draft,
         name: input.name ?? defaultName,
         agentClient: input.agentClient ?? defaultAgentClient,
       });
+      peers.set(input.instanceId, peer);
 
       await peer.waitForSync(15_000);
 
@@ -266,22 +267,47 @@ export function createFigemiteMcpServer(options: FigemiteMcpServerOptions = {}):
         peer.setCursor({ x: 0, y: 0 });
       }
 
-      return jsonResult({ connected: true, room: peer.roomName, wsUrl, ...snapshot });
+      return jsonResult({
+        connected: true,
+        instanceId: input.instanceId,
+        room: peer.roomName,
+        wsUrl: instance.wsUrl,
+        ...snapshot,
+      });
     },
   );
 
   server.registerTool(
     'disconnect',
     {
-      description: 'Disconnect from the current board. Removes this peer from awareness.',
+      description: "Disconnect from an instance's board. Removes this peer from awareness.",
+      inputSchema: { instanceId: instanceIdField },
+    },
+    async (input) => {
+      const peer = peers.get(input.instanceId);
+      if (!peer) return textResult(`Not connected to instance "${input.instanceId}".`);
+      peer.destroy();
+      peers.delete(input.instanceId);
+      return textResult(`Disconnected from instance "${input.instanceId}".`);
+    },
+  );
+
+  // ── Instances (discovery + health) ────────────────────────────────────────
+
+  server.registerTool(
+    'list_instances',
+    {
+      description: [
+        'List the figemite server instances this MCP can currently reach.',
+        'Includes your own local server (id "local") plus any discovered over mDNS.',
+        'Each entry has an id, name, url, boards, version, and health/last-seen.',
+        'Stopped/crashed instances drop off automatically via health checks.',
+        'Use an instance id here as the instanceId for connect_board and the',
+        'board/draft management tools.',
+      ].join(' '),
       inputSchema: {},
     },
-    async () => {
-      if (!peer) return textResult('Not connected.');
-      peer.destroy();
-      peer = null;
-      return textResult('Disconnected.');
-    },
+    async () => jsonResult({ instances: registry.list() }),
   );
 
   // ── Board management (HTTP; no connection required) ──────────────────────
@@ -290,24 +316,25 @@ export function createFigemiteMcpServer(options: FigemiteMcpServerOptions = {}):
     'list_boards',
     {
       description: [
-        'List all boards on the currently targeted figemite server (defaults to your own localhost server).',
+        'List all boards on a specific figemite instance (pass its instanceId from list_instances).',
         "Does not require connect_board first. Returns each board's slug, label, tags,",
         'last-modified time, and sub-board paths.',
       ].join(' '),
-      inputSchema: {},
+      inputSchema: { instanceId: instanceIdField },
     },
-    async () => jsonResult(await listBoards(activeHttpUrl)),
+    async (input) => jsonResult(await listBoards(resolveInstance(input.instanceId).httpUrl)),
   );
 
   server.registerTool(
     'create_board',
     {
       description: [
-        'Create a new, empty board on the currently targeted figemite server (defaults to localhost).',
-        'Does not require connect_board first — call connect_board with the returned slug',
-        'afterwards to start editing it.',
+        'Create a new, empty board on a specific figemite instance (pass its instanceId).',
+        'Does not require connect_board first — call connect_board with the same instanceId',
+        'and the returned slug afterwards to start editing it.',
       ].join(' '),
       inputSchema: {
+        instanceId: instanceIdField,
         slug: z.string().describe('Lowercase, hyphenated board slug, e.g. "payment-flow"'),
         label: z
           .string()
@@ -315,7 +342,8 @@ export function createFigemiteMcpServer(options: FigemiteMcpServerOptions = {}):
           .describe('Display label; defaults to a titlecased version of the slug'),
       },
     },
-    async (input) => jsonResult(await createBoard(activeHttpUrl, input.slug, input.label)),
+    async (input) =>
+      jsonResult(await createBoard(resolveInstance(input.instanceId).httpUrl, input.slug, input.label)),
   );
 
   // ── Drafts (HTTP; no connection required) ─────────────────────────────────
@@ -329,14 +357,15 @@ export function createFigemiteMcpServer(options: FigemiteMcpServerOptions = {}):
     'list_drafts',
     {
       description: [
-        'List the drafts of a board (id, title, who created it, when).',
-        'Use a draft id with create_draft/connect_board to edit inside that draft.',
+        'List the drafts of a board on a specific instance (id, title, who created it, when).',
+        'Use a draft id with connect_board (same instanceId) to edit inside that draft.',
       ].join(' '),
       inputSchema: {
+        instanceId: instanceIdField,
         slug: z.string().describe('Board slug, e.g. "spend"'),
       },
     },
-    async (input) => jsonResult(await listDrafts(activeHttpUrl, input.slug)),
+    async (input) => jsonResult(await listDrafts(resolveInstance(input.instanceId).httpUrl, input.slug)),
   );
 
   server.registerTool(
@@ -350,6 +379,7 @@ export function createFigemiteMcpServer(options: FigemiteMcpServerOptions = {}):
         'you cannot approve it yourself.',
       ].join(' '),
       inputSchema: {
+        instanceId: instanceIdField,
         slug: z.string().describe('Board slug to draft, e.g. "spend"'),
         title: z
           .string()
@@ -357,7 +387,8 @@ export function createFigemiteMcpServer(options: FigemiteMcpServerOptions = {}):
           .describe('Human-readable title for the draft; defaults to "Draft #N" (N = current draft count + 1)'),
       },
     },
-    async (input) => jsonResult(await createDraft(activeHttpUrl, input.slug, input.title)),
+    async (input) =>
+      jsonResult(await createDraft(resolveInstance(input.instanceId).httpUrl, input.slug, input.title)),
   );
 
   // ── Reads (require connection) ───────────────────────────────────────────
@@ -366,19 +397,19 @@ export function createFigemiteMcpServer(options: FigemiteMcpServerOptions = {}):
     'get_board',
     {
       description: 'Return the current state of all nodes and edges on the board.',
-      inputSchema: {},
+      inputSchema: { instanceId: instanceIdField },
     },
-    async () => jsonResult(getBoard(assertConnected())),
+    async (input) => jsonResult(getBoard(assertConnected(input.instanceId))),
   );
 
   server.registerTool(
     'get_node',
     {
       description: 'Return a single node by id.',
-      inputSchema: { id: z.string().describe('Node id') },
+      inputSchema: { instanceId: instanceIdField, id: z.string().describe('Node id') },
     },
     async (input) => {
-      const node = getNode(assertConnected(), input.id);
+      const node = getNode(assertConnected(input.instanceId), input.id);
       if (!node) throw new Error(`Node "${input.id}" not found`);
       return jsonResult(node);
     },
@@ -389,13 +420,14 @@ export function createFigemiteMcpServer(options: FigemiteMcpServerOptions = {}):
     {
       description: 'List nodes on the board, optionally filtered by type.',
       inputSchema: {
+        instanceId: instanceIdField,
         type: z
           .string()
           .optional()
           .describe('Filter by node type: sticky, text, shape, frame, emoji, icon, drawing'),
       },
     },
-    async (input) => jsonResult(listNodes(assertConnected(), input.type)),
+    async (input) => jsonResult(listNodes(assertConnected(input.instanceId), input.type)),
   );
 
   // ── Presence ──────────────────────────────────────────────────────────────
@@ -405,12 +437,13 @@ export function createFigemiteMcpServer(options: FigemiteMcpServerOptions = {}):
     {
       description: 'Move the AI cursor to a flow-space position. Humans see it move in real time.',
       inputSchema: {
+        instanceId: instanceIdField,
         x: z.number().describe('Flow-space X coordinate'),
         y: z.number().describe('Flow-space Y coordinate'),
       },
     },
     async (input) => {
-      assertConnected().setCursor({ x: input.x, y: input.y });
+      assertConnected(input.instanceId).setCursor({ x: input.x, y: input.y });
       return textResult(`Cursor moved to (${input.x}, ${input.y})`);
     },
   );
@@ -424,11 +457,12 @@ export function createFigemiteMcpServer(options: FigemiteMcpServerOptions = {}):
         'Pass null to clear.',
       ].join(' '),
       inputSchema: {
+        instanceId: instanceIdField,
         nodeId: z.string().nullable().describe('Node id to outline, or null to clear'),
       },
     },
     async (input) => {
-      const p = assertConnected();
+      const p = assertConnected(input.instanceId);
       if (input.nodeId) {
         const node = getNode(p, input.nodeId);
         if (node) await leadCursor(p, nodeCentre(node));
@@ -445,13 +479,14 @@ export function createFigemiteMcpServer(options: FigemiteMcpServerOptions = {}):
     {
       description: "Publish the AI's current viewport so humans can optionally follow it.",
       inputSchema: {
+        instanceId: instanceIdField,
         x: z.number().describe('Viewport X offset (screen pixels)'),
         y: z.number().describe('Viewport Y offset (screen pixels)'),
         zoom: z.number().describe('Zoom level (1 = 100%)'),
       },
     },
     async (input) => {
-      assertConnected().setViewport({ x: input.x, y: input.y, zoom: input.zoom });
+      assertConnected(input.instanceId).setViewport({ x: input.x, y: input.y, zoom: input.zoom });
       return textResult(`Viewport set to (${input.x}, ${input.y}) zoom=${input.zoom}`);
     },
   );
@@ -473,6 +508,7 @@ export function createFigemiteMcpServer(options: FigemiteMcpServerOptions = {}):
         'Text content (text/title) can be provided here or set later with set_node_text.',
       ].join(' '),
       inputSchema: {
+        instanceId: instanceIdField,
         type: z.string().describe('Node type'),
         pos: z.object({ x: z.number(), y: z.number() }).describe('Flow-space position'),
         id: z.string().optional().describe('Optional stable id; auto-generated if omitted'),
@@ -503,7 +539,7 @@ export function createFigemiteMcpServer(options: FigemiteMcpServerOptions = {}):
       },
     },
     async (input) => {
-      const p = assertEditable();
+      const p = assertEditable(input.instanceId);
       await leadCursor(p, centreOf(input.pos, input.size));
       const id = addNode(p, input);
       return jsonResult({ id });
@@ -521,6 +557,7 @@ export function createFigemiteMcpServer(options: FigemiteMcpServerOptions = {}):
         'Defaults: color = "#1e293b", strokeWidth = 3.',
       ].join(' '),
       inputSchema: {
+        instanceId: instanceIdField,
         points: z
           .array(z.object({ x: z.number(), y: z.number() }))
           .min(1)
@@ -532,7 +569,7 @@ export function createFigemiteMcpServer(options: FigemiteMcpServerOptions = {}):
       },
     },
     async (input) => {
-      const p = assertEditable();
+      const p = assertEditable(input.instanceId);
       await sweepCursorAlong(p, input.points);
       const id = addDrawing(p, input);
       return jsonResult({ id });
@@ -545,12 +582,13 @@ export function createFigemiteMcpServer(options: FigemiteMcpServerOptions = {}):
       description:
         'Update fields on an existing node. Only provided keys are changed; others are left intact.',
       inputSchema: {
+        instanceId: instanceIdField,
         id: z.string().describe('Node id to update'),
         patch: z.record(z.string(), z.unknown()).describe('Key-value pairs to merge into the node'),
       },
     },
     async (input) => {
-      const p = assertEditable();
+      const p = assertEditable(input.instanceId);
       const existing = getNode(p, input.id);
       if (existing) {
         const patch = input.patch as { pos?: XY; size?: unknown };
@@ -568,12 +606,13 @@ export function createFigemiteMcpServer(options: FigemiteMcpServerOptions = {}):
     {
       description: 'Move a node to a new flow-space position.',
       inputSchema: {
+        instanceId: instanceIdField,
         id: z.string().describe('Node id'),
         pos: z.object({ x: z.number(), y: z.number() }).describe('New position'),
       },
     },
     async (input) => {
-      const p = assertEditable();
+      const p = assertEditable(input.instanceId);
       const existing = getNode(p, input.id);
       await leadCursor(
         p,
@@ -588,10 +627,10 @@ export function createFigemiteMcpServer(options: FigemiteMcpServerOptions = {}):
     'delete_node',
     {
       description: 'Delete a node from the board.',
-      inputSchema: { id: z.string().describe('Node id to delete') },
+      inputSchema: { instanceId: instanceIdField, id: z.string().describe('Node id to delete') },
     },
     async (input) => {
-      const p = assertEditable();
+      const p = assertEditable(input.instanceId);
       const doomed = getNode(p, input.id);
       if (doomed) await leadCursor(p, nodeCentre(doomed));
       deleteNode(p, input.id);
@@ -609,12 +648,13 @@ export function createFigemiteMcpServer(options: FigemiteMcpServerOptions = {}):
         'edits from humans are not overwritten.',
       ].join(' '),
       inputSchema: {
+        instanceId: instanceIdField,
         id: z.string().describe('Node id'),
         text: z.string().describe('New text (or frame title)'),
       },
     },
     async (input) => {
-      const p = assertEditable();
+      const p = assertEditable(input.instanceId);
       const node = getNode(p, input.id);
       if (node) await leadCursor(p, nodeCentre(node));
       setNodeText(p, input.id, input.text);
@@ -631,12 +671,13 @@ export function createFigemiteMcpServer(options: FigemiteMcpServerOptions = {}):
         'this common case (per-node descriptions are a core part of the board format).',
       ].join(' '),
       inputSchema: {
+        instanceId: instanceIdField,
         id: z.string().describe('Node id'),
         description: z.string().describe('Markdown description text'),
       },
     },
     async (input) => {
-      const p = assertEditable();
+      const p = assertEditable(input.instanceId);
       const node = getNode(p, input.id);
       if (node) await leadCursor(p, nodeCentre(node));
       setDescription(p, input.id, input.description);
@@ -651,6 +692,7 @@ export function createFigemiteMcpServer(options: FigemiteMcpServerOptions = {}):
     {
       description: 'Add an edge (arrow or cardinality line) between two nodes.',
       inputSchema: {
+        instanceId: instanceIdField,
         source: z.string().describe('Source node id'),
         target: z.string().describe('Target node id'),
         id: z.string().optional(),
@@ -664,7 +706,7 @@ export function createFigemiteMcpServer(options: FigemiteMcpServerOptions = {}):
       },
     },
     async (input) => {
-      const p = assertEditable();
+      const p = assertEditable(input.instanceId);
       // Trace source -> target so the AI looks like it's "drawing" the
       // connection, not teleporting to dead space between the two nodes.
       const a = getNode(p, input.source);
@@ -687,12 +729,13 @@ export function createFigemiteMcpServer(options: FigemiteMcpServerOptions = {}):
     {
       description: 'Update fields on an existing edge.',
       inputSchema: {
+        instanceId: instanceIdField,
         id: z.string().describe('Edge id'),
         patch: z.record(z.string(), z.unknown()).describe('Key-value pairs to merge'),
       },
     },
     async (input) => {
-      const p = assertEditable();
+      const p = assertEditable(input.instanceId);
       const existingEdge = getBoard(p).edges.find((e) => e.id === input.id);
       if (existingEdge) {
         await leadCursor(p, edgeMidpoint(p, existingEdge.source, existingEdge.target));
@@ -706,10 +749,10 @@ export function createFigemiteMcpServer(options: FigemiteMcpServerOptions = {}):
     'delete_edge',
     {
       description: 'Delete an edge.',
-      inputSchema: { id: z.string().describe('Edge id to delete') },
+      inputSchema: { instanceId: instanceIdField, id: z.string().describe('Edge id to delete') },
     },
     async (input) => {
-      const p = assertEditable();
+      const p = assertEditable(input.instanceId);
       const doomedEdge = getBoard(p).edges.find((e) => e.id === input.id);
       if (doomedEdge) await leadCursor(p, edgeMidpoint(p, doomedEdge.source, doomedEdge.target));
       deleteEdge(p, input.id);
@@ -720,4 +763,4 @@ export function createFigemiteMcpServer(options: FigemiteMcpServerOptions = {}):
   return server;
 }
 
-export type { PeerInfo };
+export type { Instance };

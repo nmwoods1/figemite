@@ -84,7 +84,8 @@ export async function startTestServer(options: TestHarnessOptions = {}): Promise
   watcher.start();
 
   const yjs: RoomContentReplacer = options.yjs ?? { replaceRoomContent: () => false };
-  const ctx: RequestContext = { repo, history, ai, sse, watcher, config, yjs };
+  const instance = { id: 'test-instance', name: 'test', version: '0.0.0', url: '' };
+  const ctx: RequestContext = { repo, history, ai, sse, watcher, config, instance, yjs };
   const server = http.createServer(createRequestHandler(ctx));
 
   await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
@@ -93,6 +94,7 @@ export async function startTestServer(options: TestHarnessOptions = {}): Promise
     throw new Error('Failed to bind test server to an ephemeral port');
   }
   const url = `http://127.0.0.1:${address.port}`;
+  instance.url = url;
 
   return {
     url,

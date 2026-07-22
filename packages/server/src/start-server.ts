@@ -73,6 +73,11 @@ export async function startServer(config: ServerConfig): Promise<StartedServer> 
   }
   const url = `http://${host}:${address.port}`;
 
+  // Now that the real port/URL are known, record them on the instance identity
+  // and (re)publish the mDNS advertisement with the true port (fixes the old
+  // "advertise config.port (often the ephemeral 0)" bug). No-op if mDNS is off.
+  handle.advertise({ url, port: address.port });
+
   return {
     url,
     httpServer,

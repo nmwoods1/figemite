@@ -23,6 +23,8 @@
 //     whatever boards exist at the moment `start()` publishes.
 
 import type http from 'node:http';
+import os from 'node:os';
+import { randomUUID } from 'node:crypto';
 import { BoardRepository } from './repository/board-repo.js';
 import { SnapshotHistoryService } from './services/snapshot-history.js';
 import { AiSessionManager } from './services/ai-session.js';
@@ -30,8 +32,8 @@ import { SseHub } from './services/sse-hub.js';
 import { FileWatcher } from './services/file-watcher.js';
 import { YjsWebsocketService } from './services/yjs-ws.js';
 import { MdnsService } from './services/mdns.js';
-import type { ServerConfig } from './config.js';
-import { createRequestHandler, type RequestContext } from './api/router.js';
+import { SERVER_VERSION, type ServerConfig } from './config.js';
+import { createRequestHandler, type InstanceIdentity, type RequestContext } from './api/router.js';
 import { makeAiBroadcast } from './api/ai-broadcast.js';
 
 export interface ServerHandle {
@@ -39,6 +41,19 @@ export interface ServerHandle {
   requestHandler: (req: http.IncomingMessage, res: http.ServerResponse) => void;
   /** Registers the Yjs `/yjs/*` websocket upgrade handler on `httpServer`. */
   attachUpgrade(httpServer: http.Server): void;
+  /**
+   * This instance's identity (id/name/version, and `url` once advertised). The
+   * same object surfaced by `GET /api/instance`.
+   */
+  instance: InstanceIdentity;
+  /**
+   * Records the server's real bound URL/port (known only after
+   * `http.Server#listen()`) and (re)publishes the mDNS advertisement with them.
+   * `startServer` and the dev-server plugin call this once bound. Setting the
+   * URL also makes `GET /api/instance` report the true address; the mDNS
+   * re-publish is a no-op when mDNS is disabled.
+   */
+  advertise(runtime: { url: string; port: number }): void;
   /** Tears down every service: watcher, SSE heartbeat, Yjs sockets, mDNS, AI timers. */
   dispose(): void;
 }
@@ -95,18 +110,37 @@ export function createServer(config: ServerConfig): ServerHandle {
     debounceMs: config.yjsPersistDebounceMs,
   });
 
+  // Instance identity: a per-process id disambiguates multiple servers on one
+  // host (the mDNS name defaults to os.hostname()). `url` is filled in later by
+  // `advertise(...)` once the real bound address is known.
+  const instance: InstanceIdentity = {
+    id: config.instanceId ?? randomUUID(),
+    name: config.instanceName ?? os.hostname(),
+    version: config.version ?? SERVER_VERSION,
+    url: '',
+  };
+
   const mdns = new MdnsService({
     enabled: config.mdns ?? false,
-    port: config.port ?? 0,
+    port: config.port,
+    id: instance.id,
+    name: instance.name,
+    version: instance.version,
     getBoards: () => repo.listSlugs(),
   });
-  mdns.start();
+  // Not published here: the real bound port isn't known until listen(). The
+  // caller (startServer / dev plugin) calls `advertise(...)` to publish.
 
-  const ctx: RequestContext = { repo, history, ai, sse, watcher, config, yjs: yjsWs };
+  const ctx: RequestContext = { repo, history, ai, sse, watcher, config, instance, yjs: yjsWs };
   const requestHandler = createRequestHandler(ctx);
 
   return {
     requestHandler,
+    instance,
+    advertise({ url, port }: { url: string; port: number }): void {
+      instance.url = url;
+      mdns.start({ url, port });
+    },
     attachUpgrade(httpServer: http.Server): void {
       yjsWs.attachUpgrade(httpServer);
     },

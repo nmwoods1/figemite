@@ -54,10 +54,12 @@ changes allowed on the live board.)
 
 The default workflow:
 
-1. **Make (or find) a draft** — `create_draft` with the board slug returns a new
-   `draftId` (a copy of current prod); `list_drafts` lists existing ones.
-2. **Connect to the draft** — `connect_board` with `slug` **and** `draft:
-   <draftId>`. Your edits now land in the draft, never prod.
+1. **Make (or find) a draft** — `create_draft` with the `instanceId` and board
+   slug returns a new `draftId` (a copy of current prod); `list_drafts` lists
+   existing ones.
+2. **Connect to the draft** — `connect_board` with the same `instanceId`, the
+   `slug`, **and** `draft: <draftId>`. Your edits now land in the draft, never
+   prod.
 3. **A human approves** — only a person can promote a draft to prod, from their
    browser. **There is deliberately no `promote`/`approve` tool** — the same way
    comments and tags stay human-owned by having no tools (see below). Don't ask
@@ -68,12 +70,34 @@ You *can* still `connect_board` to prod directly (no `draft`) — but only to
 prod connection is rejected with a "create a draft" error. To change anything,
 connect with a `draft`.
 
+## Instances — pick a server first
+
+A single MCP process can talk to **any number of figemite servers at once**.
+Each running server is an **instance** with a stable `id`, discovered over the
+local network (mDNS) or included automatically as your own localhost server
+(id `local`). **Every board and draft operation is addressed by `instanceId`** —
+there is no hidden "active server".
+
+1. **List** — call `list_instances` to see every reachable server: its `id`,
+   `name`, `url`, `boards`, `version`, and health. Stopped or crashed instances
+   drop off this list automatically (a background health check evicts anything
+   that stops responding to `GET /api/instance`).
+2. **Address by id** — pass the `instanceId` from that list to `connect_board`
+   and to the board/draft management tools (`list_boards`, `create_board`,
+   `list_drafts`, `create_draft`). Read, presence, and content tools operate on
+   the connection you opened for that `instanceId`.
+3. **Many at once** — you may `connect_board` to several instances
+   concurrently; each holds its own connection, keyed by `instanceId`.
+   Re-connecting with the same `instanceId` replaces that instance's
+   connection (e.g. to switch board or draft on that server).
+
 ## The collaboration loop
 
-1. **Connect** — call `connect_board` with a board slug (and, preferably, a
-   `draft` id — see above). This joins the board/draft as a real multiplayer
-   peer: you get a visible cursor and an "AI" name pill in every connected
-   browser, exactly like a human collaborator.
+1. **Connect** — call `connect_board` with an `instanceId` (from
+   `list_instances`) and a board slug (and, preferably, a `draft` id — see
+   above). This joins the board/draft as a real multiplayer peer: you get a
+   visible cursor and an "AI" name pill in every connected browser, exactly like
+   a human collaborator.
 2. **Read** — inspect current state with `get_board` / `get_node` /
    `list_nodes` before deciding what to change.
 3. **Edit via ops** — call the node/edge tools below. Each call is a real
@@ -90,20 +114,29 @@ connect with a `draft`.
 
 ## Tools
 
+Every tool below except `list_instances` takes a required **`instanceId`** (from
+`list_instances`) naming which server it acts on.
+
+### Instances
+
+| Tool             | Purpose                                                                                           |
+| ---------------- | ------------------------------------------------------------------------------------------------- |
+| `list_instances` | List every reachable figemite server (id, name, url, boards, version, health). Takes no arguments. Stopped instances are dropped automatically via health checks. |
+
 ### Connection
 
 | Tool            | Purpose                                                                                     |
 | --------------- | ------------------------------------------------------------------------------------------- |
-| `connect_board` | Connect to a board (or a draft, via `draft`) as a multiplayer AI peer; call this first. Returns the current snapshot. |
-| `disconnect`    | Disconnect from the current board and clear this peer's presence.                           |
+| `connect_board` | Connect to a board (or a draft, via `draft`) on a given `instanceId` as a multiplayer AI peer. Returns the current snapshot. |
+| `disconnect`    | Disconnect from an instance's board and clear this peer's presence.                          |
 
 ### Board & draft management (HTTP, no connection required)
 
 | Tool           | Purpose                                                                                 |
 | -------------- | --------------------------------------------------------------------------------------- |
-| `list_boards`  | List every board on the targeted server (slug, label, tags, last-modified, sub-boards). |
-| `create_board` | Create a new, empty board by slug (and optional label).                                 |
-| `list_drafts`  | List a board's drafts (id, title, who created it, when).                                 |
+| `list_boards`  | List every board on the given instance (slug, label, tags, last-modified, sub-boards).  |
+| `create_board` | Create a new, empty board by slug (and optional label) on the given instance.           |
+| `list_drafts`  | List a board's drafts on the given instance (id, title, who created it, when).           |
 | `create_draft` | Create a new draft (a copy) of a board; returns its `draftId` to pass to `connect_board`. |
 
 **There is deliberately no promote/approve tool.** Approving a draft to
@@ -151,15 +184,15 @@ tags, by omission (see below).
 The MCP entry point (`packages/mcp/src/index.ts`) reads, in order of
 precedence (CLI flag, then env var, then default):
 
-- `--http` / `FIGEMITE_HTTP_URL` — default HTTP base URL for board-management
-  tools and for `connect_board` calls with no `address`. Default
-  `http://localhost:5400`.
+- `--http` / `FIGEMITE_HTTP_URL` — HTTP base URL of your own localhost server,
+  registered as the synthetic `local` instance. Default `http://localhost:5400`.
 - `--name` / `FIGEMITE_NAME` — display name shown in the browser. Default
   `"AI"`.
 - `--client` / `FIGEMITE_CLIENT` — agent-client tag (e.g. `cursor`,
   `claude-code`). Default `"claude-code"`.
 
-`connect_board` also takes an optional `address` (an mDNS peer name, IP, or
-hostname) to reach a board on a different figemite server than the default
-local one — see [SECURITY.md](SECURITY.md) for what that requires on the
-host side.
+Other instances are discovered automatically over mDNS (`_figemite._tcp`); each
+server advertises its `id`, `name`, `url`, `version`, and a board preview, and
+also serves the authoritative `GET /api/instance`. Use `list_instances` to see
+what's reachable and pass an `instanceId` to every board/draft tool — see
+[SECURITY.md](SECURITY.md) for what reaching another host's server requires.
