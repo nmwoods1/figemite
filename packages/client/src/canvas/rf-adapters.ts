@@ -200,7 +200,11 @@ function callbacksForNode(node: BoardNode, callbacks?: NodeCallbacks): RfNodeDat
  * Map a single {@link BoardNode} to its ReactFlow node. `zIndex` mirrors the
  * legacy's frame-behind-non-frame rule (see module doc); `order` (not `pos`)
  * decides the exact zIndex so within-partition stacking is meaningful.
- * `readonly` drives `draggable`/`selectable` (both false when true).
+ * When `readonly`, nodes are pinned non-`draggable`/-`selectable` at the node
+ * level; when editable, both are left UNSET so the board-level ReactFlow props
+ * (`nodesDraggable`/`elementsSelectable`) — which encode the live content-lock,
+ * AI locks, and overlay modes — remain the single source of truth (see the
+ * node-level comment below).
  * `callbacks`, when given AND `readonly` is false, augments `data` with the
  * editing callbacks this node's type needs (see the module doc above) — the
  * seams in BaseNode/useEditableText/ConnectionHandles/DescriptionBadge go
@@ -243,8 +247,18 @@ export function boardNodeToRf(
     // themselves. Inner nodes are separate RF nodes stacked above, unaffected.
     ...(node.type === 'frame' ? { style: { pointerEvents: 'none' as const } } : {}),
     zIndex,
-    draggable: !readonly,
-    selectable: !readonly,
+    // Interactivity is governed by the board-level ReactFlow props
+    // (`nodesDraggable`/`elementsSelectable`), which aggregate EVERY edit gate:
+    // read-only, the live content-lock, AI locks, and overlay (pencil/annotation)
+    // modes. An explicit node-level `draggable`/`selectable` OVERRIDES those
+    // board-level props (xyflow uses `node.draggable || (nodesDraggable &&
+    // node.draggable === undefined)`), so a node-level `true` on the editable
+    // pane would leak drag/select past the content-lock on the live board
+    // (editable pane, but frozen). We therefore leave both UNSET when editable
+    // and let the board-level gate decide — mirroring `connectable`, which is
+    // never set node-level. When read-only we still pin them false as a
+    // belt-and-suspenders reinforcement of the read-only pane's board-level gate.
+    ...(readonly ? { draggable: false, selectable: false } : {}),
   };
 }
 

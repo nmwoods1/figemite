@@ -180,13 +180,16 @@ describe('boardNodeToRf', () => {
     expect(rf.data).toMatchObject({ points: node.points, strokeWidth: 3 });
   });
 
-  it('readonly=false makes nodes draggable and selectable', () => {
+  it('readonly=false leaves draggable/selectable UNSET (board-level props govern)', () => {
+    // An explicit node-level draggable/selectable would override the board-level
+    // nodesDraggable/elementsSelectable gate and leak drag/select past the live
+    // content-lock (editable pane, frozen). Editable nodes must stay unset.
     const rf = boardNodeToRf(sticky(), false);
-    expect(rf.draggable).toBe(true);
-    expect(rf.selectable).toBe(true);
+    expect(rf.draggable).toBeUndefined();
+    expect(rf.selectable).toBeUndefined();
   });
 
-  it('readonly=true makes nodes non-draggable and non-selectable', () => {
+  it('readonly=true pins nodes non-draggable and non-selectable', () => {
     const rf = boardNodeToRf(sticky(), true);
     expect(rf.draggable).toBe(false);
     expect(rf.selectable).toBe(false);

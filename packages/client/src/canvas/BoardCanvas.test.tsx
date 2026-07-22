@@ -319,6 +319,21 @@ describe('BoardCanvas', () => {
     expect(stickyNode?.className).toMatch(/\bselectable\b/);
   });
 
+  // The LIVE board is the editable pane (readonly=false) but content-locked (a
+  // slug, no draftId), so its content is frozen: nodes must NOT drag or select,
+  // exactly like the read-only pane. Regression guard — a node-level
+  // draggable/selectable of `true` overrides the board-level nodesDraggable/
+  // elementsSelectable={false} that the content-lock sets, so nodes must not
+  // carry that node-level override on the live board.
+  it('renders nodes as non-draggable and non-selectable on the LIVE (content-locked) board', () => {
+    const { container } = render(
+      <BoardCanvas board={fixtureBoard()} readonly={false} slug="my-board" path={[]} />,
+    );
+    const stickyNode = container.querySelector('[data-id="s1"]');
+    expect(stickyNode?.className).not.toMatch(/\bdraggable\b/);
+    expect(stickyNode?.className).not.toMatch(/\bselectable\b/);
+  });
+
   it('wires the editable interaction handlers to ReactFlow when not readonly', () => {
     render(<BoardCanvas board={fixtureBoard()} readonly={false} />);
     const props = lastReactFlowProps();
