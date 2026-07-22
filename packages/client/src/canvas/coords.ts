@@ -101,6 +101,22 @@ export function snapToGrid(p: XY): XY {
   };
 }
 
+/** `[x, y]` grid-cell size, in the `[number, number]` tuple shape some
+ * consumers (e.g. ReactFlow's `snapGrid` prop) expect — both entries are
+ * {@link GRID_SIZE} since the grid is square. */
+export const SNAP_GRID: [number, number] = [GRID_SIZE, GRID_SIZE];
+
+/** Round a size to the grid, clamped to a minimum of one grid cell —
+ * mirrors {@link snapToGrid} for width/height rather than x/y, with a floor
+ * so a dragged-down resize can never round away to a zero (or negative)
+ * dimension. */
+export function snapSize(wh: { width: number; height: number }): { width: number; height: number } {
+  return {
+    width: Math.max(GRID_SIZE, Math.round(wh.width / GRID_SIZE) * GRID_SIZE),
+    height: Math.max(GRID_SIZE, Math.round(wh.height / GRID_SIZE) * GRID_SIZE),
+  };
+}
+
 /**
  * The flow-space point a fixed `offset` (screen px) down-and-right of the
  * current viewport's origin, snapped to the grid — i.e. "roughly the visible
