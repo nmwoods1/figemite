@@ -58,15 +58,26 @@ export interface EdgeGeometry {
 }
 
 /**
- * Build a `RectGeom` from an internal node iff it has a finite measured size;
- * otherwise `null` ("not measured yet" → caller falls back to the RF props).
+ * Build a `RectGeom` from an internal node iff it has a finite, strictly
+ * positive measured size; otherwise `null` ("not measured yet" → caller falls
+ * back to the RF props). A size of `0` or `NaN` (or `undefined`) is treated as
+ * unmeasured: `NaN` would poison the intersection math into a `d="M NaN,…"`
+ * path, and `0` collapses the rect to its top-left corner — both degenerate, so
+ * both fall through to the prop fallback rather than rendering a broken edge.
  */
 function rectOf(node: ReturnType<typeof useInternalNode>): RectGeom | null {
   if (!node) return null;
   const { width, height } = node.measured;
-  if (typeof width !== 'number' || typeof height !== 'number') return null;
+  if (
+    !Number.isFinite(width) ||
+    (width as number) <= 0 ||
+    !Number.isFinite(height) ||
+    (height as number) <= 0
+  ) {
+    return null;
+  }
   const { x, y } = node.internals.positionAbsolute;
-  return { x, y, width, height };
+  return { x, y, width: width as number, height: height as number };
 }
 
 export function useEdgeGeometry(input: EdgeGeometryInput): EdgeGeometry {

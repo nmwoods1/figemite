@@ -106,4 +106,28 @@ describe('ArrowEdge — floating geometry', () => {
     expect(compact).toContain('0,0'); // fallback source
     expect(compact).toContain('100,100'); // fallback target
   });
+
+  it('falls back (no degenerate rect) when a node reports a 0 measured size', () => {
+    // Source is properly measured, but the target's measured size is 0 — a
+    // degenerate rect that would collapse to its top-left corner. It must be
+    // treated as unmeasured → fallback to props (0,0)→(100,100), NOT a broken
+    // or corner-anchored endpoint.
+    nodeStore.set('source-node', measuredNode(0, 0, 100, 60));
+    nodeStore.set('target-node', measuredNode(300, 0, 0, 0));
+    const compact = pathD(renderArrow().container).replace(/\s+/g, '');
+    expect(compact).toContain('0,0');
+    expect(compact).toContain('100,100');
+    expect(compact).not.toContain('NaN');
+  });
+
+  it('falls back (no NaN path) when a node reports a NaN measured size', () => {
+    // A NaN size would poison the intersection math into a `d="M NaN,…"` path.
+    // It must be treated as unmeasured → fallback to props (0,0)→(100,100).
+    nodeStore.set('source-node', measuredNode(0, 0, 100, 60));
+    nodeStore.set('target-node', measuredNode(300, 0, NaN, NaN));
+    const compact = pathD(renderArrow().container).replace(/\s+/g, '');
+    expect(compact).not.toContain('NaN');
+    expect(compact).toContain('0,0');
+    expect(compact).toContain('100,100');
+  });
 });
