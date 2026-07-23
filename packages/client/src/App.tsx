@@ -162,6 +162,10 @@ function BoardRoute({
   // segment's name, not the root's — so the breadcrumb's root crumb needs the
   // root label from elsewhere. `listBoards()` already carries it per slug.
   const [rootLabel, setRootLabel] = useState<string | undefined>(undefined);
+  // The history version currently previewed on the Live board (a snapshot id),
+  // reported up by BoardCanvas; fed to LiveDraftMenu so "New draft" forks it
+  // instead of copying current Live. Null when not previewing on the live root.
+  const [previewedVersionId, setPreviewedVersionId] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -261,6 +265,7 @@ function BoardRoute({
       draftId={draftId}
       onOpenDraft={onOpenDraft}
       onExitDraft={onExitDraft}
+      fromVersion={previewedVersionId ?? undefined}
     />
   );
 
@@ -313,6 +318,7 @@ function BoardRoute({
           draftId={draftId}
           onDrillIn={handleDrillIn}
           subBoardChildIds={subBoardChildIds}
+          onPreviewVersionChange={setPreviewedVersionId}
         />
       )}
       {/* Draft affordances (dev only) now live in the top-left breadcrumb via

@@ -44,6 +44,24 @@ describe('LiveDraftMenu', () => {
     await waitFor(() => expect(onOpenDraft).toHaveBeenCalledWith('d2'));
   });
 
+  it('forks the previewed version: "New draft" relabels and passes fromVersion', async () => {
+    const onOpenDraft = vi.fn();
+    render(
+      <LiveDraftMenu
+        slug="spend"
+        onOpenDraft={onOpenDraft}
+        onExitDraft={() => {}}
+        fromVersion="v-123"
+      />,
+    );
+    fireEvent.click(screen.getByRole('button', { name: /Live/ }));
+    // The button relabels to signal it forks the version being viewed.
+    const btn = await screen.findByRole('button', { name: /New draft from this version/ });
+    fireEvent.click(btn);
+    await waitFor(() => expect(api.createDraft).toHaveBeenCalledWith('spend', undefined, 'v-123'));
+    await waitFor(() => expect(onOpenDraft).toHaveBeenCalledWith('d2'));
+  });
+
   it('clicking a draft row opens it', async () => {
     const onOpenDraft = vi.fn();
     render(<LiveDraftMenu slug="spend" onOpenDraft={onOpenDraft} onExitDraft={() => {}} />);
