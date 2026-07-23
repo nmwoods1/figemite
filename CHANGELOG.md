@@ -5,6 +5,40 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.1.0] - 2026-07-23
+
+Minor release: new backward-compatible capabilities plus bug fixes. Boards,
+connected agents, and configs from 2.0.0 keep working untouched — the new
+`board.json` `routing` field is optional (old files open directly), the MCP
+tool contract only gained an optional param, and no `/api`, config, or
+security default changed. See [RELEASING.md](RELEASING.md) for the policy
+that classifies this as a minor release.
+
+### Added
+
+- **Grid snapping**: dragging and resizing snap to an aligned grid, toggled
+  from the toolbar and remembered via a persisted snap preference.
+- **Floating, routable edges**: edge endpoints float to the nearest node
+  border, with selectable routing — bezier, straight, or elbow — via a
+  toolbar picker. Adds an **optional** `routing` field to `board.json` edges;
+  boards written by 2.0.0 (without it) load unchanged.
+- **MCP `add_edge` accepts an optional `routing` param**, so agents can set
+  edge routing directly. Adding an optional param is backward-compatible —
+  clients written against 2.0.0 keep working (see [AGENTS.md](AGENTS.md)).
+- **Version-scoped comments**: comments are scoped per board version, so a
+  draft's discussion stays separate from the Live board's.
+- **Labeled promote history**: promoting a draft records a single labeled
+  version in the Live board's history.
+
+### Fixed
+
+- **The Live board is now truly frozen for layout.** Nodes on the
+  content-locked Live board could still be dragged and selected: the adapter
+  set a node-level `draggable`/`selectable` that overrode the board-level
+  read-only gate. They now honor the lock (editing still works in drafts).
+- **Floating edges** treat a `0`/`NaN` measured node size as unmeasured,
+  avoiding degenerate geometry before the layout settles.
+
 ## [2.0.0] - 2026-07-22
 
 This release is a **major** version bump because the MCP tool contract
