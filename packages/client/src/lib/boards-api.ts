@@ -195,12 +195,18 @@ export async function listDrafts(slug: string): Promise<DraftMeta[]> {
 }
 
 /** Creates a new (human-authored) draft of a board; returns its id. */
-export async function createDraft(slug: string, title?: string): Promise<string> {
+export async function createDraft(
+  slug: string,
+  title?: string,
+  fromVersion?: string,
+): Promise<string> {
   if (READONLY) throw new ReadOnlyError('create a draft');
   const data = (await fetchJson('/api/drafts', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ board: slug, title, createdBy: 'human' }),
+    // `fromVersion` (a history snapshot id) seeds the draft's root board from
+    // that old version instead of current Live; omitted → copies current Live.
+    body: JSON.stringify({ board: slug, title, createdBy: 'human', fromVersion }),
   })) as { draftId?: string };
   if (!data.draftId) throw new ApiError(0, 'Server did not return a draft id');
   return data.draftId;

@@ -13,6 +13,7 @@ import {
   getBoard,
   saveBoard,
   createBoard,
+  createDraft,
   createSubBoard,
   deleteSubBoard,
   fetchComments,
@@ -127,6 +128,32 @@ describe('boards-api', () => {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ board: 'spend', path: ['nodeA'], data: board }),
+      });
+    });
+
+    it('createDraft calls POST /api/drafts, threading fromVersion when given', async () => {
+      fetchMock.mockResolvedValueOnce(jsonResponse({ draftId: 'd2' }));
+
+      const id = await createDraft('spend', undefined, 'v-1');
+
+      expect(id).toBe('d2');
+      // title is undefined (omitted by JSON.stringify); fromVersion is carried.
+      expect(fetchMock).toHaveBeenCalledWith('/api/drafts', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ board: 'spend', createdBy: 'human', fromVersion: 'v-1' }),
+      });
+    });
+
+    it('createDraft omits fromVersion when not given (copies current Live)', async () => {
+      fetchMock.mockResolvedValueOnce(jsonResponse({ draftId: 'd3' }));
+
+      await createDraft('spend');
+
+      expect(fetchMock).toHaveBeenCalledWith('/api/drafts', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ board: 'spend', createdBy: 'human' }),
       });
     });
 

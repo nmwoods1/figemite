@@ -105,7 +105,7 @@ describe('POST /api/drafts (create)', () => {
     expect(res.status).toBe(404);
   });
 
-  it('defaults an untitled draft to "Draft #N" numbered by the current draft count', async () => {
+  it('defaults an untitled draft to "Draft #N" one past the highest existing number (never colliding)', async () => {
     h.ctx.repo.seedBoard('spend', 'Spend');
 
     // Create a draft with the given body; return the parsed response.
@@ -129,11 +129,58 @@ describe('POST /api/drafts (create)', () => {
     const named = await create({ title: 'My own name' });
     expect(named.draft.title).toBe('My own name');
 
-    // The number reflects the count AT THAT MOMENT: discard one, and the next
-    // untitled draft reuses that number (2 drafts remain → "Draft #3").
-    await fetch(`${h.url}/api/drafts?board=spend&draft=${second.draftId}`, { method: 'DELETE' });
+    // Discard the FIRST draft (#1), leaving "Draft #2". The next untitled draft
+    // must NOT reuse #2 — the old count-based scheme did (2 drafts remaining →
+    // "Draft #2" again, a duplicate name). It numbers one past the highest
+    // remaining number instead → "Draft #3".
+    await fetch(`${h.url}/api/drafts?board=spend&draft=${first.draftId}`, { method: 'DELETE' });
     const afterDiscard = await create({ createdBy: 'human' });
     expect(afterDiscard.draft.title).toBe('Draft #3');
+
+    // Custom titles never perturb the sequence (the numbering ignores anything
+    // that isn't exactly "Draft #<n>"). Existing: #2, "My own name", #3 → #4.
+    const later = await create({ createdBy: 'human' });
+    expect(later.draft.title).toBe('Draft #4');
+  });
+
+  it('seeds the draft root from a history version when `fromVersion` is given (fork an old version)', async () => {
+    h.ctx.repo.seedBoard('spend', 'Spend');
+
+    // An OLD version of the board, captured in history.
+    h.ctx.repo.write('spend', [], boardWith('Spend', 'oldNode'));
+    h.ctx.history.snapshot('spend', [], 'save');
+    const oldVersionId = h.ctx.history.list('spend', [])[0]!.id;
+
+    // Live then moves on to entirely different content.
+    h.ctx.repo.write('spend', [], boardWith('Spend', 'newNode'));
+
+    // Fork the OLD version into a new draft.
+    const res = await fetch(`${h.url}/api/drafts`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ board: 'spend', createdBy: 'human', fromVersion: oldVersionId }),
+    });
+    expect(res.status).toBe(200);
+    const draftId = (await res.json()).draftId as string;
+
+    // The draft's root board is seeded from the OLD version, not current Live.
+    expect(h.ctx.repo.read('spend', [], draftId).nodes.map((n) => n.id)).toEqual(['oldNode']);
+    // Live itself is untouched by the fork.
+    expect(h.ctx.repo.read('spend', []).nodes.map((n) => n.id)).toEqual(['newNode']);
+  });
+
+  it('404s when `fromVersion` names a snapshot that does not exist', async () => {
+    h.ctx.repo.seedBoard('spend', 'Spend');
+    const res = await fetch(`${h.url}/api/drafts`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        board: 'spend',
+        createdBy: 'human',
+        fromVersion: '2099-01-01T00-00-00-000Z__save',
+      }),
+    });
+    expect(res.status).toBe(404);
   });
 });
 

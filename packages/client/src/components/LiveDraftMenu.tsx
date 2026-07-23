@@ -28,6 +28,9 @@ interface LiveDraftMenuProps {
   onOpenDraft: (draftId: string) => void;
   /** Leave the current draft back to the live board. */
   onExitDraft: () => void;
+  /** When set, the user is viewing this history version (a snapshot id) on the
+   * live board: "New draft" then forks THAT version instead of current Live. */
+  fromVersion?: string;
 }
 
 type Pending = { kind: 'promote' | 'discard'; draft: DraftMeta } | null;
@@ -37,6 +40,7 @@ export default function LiveDraftMenu({
   draftId,
   onOpenDraft,
   onExitDraft,
+  fromVersion,
 }: LiveDraftMenuProps) {
   const [open, setOpen] = useState(false);
   const [drafts, setDrafts] = useState<DraftMeta[] | null>(null);
@@ -94,7 +98,9 @@ export default function LiveDraftMenu({
     setBusy(true);
     setError(null);
     try {
-      const id = await createDraft(slug);
+      // When previewing an old version on Live, fork THAT version; otherwise
+      // copy current Live (fromVersion is undefined).
+      const id = await createDraft(slug, undefined, fromVersion);
       setOpen(false);
       onOpenDraft(id);
     } catch (err) {
@@ -392,7 +398,7 @@ export default function LiveDraftMenu({
               opacity: busy ? 0.6 : 1,
             }}
           >
-            {busy ? 'Creating…' : '+ New draft'}
+            {busy ? 'Creating…' : fromVersion ? '+ New draft from this version' : '+ New draft'}
           </button>
 
           {error && (

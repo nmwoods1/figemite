@@ -113,6 +113,10 @@ export interface BoardCanvasProps {
   /** When set, join the DRAFT room for this board instead of prod — the store's
    * edits then persist into `boards/<slug>/.drafts/<draftId>/`, never prod. */
   draftId?: string;
+  /** Reports the history version currently previewed on the content-locked Live
+   * board root (a snapshot id), or null when not previewing there. The route
+   * (App.tsx) feeds it to LiveDraftMenu so "New draft" forks that version. */
+  onPreviewVersionChange?: (versionId: string | null) => void;
 }
 
 /** True when a viewport is just the BoardFile zero-value default — i.e. not
@@ -462,6 +466,7 @@ function EditableCanvas({
   contentLocked,
   draftId,
   subBoard,
+  onPreviewVersionChange,
 }: EditablePaneProps) {
   const [descNodeId, setDescNodeId] = useState<string | null>(null);
   const openDescription = useCallback((id: string) => setDescNodeId(id), []);
@@ -501,6 +506,17 @@ function EditableCanvas({
   // live board; only Restore mutates prod, and it's gated to drafts via the
   // preview banner's `canRestore={!contentLocked}` below.
   const history = useHistory({ slug, path: path ?? [], draftId, store, undo: undoRedo });
+
+  // Report the previewed version up to the route (App -> LiveDraftMenu) so
+  // "New draft" can fork it — but ONLY on the content-locked Live board root.
+  // In a draft the action is Restore (canRestore below), and a sub-board
+  // version can't seed a whole-board draft, so both report null. Reset to null
+  // on unmount so a stale preview never lingers after navigating away.
+  useEffect(() => {
+    const forkable = contentLocked && (path?.length ?? 0) === 0;
+    onPreviewVersionChange?.(forkable ? history.previewId : null);
+  }, [contentLocked, path, history.previewId, onPreviewVersionChange]);
+  useEffect(() => () => onPreviewVersionChange?.(null), [onPreviewVersionChange]);
 
   // ── P6-T34: comments (comments.json — separate from the Yjs doc) ───────────
   // `reloadCommentsRef` bridges useAiLock's single `onExternalChange`
@@ -836,6 +852,8 @@ interface EditablePaneProps extends PaneProps {
   draftId?: string;
   /** Drill-in (sub-board) adapter — see BoardCanvasProps.onDrillIn's doc. */
   subBoard?: SubBoardAdapter;
+  /** See BoardCanvasProps.onPreviewVersionChange. */
+  onPreviewVersionChange?: (versionId: string | null) => void;
 }
 
 /**
@@ -1077,6 +1095,7 @@ export function BoardCanvas({
   draftId,
   onDrillIn,
   subBoardChildIds,
+  onPreviewVersionChange,
 }: BoardCanvasProps) {
   const room = !readonly && slug ? { slug, path: path ?? [], draftId } : undefined;
   const store = useBoardStoreLifecycle(board, readonly, room);
@@ -1131,6 +1150,7 @@ export function BoardCanvas({
             contentLocked={contentLocked}
             draftId={draftId}
             subBoard={subBoard}
+            onPreviewVersionChange={onPreviewVersionChange}
           />
         )}
       </ReactFlowProvider>

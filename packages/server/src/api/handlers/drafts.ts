@@ -3,7 +3,9 @@
 // GET    /api/drafts?board=        — list a board's drafts (id, title, provenance).
 // POST   /api/drafts               — create a draft (copy current prod into a
 //                                    new .drafts/<id>/ and index it). Body
-//                                    `{ board, title?, createdBy? }`.
+//                                    `{ board, title?, createdBy?, fromVersion? }`.
+//                                    `fromVersion` seeds the root board from a
+//                                    history snapshot instead of current Live.
 // PATCH  /api/drafts               — rename a draft (update its title in the
 //                                    index). Body `{ board, draft, title }`.
 // DELETE /api/drafts?board=&draft= — discard a draft (delete its dir + de-index).
@@ -14,7 +16,14 @@
 // has no MCP tool, which is what keeps "approve" human-only (see promote.ts).
 
 import type { IncomingMessage, ServerResponse } from 'node:http';
-import { SlugSchema, PathSegmentSchema, generateId, type DraftMeta } from '@figemite/shared';
+import {
+  SlugSchema,
+  PathSegmentSchema,
+  generateId,
+  deserialise,
+  type BoardFile,
+  type DraftMeta,
+} from '@figemite/shared';
 import { getQuery, readJsonBody, sendJson } from '../../http/body.js';
 import { readDrafts, writeDrafts } from '../../repository/drafts-repo.js';
 import { readComments, writeComments } from '../../repository/comments-repo.js';
@@ -54,6 +63,39 @@ function reconcileDrafts(ctx: RequestContext, slug: string): DraftMeta[] {
   );
 }
 
+/**
+ * The default draft number: one past the largest existing `Draft #N`, so
+ * auto-generated titles stay unique and only climb — even after a discard.
+ * (The old count-based scheme repeated a number after a discard: discard #1 of
+ * {#1, #2} left one draft named "Draft #2", and the next draft became "Draft
+ * #2" again.) Titles that aren't the exact `Draft #<n>` shape are ignored, so a
+ * user's custom names never perturb the sequence.
+ */
+function nextDraftNumber(existingTitles: string[]): number {
+  let max = 0;
+  for (const title of existingTitles) {
+    const m = /^Draft #(\d+)$/.exec(title.trim());
+    if (m) max = Math.max(max, Number(m[1]));
+  }
+  return max + 1;
+}
+
+/**
+ * Reads a history snapshot (of the root board) as a validated `BoardFile`, used
+ * to seed a draft forked from an old version. Maps the two message-typed errors
+ * `history.read` throws to client errors, exactly like `handleReadHistoryVersion`.
+ */
+function readVersionBoard(ctx: RequestContext, slug: string, versionId: string): BoardFile {
+  try {
+    return deserialise(ctx.history.read(slug, [], versionId));
+  } catch (err) {
+    const message = err instanceof Error ? err.message : '';
+    if (/^Snapshot not found/.test(message)) throw new NotFoundError('Snapshot not found');
+    if (/^Invalid snapshot id/.test(message)) throw new ValidationError('Invalid snapshot id');
+    throw err;
+  }
+}
+
 /** GET /api/drafts?board=slug → `{ drafts: DraftMeta[] }`. */
 export function handleListDrafts(
   ctx: RequestContext,
@@ -74,6 +116,7 @@ export async function handleCreateDraft(
     board?: unknown;
     title?: unknown;
     createdBy?: unknown;
+    fromVersion?: unknown;
   };
   const slug = requireSlug(body.board);
   if (!ctx.repo.exists(slug, [])) {
@@ -82,13 +125,14 @@ export async function handleCreateDraft(
 
   const createdBy = body.createdBy === 'agent' ? 'agent' : 'human';
   const rawTitle = typeof body.title === 'string' ? body.title.trim() : '';
+  // When set, the caller is forking an OLD root version they're viewing in
+  // history (rather than current Live) — see the root-board seed below.
+  const fromVersion = typeof body.fromVersion === 'string' ? body.fromVersion : undefined;
 
-  // Default title numbers the draft by how many already exist RIGHT NOW: 0
-  // existing → "Draft #1", 2 existing → "Draft #3", etc. It's a snapshot count
-  // (computed before this draft's dir is created below), so a number can repeat
-  // after a discard — matching "based on how many other drafts there are at that
-  // moment". Physical dirs are the source of truth for what the user sees.
-  const priorDraftCount = ctx.repo.listDrafts(slug).length;
+  // Default title: one past the largest existing "Draft #N" so auto-names stay
+  // unique and monotonic (see `nextDraftNumber`). Computed against the CURRENT
+  // drafts, before this one's dir is created below.
+  const nextNumber = nextDraftNumber(reconcileDrafts(ctx, slug).map((d) => d.title));
 
   // A fresh id, unique against both the index and any physical draft dir.
   const existing = new Set<string>([
@@ -97,10 +141,13 @@ export async function handleCreateDraft(
   ]);
   const draftId = generateId('draft', existing);
 
-  // Copy the current prod board tree (root + every sub-board) into the draft,
-  // each write routed through the single funnel so the draft gets its own
-  // history + suppression exactly like a normal board write.
-  const rootBoard = ctx.repo.read(slug, []);
+  // Copy the board tree into the draft, each write routed through the single
+  // funnel so the draft gets its own history + suppression like a normal write.
+  // The ROOT board is seeded from current Live by default, or from the given
+  // `fromVersion` history snapshot when forking an old version. Sub-boards (and
+  // comments, below) always come from current Live — matching how single-board
+  // history Restore replaces only the root doc, not the sub-board tree.
+  const rootBoard = fromVersion !== undefined ? readVersionBoard(ctx, slug, fromVersion) : ctx.repo.read(slug, []);
   persistBoard(ctx, slug, [], rootBoard, 'save', draftId);
   for (const subPath of ctx.repo.listSubBoardPaths(slug)) {
     persistBoard(ctx, slug, subPath, ctx.repo.read(slug, subPath), 'save', draftId);
@@ -113,7 +160,7 @@ export async function handleCreateDraft(
 
   const meta: DraftMeta = {
     id: draftId,
-    title: rawTitle || `Draft #${priorDraftCount + 1}`,
+    title: rawTitle || `Draft #${nextNumber}`,
     createdBy,
     createdAt: new Date().toISOString(),
   };

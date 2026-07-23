@@ -1381,4 +1381,37 @@ describe('BoardCanvas — history panel (time-travel, P6-T36)', () => {
       screen.getByTitle('Discard preview, return to current version'),
     ).toBeInTheDocument();
   });
+
+  it('reports the previewed version id up (onPreviewVersionChange) on the LIVE board — for "New draft from version"', async () => {
+    const onPreviewVersionChange = vi.fn();
+    fetchHistoryMock.mockResolvedValue([
+      { id: 'v1', timestamp: '2026-07-06T08:00:00.000Z', trigger: 'save' },
+    ]);
+    fetchVersionMock.mockResolvedValue(historySnapshotBoard());
+    // No draftId → content-locked live board (where "New draft" forks a version).
+    await act(async () => {
+      render(
+        <BoardCanvas
+          board={fixtureBoard()}
+          readonly={false}
+          slug="my-board"
+          path={[]}
+          onPreviewVersionChange={onPreviewVersionChange}
+        />,
+      );
+    });
+    // Not previewing yet → null.
+    expect(onPreviewVersionChange).toHaveBeenLastCalledWith(null);
+
+    fireEvent.click(screen.getByTitle('Version history'));
+    await vi.waitFor(() => expect(screen.getByText(/Latest/)).toBeInTheDocument());
+    await act(async () => {
+      fireEvent.click(screen.getByText(/Latest/));
+      await Promise.resolve();
+    });
+
+    // Previewing v1 on the live board → reported up so LiveDraftMenu's
+    // "New draft" forks THAT version instead of copying current Live.
+    expect(onPreviewVersionChange).toHaveBeenLastCalledWith('v1');
+  });
 });
