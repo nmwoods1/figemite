@@ -420,15 +420,23 @@ test.describe('multi-peer browser sync (Phase 5 gate)', () => {
 
   // ── A. Presence: editing outline ────────────────────────────────────────
 
-  test('page B shows an editing outline while page A is editing a node', async ({ browser }) => {
+  test('page B shows an editing outline while page A is editing a node', async ({
+    browser,
+    request,
+  }) => {
+    // Editing happens in a DRAFT: the Live board is read-only (content-locked),
+    // so its nodes aren't selectable/editable — entering text-edit mode is only
+    // possible in a draft. Both peers join the SAME draft room to exercise the
+    // editing-outline presence broadcast (mirrors the "typing text" sync test).
+    currentDraftId = await createDraft(request);
     const contextA = await newIdentifiedContext(browser, 'Page A');
     const contextB = await newIdentifiedContext(browser, 'Page B');
     try {
       const pageA = await contextA.newPage();
       const pageB = await contextB.newPage();
 
-      await gotoBoard(pageA);
-      await gotoBoard(pageB);
+      await gotoDraftBoard(pageA);
+      await gotoDraftBoard(pageB);
 
       await expect(pageB.locator('[data-testid="presence-outline"]')).toHaveCount(0);
 
